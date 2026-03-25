@@ -20,9 +20,14 @@ bin/
 .idea/
 .vscode/
 *.iml
+.vmodules/
 
 # ENV
 .env
 
 # vweb and database
 *.db
+
+# Local TypeScript vendoring cache
+typescript-*.tgz
+thirdparty/typescript/package/

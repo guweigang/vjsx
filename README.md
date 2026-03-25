@@ -113,13 +113,20 @@ TypeScript entry files are also supported:
 ./vjs --module ./tests/ts_module_runtime.mts
 ```
 
+TypeScript module graphs are also supported, including:
+
+- relative `.ts` / `.mts` imports
+- nearest `tsconfig.json` `compilerOptions.baseUrl` and `paths`
+- bare package imports resolved from local `node_modules`
+
 Options:
 
 - `--module`, `-m`: run the file as an ES module
 
 Currently this TypeScript support is runtime transpilation for the entry file.
-It is a good fit for standalone `.ts` scripts and `.mts` modules, but it does
-not yet compile imported `.ts` dependency graphs or apply `tsconfig.json`.
+It is a good fit for standalone `.ts` scripts and `.mts` modules. Project-wide
+features like full `tsc` diagnostics, `references`, and broader Node
+compatibility are still out of scope for now.
 
 The wrapper script will use `VJS_QUICKJS_PATH` when it is set. If it is not
 set, it will try `../quickjs` relative to the repository root.

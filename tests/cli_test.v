@@ -42,6 +42,24 @@ fn test_cli_run_typescript_module_graph() {
 	assert !os.exists(output_file)
 }
 
+fn test_cli_run_typescript_tsconfig_paths() {
+	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_runtime', '.tsconfig_runtime_output.txt')
+	os.rm(output_file) or {}
+	output := os.execute('sh ./vjs --module ./tests/tsconfig_runtime/src/main.mts')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'path alias works'
+	assert !os.exists(output_file)
+}
+
+fn test_cli_run_typescript_node_package() {
+	output_file := os.join_path(@VMODROOT, 'tests', 'ts_pkg_runtime', '.ts_pkg_output.txt')
+	os.rm(output_file) or {}
+	output := os.execute('sh ./vjs --module ./tests/ts_pkg_runtime/main.mts')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'node package'
+	assert !os.exists(output_file)
+}
+
 fn test_cli_host_runtime_features() {
 	output_file := os.join_path(@VMODROOT, 'tests', '.host_runtime_output.txt')
 	os.rm(output_file) or {}
