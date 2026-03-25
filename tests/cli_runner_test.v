@@ -73,6 +73,32 @@ fn install_typescript_host_bridge(ctx &vjs.Context) {
 		}
 		return arr
 	}))
+	host.set('readDirectory', ctx.js_function(fn [ctx] (args []vjs.Value) vjs.Value {
+		if args.len == 0 {
+			return ctx.js_array()
+		}
+		root := args[0].str()
+		mut arr := ctx.js_array()
+		if !os.is_dir(root) {
+			return arr
+		}
+		mut stack := [root]
+		mut index := 0
+		for stack.len > 0 {
+			current := stack.pop()
+			entries := os.ls(current) or { continue }
+			for entry in entries {
+				full := os.join_path(current, entry)
+				if os.is_dir(full) {
+					stack << full
+				} else {
+					arr.set(index, full)
+					index++
+				}
+			}
+		}
+		return arr
+	}))
 	host.set('realpath', ctx.js_function(fn [ctx] (args []vjs.Value) vjs.Value {
 		if args.len == 0 {
 			return ctx.js_string('')
@@ -121,19 +147,24 @@ fn install_typescript_transpiler(ctx &vjs.Context) ! {
 			if (!configText) {
 				return JSON.stringify({ compilerOptions: {}, configDir: "" });
 			}
-			const parsed = ts.parseConfigFileTextToJson(fileName, configText);
-			if (parsed.error) {
-				throw new Error(globalThis.__vjs_format_diagnostics([parsed.error]).join("\\n"));
-			}
-			const config = parsed.config || {};
 			const configDir = fileName.replace(/[\\\\/][^\\\\/]+$/, "");
-			const converted = ts.convertCompilerOptionsFromJson(config.compilerOptions || {}, configDir, fileName);
-			const diagnostics = globalThis.__vjs_format_diagnostics(converted.errors || []);
+			const host = {
+				useCaseSensitiveFileNames: !!__vjs_host.useCaseSensitiveFileNames(),
+				fileExists: (path) => !!__vjs_host.fileExists(path),
+				readFile: (path) => __vjs_host.readFile(path),
+				readDirectory: (path, extensions, exclude, include, depth) => __vjs_host.readDirectory(path),
+				onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+					throw new Error(globalThis.__vjs_format_diagnostics([diagnostic]).join("\\n"));
+				}
+			};
+			const parsed = ts.parseJsonText(fileName, configText);
+			const result = ts.parseJsonSourceFileConfigFileContent(parsed, host, configDir, undefined, fileName);
+			const diagnostics = globalThis.__vjs_format_diagnostics(result.errors || []);
 			if (diagnostics.length > 0) {
 				throw new Error(diagnostics.join("\\n"));
 			}
 			return JSON.stringify({
-				compilerOptions: converted.options || {},
+				compilerOptions: result.options || {},
 				configDir
 			});
 		};
@@ -181,16 +212,40 @@ fn install_typescript_transpiler(ctx &vjs.Context) ! {
 			const result = ts.resolveModuleName(specifier, importerFileName, compilerOptions, host);
 			return result.resolvedModule ? result.resolvedModule.resolvedFileName : "";
 		};
-		globalThis.__vjs_package_entry = function(packageText) {
+		globalThis.__vjs_pick_package_target = function(target) {
+			if (typeof target === "string") return target;
+			if (!target || typeof target !== "object" || Array.isArray(target)) return "";
+			if (typeof target.import === "string") return target.import;
+			if (typeof target.default === "string") return target.default;
+			if (typeof target.module === "string") return target.module;
+			if (typeof target.browser === "string") return target.browser;
+			for (const key of Object.keys(target)) {
+				const nested = globalThis.__vjs_pick_package_target(target[key]);
+				if (nested) return nested;
+			}
+			return "";
+		};
+		globalThis.__vjs_package_entry = function(packageText, subpath) {
 			if (!packageText) {
 				return "";
 			}
 			const pkg = JSON.parse(packageText);
-			if (typeof pkg.module === "string") return pkg.module;
-			if (typeof pkg.main === "string") return pkg.main;
-			if (typeof pkg.exports === "string") return pkg.exports;
-			if (pkg.exports && typeof pkg.exports["."] === "string") return pkg.exports["."];
-			if (pkg.exports && pkg.exports["."] && typeof pkg.exports["."].default === "string") return pkg.exports["."].default;
+			const key = subpath ? "./" + subpath : ".";
+			if (pkg.exports) {
+				if (typeof pkg.exports === "string" && key === ".") return pkg.exports;
+				if (typeof pkg.exports === "object" && !Array.isArray(pkg.exports)) {
+					if (!Object.keys(pkg.exports).some((entry) => entry.startsWith(".")) && key === ".") {
+						const direct = globalThis.__vjs_pick_package_target(pkg.exports);
+						if (direct) return direct;
+					}
+					if (key in pkg.exports) {
+						const mapped = globalThis.__vjs_pick_package_target(pkg.exports[key]);
+						if (mapped) return mapped;
+					}
+				}
+			}
+			if (key == "." && typeof pkg.module === "string") return pkg.module;
+			if (key == "." && typeof pkg.main === "string") return pkg.main;
 			return "";
 		};'
 	) or { return error('failed to install TypeScript resolver helpers: ${err.msg()}') }
@@ -258,7 +313,7 @@ fn resolve_ts_module(ctx &vjs.Context, importer_path string, specifier string, c
 	return output.to_string()
 }
 
-fn package_entry(ctx &vjs.Context, package_json_path string) !string {
+fn package_entry(ctx &vjs.Context, package_json_path string, subpath string) !string {
 	text := os.read_file(package_json_path)!
 	entry_fn := ctx.js_global('__vjs_package_entry')
 	defer {
@@ -267,7 +322,7 @@ fn package_entry(ctx &vjs.Context, package_json_path string) !string {
 	if entry_fn.is_undefined() {
 		return error('package entry helper is not installed')
 	}
-	output := ctx.call(entry_fn, text)!
+	output := ctx.call(entry_fn, text, subpath)!
 	defer {
 		output.free()
 	}
@@ -386,18 +441,18 @@ fn resolve_node_module(ctx &vjs.Context, importer_path string, specifier string)
 	for {
 		package_root := os.join_path(current, 'node_modules', package_name)
 		if os.is_dir(package_root) {
-			if package_subpath != '' {
-				return resolve_local_module(os.join_path(package_root, '_entry.js'), './' + package_subpath)
-			}
 			package_json_path := os.join_path(package_root, 'package.json')
 			if os.exists(package_json_path) {
-				entry := package_entry(ctx, package_json_path) or { '' }
+				entry := package_entry(ctx, package_json_path, package_subpath) or { '' }
 				if entry != '' {
 					resolved := resolve_local_module(os.join_path(package_root, '_entry.js'), './' + entry) or { '' }
 					if resolved != '' {
 						return resolved
 					}
 				}
+			}
+			if package_subpath != '' {
+				return resolve_local_module(os.join_path(package_root, '_entry.js'), './' + package_subpath)
 			}
 			return resolve_local_module(os.join_path(package_root, '_entry.js'), './index')
 		}

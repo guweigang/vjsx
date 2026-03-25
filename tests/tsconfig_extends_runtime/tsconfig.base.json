@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./project/src",
+    "paths": {
+      "@shared/*": ["shared/*"]
+    },
+    "module": "esnext",
+    "target": "es2020"
+  }
+}

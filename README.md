@@ -116,8 +116,10 @@ TypeScript entry files are also supported:
 TypeScript module graphs are also supported, including:
 
 - relative `.ts` / `.mts` imports
-- nearest `tsconfig.json` `compilerOptions.baseUrl` and `paths`
+- nearest `tsconfig.json`, including `extends`
+- `compilerOptions.baseUrl` and `paths`
 - bare package imports resolved from local `node_modules`
+- package `exports` root and explicit subpath entries
 
 Options:
 
