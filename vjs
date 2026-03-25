@@ -1,0 +1,101 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+quickjs_path=${VJS_QUICKJS_PATH:-}
+
+if [ -z "$quickjs_path" ] && [ -d "$repo_root/../quickjs" ]; then
+	quickjs_path="$repo_root/../quickjs"
+fi
+
+if [ -z "$quickjs_path" ] || [ ! -d "$quickjs_path" ]; then
+	echo "QuickJS source not found. Set VJS_QUICKJS_PATH to your quickjs checkout." >&2
+	exit 1
+fi
+
+script_file=''
+as_module=0
+args_file=$(mktemp "${TMPDIR:-/tmp}/vjs-args.XXXXXX")
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		run)
+			shift
+			;;
+		--module|-m)
+			as_module=1
+			shift
+			;;
+		--help|-h)
+			echo "Usage: vjs run [--module|-m] <script.js>"
+			echo "   or: vjs [--module|-m] <script.js>"
+			exit 0
+			;;
+		-*)
+			echo "unknown flag: $1" >&2
+			exit 1
+			;;
+		*)
+			if [ -n "$script_file" ]; then
+				printf '%s\n' "$1" >> "$args_file"
+				shift
+				continue
+			fi
+			script_file=$1
+			shift
+			;;
+	esac
+done
+
+if [ -z "$script_file" ]; then
+	echo "missing script path" >&2
+	exit 1
+fi
+
+case "$script_file" in
+	*.mjs)
+		as_module=1
+		;;
+	*.js|*.cjs|*.ts|*.cts)
+		:
+		;;
+	*.mts)
+		as_module=1
+		;;
+	*)
+		echo "unsupported script type: $script_file" >&2
+		echo "expected a .js, .mjs, .cjs, .ts, .mts, or .cts file" >&2
+		exit 1
+		;;
+esac
+
+output_file=$(mktemp "${TMPDIR:-/tmp}/vjs-output.XXXXXX")
+cleanup() {
+	rm -f "$output_file" "$args_file"
+}
+trap cleanup EXIT INT TERM
+
+set +e
+output=$(
+	cd "$repo_root" && \
+	VJS_QUICKJS_PATH="$quickjs_path" \
+	VJS_CLI_RUN=1 \
+	VJS_SCRIPT_FILE="$script_file" \
+	VJS_AS_MODULE="$as_module" \
+	VJS_ARGS_FILE="$args_file" \
+	VJS_OUTPUT_FILE="$output_file" \
+	v -silent -d build_quickjs test tests/cli_runner_test.v 2>&1
+)
+status=$?
+set -e
+
+printf '%s\n' "$output" | sed \
+	-e '/^---- Testing\.\.\. /d' \
+	-e '/^Summary for all V _test\.v files:/d' \
+	-e '/^--------------------------------------------------------------------------------$/d'
+
+if [ "$status" -eq 0 ] && [ -f "$output_file" ]; then
+	cat "$output_file"
+fi
+
+exit "$status"
