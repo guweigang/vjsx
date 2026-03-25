@@ -1,0 +1,139 @@
+module vjs
+
+import rand
+
+// Original `type` JS Callback function from `qjs`
+pub type JSCFunction = fn (&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
+
+// `type` JS Callback function with `this`
+pub type JSFunctionThis = fn (this Value, args []Value) Value
+
+// `type` JS Callback function
+pub type JSFunction = fn (args []Value) Value
+
+// `type` Constructor Class function
+pub type JSConstructor = fn (this Value, args []Value)
+
+@[typedef]
+struct C.JSClassDef {
+	class_name &char
+}
+
+@[typedef]
+struct C.JSClassID {}
+
+const ctor_code = C.JS_CFUNC_constructor
+
+@[params]
+pub struct ClassParams {
+	id   ?u32
+	name string
+	ctor ?JSConstructor
+}
+
+fn C.JS_NewCFunction(&C.JSContext, &JSCFunction, &i8, int) C.JSValue
+fn C.JS_NewCFunction2(&C.JSContext, &JSCFunction, &i8, int, int, int) C.JSValue
+fn C.JS_NewClassID(&u32) C.JSClassID
+fn C.JS_NewClass(&C.JSRuntime, C.JSClassID, &C.JSClassDef) int
+fn C.JS_SetConstructor(&C.JSContext, JSValueConst, JSValueConst)
+fn C.JS_SetClassProto(&C.JSContext, C.JSClassID, C.JSValue)
+fn C.JS_NewObjectProtoClass(&C.JSContext, JSValueConst, C.JSClassID) C.JSValue
+
+fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {
+	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: len}
+		for i in 0 .. len {
+			args << ctx.c_val(unsafe { argv[i] })
+		}
+		return cb(ctx.c_val(this), args).ref
+	}
+}
+
+fn (ctx &Context) js_fn_plain(cb JSFunction) JSCFunction {
+	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: len}
+		for i in 0 .. len {
+			args << ctx.c_val(unsafe { argv[i] })
+		}
+		return cb(args).ref
+	}
+}
+
+// JS Callback function with `this`
+// Example:
+// ```v
+// my_fn := ctx.js_function_this(fn (this Value, args []Value) Value {
+//   return this.ctx.js_string('foo')	
+// })
+// ```
+pub fn (ctx &Context) js_function_this(cb JSFunctionThis) Value {
+	return ctx.c_val(C.JS_NewCFunction(ctx.ref, ctx.js_fn_this(cb), 0, 1))
+}
+
+// JS Callback function
+// Example:
+// ```v
+// my_fn := ctx.js_function(fn [ctx](args []Value) Value {
+//   return ctx.js_string('foo')	
+// })
+// ```
+pub fn (ctx &Context) js_function(cb JSFunction) Value {
+	return ctx.c_val(C.JS_NewCFunction(ctx.ref, ctx.js_fn_plain(cb), 0, 1))
+}
+
+// JS Callback only function this
+pub fn (ctx &Context) js_only_function_this(cb JSFunctionThis) JSCFunction {
+	return ctx.js_fn_this(cb)
+}
+
+// JS Callback only function
+pub fn (ctx &Context) js_only_function(cb JSFunction) JSCFunction {
+	return ctx.js_fn_plain(cb)
+}
+
+// Create JS Class
+// Example:
+// ```v
+// foo_class := ctx.js_class(
+// 	 name: 'Foo',
+// 	 ctor: fn (this Value, args []Value) {
+// 		 // constructor code here
+// 	 }
+// )
+//
+// foo := foo_class.new()
+// ```
+pub fn (ctx &Context) js_class(cls ClassParams) Value {
+	ctor := cls.ctor or {
+		fn (this Value, args []Value) {}
+	}
+
+	id := cls.id or { rand.u32n(1000) or { panic(err) } }
+	ref := C.JS_NewClassID(&id)
+	name_ptr := cls.name.str
+	def := C.JSClassDef{
+		class_name: name_ptr
+	}
+	proto := ctx.js_object()
+	C.JS_NewClass(ctx.rt.ref, ref, &def)
+	c_ctor := fn [ctx, ctor, ref] (jctx &C.JSContext, new_target JSValueConst, len int, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: len}
+		for i in 0 .. len {
+			args << ctx.c_val(unsafe { argv[i] })
+		}
+		target := ctx.c_val(new_target)
+		proto := target.get('prototype')
+		this := ctx.c_val(C.JS_NewObjectProtoClass(ctx.ref, proto.ref, ref))
+		ctor(this, args)
+		proto.free()
+		return this.ref
+	}
+	class := C.JS_NewCFunction2(ctx.ref, c_ctor, name_ptr, 0, vjs.ctor_code, 0)
+	C.JS_SetConstructor(ctx.ref, class, proto.ref)
+	C.JS_SetClassProto(ctx.ref, ref, proto.ref)
+	proto.free()
+	unsafe {
+		free(name_ptr)
+	}
+	return ctx.c_val(class)
+}

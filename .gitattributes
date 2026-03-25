@@ -1,0 +1,8 @@
+
+* text=auto eol=lf
+*.bat eol=crlf
+
+*.v linguist-language=V
+
+libs/include/* linguist-vendored
+web/js/* linguist-vendored
