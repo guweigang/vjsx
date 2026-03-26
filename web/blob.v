@@ -1,20 +1,20 @@
 module web
 
-import vjs { Context }
+import vjsx { Context }
 
 // Add Blob API to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.blob_api(ctx)
 // }
 // ```
 pub fn blob_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/blob.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/blob.js', vjsx.type_module) or { panic(err) }
 }

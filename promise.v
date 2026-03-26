@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 type JSHostPromiseRejectionTracker = fn (&C.JSContext, JSValueConst, JSValueConst, bool, voidptr)
 

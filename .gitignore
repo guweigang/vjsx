@@ -11,15 +11,19 @@ main
 *.so
 *.dylib
 *.dll
+*.dSYM/
 
 # Ignore binary output folders
 bin/
+/cli_runner_bin/cli_runner_bin
+/cli_runner_bin/*.dSYM/
 
 # Ignore common editor/system specific metadata
 .DS_Store
 .idea/
 .vscode/
 *.iml
+.build/
 .vmodules/
 
 # ENV
@@ -31,3 +35,6 @@ bin/
 # Local TypeScript vendoring cache
 typescript-*.tgz
 thirdparty/typescript/package/
+
+# Local scratch probes under tests/
+tests/.wechat_*

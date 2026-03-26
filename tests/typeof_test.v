@@ -1,7 +1,7 @@
-import vjs
+import vjsx
 
 fn test_typeof() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 	code := '(() => {
 		return {

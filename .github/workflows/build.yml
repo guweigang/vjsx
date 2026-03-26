@@ -5,74 +5,80 @@ on:
 
 jobs:
   build:
-    name: Building QuickJS
-    runs-on: ${{ matrix.platform }}
+    name: Build ${{ matrix.lib_name }}
+    runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        platform: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            lib_name: qjs_linux_x64.a
+            archive_path: libs/qjs_linux_x64.a
+            cmake_generator: Unix Makefiles
+          - os: macos-13
+            lib_name: qjs_macos_x64.a
+            archive_path: libs/qjs_macos_x64.a
+            cmake_generator: Unix Makefiles
+          - os: macos-14
+            lib_name: qjs_macos_arm64.a
+            archive_path: libs/qjs_macos_arm64.a
+            cmake_generator: Unix Makefiles
+          - os: windows-latest
+            lib_name: qjs_win_x64.a
+            archive_path: libs/qjs_win_x64.a
+            cmake_generator: MinGW Makefiles
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: true
-        fetch-depth: 1
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-    - name: Build Linux x64
-      if: matrix.platform == 'ubuntu-latest'
-      run: |
-        sudo rm -rf libs/qjs_linux_x64.a
-        sudo mkdir ./build
-        sudo cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -S ./ -B ./build
-        sudo cmake --build ./build --config Release
-        sudo cp build/libqjs.a libs/qjs_linux_x64.a
-        sudo rm -rf build
-    - name: Create PR For Linux x64 
-      if: matrix.platform == 'ubuntu-latest'
-      uses: peter-evans/create-pull-request@v6
-      with:
-        commit-message: Update Linux x64
-        branch-suffix: random
-        delete-branch: true
-        title: Update Linux x64
+      - name: Prepare Windows x64
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: '"C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
 
-    - name: Build Macos x64
-      if: matrix.platform == 'macos-latest'
-      run: |
-        sudo rm -rf libs/qjs_macos_x64.a
-        sudo mkdir ./build
-        sudo cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -S ./ -B ./build
-        sudo cmake --build ./build --config Release
-        sudo cp build/libqjs.a libs/qjs_macos_x64.a
-        sudo rm -rf build
-    - name: Create PR For Macos x64 
-      if: matrix.platform == 'macos-latest'
-      uses: peter-evans/create-pull-request@v6
-      with:
-        commit-message: Update Macos x64
-        branch-suffix: random
-        delete-branch: true
-        title: Update Macos x64
-    
-    - name: Prepare Windows x64
-      if: matrix.platform == 'windows-latest'
-      shell: cmd
-      run: setx PATH "%PATH%;C:\msys64\mingw64\bin"
-    - name: Build Windows x64
-      if: matrix.platform == 'windows-latest'
-      shell: bash
-      run: |
-        rm -rf ./libs/qjs_win_x64.a
-        mkdir ./build
-        cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -S ./ -B ./build
-        cmake --build ./build --config Release
-        cp build/libqjs.a libs/qjs_win_x64.a
-        rm -rf ./build
-    - name: Create PR For Windows x64 
-      if: matrix.platform == 'windows-latest'
-      uses: peter-evans/create-pull-request@v6
-      with:
-        commit-message: Update Windows x64
-        branch-suffix: random
-        delete-branch: true
-        title: Update Windows x64
+      - name: Check bundled archive
+        id: archive
+        shell: bash
+        run: |
+          if [ -f "${{ matrix.archive_path }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure QuickJS checkout
+        if: steps.archive.outputs.exists != 'true'
+        id: quickjs
+        shell: bash
+        run: ./.github/scripts/ensure-quickjs.sh
+
+      - name: Build missing archive
+        if: steps.archive.outputs.exists != 'true'
+        shell: bash
+        run: |
+          rm -rf ./build
+          cmake -G "${{ matrix.cmake_generator }}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQUICKJS_DIR="${{ steps.quickjs.outputs.quickjs_dir }}" \
+            -S ./ -B ./build
+          cmake --build ./build --config Release
+          cp build/libqjs.a "${{ matrix.archive_path }}"
+          rm -rf ./build
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.lib_name }}
+          path: ${{ matrix.archive_path }}
+          if-no-files-found: error
+
+      - name: Create PR for missing archive
+        if: steps.archive.outputs.exists != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: Add ${{ matrix.lib_name }}
+          branch: ci/add-${{ matrix.lib_name }}-${{ github.run_id }}
+          delete-branch: true
+          title: Add ${{ matrix.lib_name }}

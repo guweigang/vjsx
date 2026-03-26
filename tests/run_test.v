@@ -1,7 +1,7 @@
-import vjs
+import vjsx
 
 fn test_run_helpers() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	value := ctx.run('1 + 2') or { panic(err) }

@@ -1,4 +1,8 @@
-module vjs
+module vjsx
+
+$if build_quickjs ? {
+	#flag -I @VMODROOT/libs/include
+}
 
 $if build_quickjs ? {
 	#flag -I $env('VJS_QUICKJS_PATH')
@@ -40,3 +44,4 @@ $if build_quickjs ? {
 #flag -lpthread -lm
 #include "quickjs-libc.h"
 #include "quickjs.h"
+#include "vjsx_quickjs_compat.h"

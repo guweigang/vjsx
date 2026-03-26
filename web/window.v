@@ -1,15 +1,15 @@
 module web
 
-import vjs { Context }
+import vjsx { Context }
 
 // Add Window API to globals. same as globalThis.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.window_api(ctx)

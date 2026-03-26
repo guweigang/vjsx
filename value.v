@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 @[typedef]
 union C.JSValueUnion {

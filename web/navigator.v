@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 import os
 import runtime
 import v.vmod
@@ -20,11 +20,11 @@ fn navigator_boot(ctx &Context, boot Value) {
 // Add Navigator API to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.navigator_api(ctx)
@@ -33,6 +33,6 @@ fn navigator_boot(ctx &Context, boot Value) {
 pub fn navigator_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	navigator_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/navigator.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/navigator.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

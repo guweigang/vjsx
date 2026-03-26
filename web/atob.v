@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 import encoding.base64
 
 // Atob. this is return js_function value.
@@ -17,11 +17,11 @@ pub fn atob(ctx &Context) Value {
 // Add atob to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.atob_api(ctx)

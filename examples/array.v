@@ -1,7 +1,7 @@
-import herudi.vjs
+import vjsx
 
 fn main() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	array := ctx.js_array()

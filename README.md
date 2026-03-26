@@ -1,4 +1,4 @@
-# VJS
+# VJSX
 
 [V](https://vlang.io/) bindings to [QuickJS](https://bellard.org/quickjs/)
 javascript engine. Run JS in V.
@@ -12,17 +12,17 @@ javascript engine. Run JS in V.
 - Set-Module support.
 - Call V from JS.
 - Call JS from V.
-- Top-Level `await` support. using `vjs.type_module`.
+- Top-Level `await` support. using `vjsx.type_module`.
 
 ## Install
 
 ```bash
-v install herudi.vjs
+v install vjsx
 ```
 
 ## Build With Local QuickJS Source
 
-If you already have a local QuickJS checkout, you can compile `vjs` against the
+If you already have a local QuickJS checkout, you can compile `vjsx` against the
 source tree directly instead of the bundled prebuilt archives.
 
 This is useful when:
@@ -42,19 +42,19 @@ Notes:
 
 - `VJS_QUICKJS_PATH` should point to the QuickJS source root that contains
   `quickjs.c`, `quickjs-libc.c`, `quickjs.h`, and `quickjs-libc.h`.
-- In this mode `vjs` compiles QuickJS C sources directly.
-- Without `-d build_quickjs`, `vjs` keeps using the bundled prebuilt
-  libraries from `libs/`.
+- In this mode `vjsx` compiles QuickJS C sources directly.
+- Without `-d build_quickjs`, `vjsx` uses the bundled headers under
+  `libs/include/` together with the prebuilt archives in `libs/`.
 
 ## Basic Usage
 
 Create file `main.v` and copy-paste this code.
 
 ```v
-import herudi.vjs
+import vjsx
 
 fn main() {
-  rt := vjs.new_runtime()
+  rt := vjsx.new_runtime()
   ctx := rt.new_context()
 
   value := ctx.eval('1 + 2') or { panic(err) }
@@ -87,7 +87,7 @@ VJS_QUICKJS_PATH=/Users/guweigang/Source/quickjs \
 v -d build_quickjs run main.v
 ```
 
-Explore [examples](https://github.com/herudi/vjs/tree/master/examples)
+Explore [examples](https://github.com/guweigang/vjsx/tree/master/examples)
 
 If you want the smallest file-based example, see
 `examples/run_file.v` together with `examples/js/foo.js`.
@@ -97,20 +97,20 @@ If you want the smallest file-based example, see
 You can also run JS files directly from the repository:
 
 ```bash
-./vjs ./tests/test.js
+./vjsx ./tests/test.js
 ```
 
 Module mode:
 
 ```bash
-./vjs --module ./examples/js/main.js
+./vjsx --module ./examples/js/main.js
 ```
 
 TypeScript entry files are also supported:
 
 ```bash
-./vjs ./tests/ts_basic.ts
-./vjs --module ./tests/ts_module_runtime.mts
+./vjsx ./tests/ts_basic.ts
+./vjsx --module ./tests/ts_module_runtime.mts
 ```
 
 TypeScript module graphs are also supported, including:
@@ -125,17 +125,84 @@ Options:
 
 - `--module`, `-m`: run the file as an ES module
 
-Currently this TypeScript support is runtime transpilation for the entry file.
-It is a good fit for standalone `.ts` scripts and `.mts` modules. Project-wide
-features like full `tsc` diagnostics, `references`, and broader Node
-compatibility are still out of scope for now.
+This is runtime transpilation backed by the bundled `typescript.js`, and the
+same loader is now also available from the `vjsx` API through
+`ctx.install_typescript_runtime()` and `ctx.run_runtime_entry(...)`.
+It is a good fit for standalone `.ts` scripts, `.mts` modules, and small local
+module graphs. Project-wide features like full `tsc` diagnostics, `references`,
+and broader Node compatibility are still out of scope for now.
 
 The wrapper script will use `VJS_QUICKJS_PATH` when it is set. If it is not
-set, it will try `../quickjs` relative to the repository root.
+set, it will try `../quickjs` relative to the repository root as a local
+convenience fallback.
 
 > Currently support linux/mac/win (x64).
 
 > in windows, requires `-cc gcc`.
+
+## Host Profiles
+
+The runtime is now split into clearer layers:
+
+- `ctx.install_runtime_globals(...)`: reusable globals like `Buffer`, timers,
+  `URL`, and `URLPattern`
+- `ctx.install_node_compat(...)`: Node-like host features such as `console`,
+  `fs`, `path`, and `process`
+- `web.inject_browser_host(ctx, ...)`: browser-style host features under
+  `web/`, including `window`, DOM bootstrap, and Web APIs
+
+`web.inject_browser_host(...)` is now configurable, so you can expose only the
+browser-facing modules you want, while still letting higher-level features like
+`fetch` pull in their required Web API dependencies.
+
+The legacy `ctx.install_host(...)` entrypoint still works as a compatibility
+wrapper around `install_node_compat(...)`.
+
+Useful presets:
+
+- `vjsx.runtime_globals_full()`
+- `vjsx.runtime_globals_minimal()`
+- `vjsx.node_compat_full(fs_roots, process_args)`
+- `vjsx.node_compat_minimal(fs_roots, process_args)`
+- `web.browser_host_full()`
+- `web.browser_host_minimal()`
+
+Higher-level runtime entrypoints:
+
+- `ctx.install_script_runtime(...)`
+- `ctx.install_node_runtime(...)`
+- `web.inject_browser_runtime(ctx)`
+- `web.inject_browser_runtime_minimal(ctx)`
+
+CLI runtime profiles:
+
+- `./vjsx --runtime node ...`
+- `./vjsx --runtime script ...`
+- `./vjsx --runtime browser --module ...`
+
+The CLI defaults to `--runtime node` for backwards compatibility.
+`browser` is intentionally a pure browser-style host profile and currently
+requires `--module`. The current CLI browser profile exposes browser-like
+globals such as `window`, `self`, `EventTarget`, `URL`, timers, streams,
+`Blob`, and `FormData`, while intentionally leaving out Node globals like
+`process`, `Buffer`, and modules such as `fs`.
+
+Example:
+
+```v
+import vjsx
+import herudi.vjsx.web
+
+fn main() {
+  rt := vjsx.new_runtime()
+  ctx := rt.new_context()
+
+  ctx.install_script_runtime(
+    process_args: ['inline.js']
+  )
+  web.inject_browser_runtime_minimal(ctx)
+}
+```
 
 ## Multi Evaluate
 
@@ -185,24 +252,24 @@ code := '
   console.log(mod);
 '
 
-ctx.eval(code, vjs.type_module) or { panic(err) }
+ctx.eval(code, vjsx.type_module) or { panic(err) }
 ctx.end()
 ```
 
 ## Web Platform APIs
 
-Inject Web API to vjs.
+Inject Web API to vjsx.
 
 ```v
-import herudi.vjs
-import herudi.vjs.web
+import vjsx
+import herudi.vjsx.web
 
 fn main() {
-  rt := vjs.new_runtime()
+  rt := vjsx.new_runtime()
   ctx := rt.new_context()
 
-  // inject all
-  web.inject(ctx)
+  // inject all browser host features
+  web.inject_browser_host(ctx)
 
   // or inject one by one
   // web.console_api(ctx)

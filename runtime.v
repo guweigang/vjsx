@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 @[typedef]
 struct C.JSRuntime {}
@@ -36,7 +36,7 @@ fn C.JS_IsJobPending(&C.JSRuntime) bool
 // Create new Runtime.
 // Example:
 // ```v
-// rt := vjs.new_runtime()
+// rt := vjsx.new_runtime()
 // ```
 pub fn new_runtime() Runtime {
 	rt := Runtime{C.JS_NewRuntime()}

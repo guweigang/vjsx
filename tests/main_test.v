@@ -1,7 +1,7 @@
-import vjs { Value }
+import vjsx { Value }
 
 fn test_atom() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 	atom_str := ctx.new_atom('foo')
 	atom_int := ctx.new_atom(20)
@@ -26,7 +26,7 @@ fn test_atom() {
 }
 
 fn test_callback() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 	glob := ctx.js_global()
 	glob.set('my_fn', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -61,7 +61,7 @@ fn test_callback() {
 }
 
 fn test_module() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	mut mod := ctx.js_module('my-module')
@@ -81,7 +81,7 @@ fn test_module() {
 		mod.foo("foo");
 	'
 
-	ctx.eval(code, vjs.type_module) or { panic(err) }
+	ctx.eval(code, vjsx.type_module) or { panic(err) }
 	ctx.end()
 
 	ctx.free()

@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 // Declare Type Is
 fn C.JS_IsException(JSValueConst) int

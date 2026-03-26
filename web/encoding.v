@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 
 @[manualfree]
 fn text_encode(this Value, args []Value) Value {
@@ -71,11 +71,11 @@ fn encoding_boot(ctx &Context, boot Value) {
 // Add encoding API to globals (`TextEncoder`, `TextDecoder`).
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.encoding_api(ctx)
@@ -85,6 +85,6 @@ fn encoding_boot(ctx &Context, boot Value) {
 pub fn encoding_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	encoding_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/encoding.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/encoding.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

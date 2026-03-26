@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 
 fn console_boot(ctx &Context, boot Value) {
 	boot.set('print', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -15,11 +15,11 @@ fn console_boot(ctx &Context, boot Value) {
 // Add console to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.console_api(ctx)
@@ -30,6 +30,6 @@ pub fn console_api(ctx &Context) {
 	create_util(ctx)
 	glob, boot := get_bootstrap(ctx)
 	console_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/console.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/console.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

@@ -2,6 +2,7 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+repo_parent=$(dirname "$repo_root")
 quickjs_path=${VJS_QUICKJS_PATH:-}
 
 if [ -z "$quickjs_path" ] && [ -d "$repo_root/../quickjs" ]; then
@@ -15,7 +16,8 @@ fi
 
 script_file=''
 as_module=0
-args_file=$(mktemp "${TMPDIR:-/tmp}/vjs-args.XXXXXX")
+runtime_profile=${VJS_RUNTIME_PROFILE:-node}
+args_file=$(mktemp "${TMPDIR:-/tmp}/vjsx-args.XXXXXX")
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -26,9 +28,17 @@ while [ $# -gt 0 ]; do
 			as_module=1
 			shift
 			;;
+		--runtime|-r)
+			if [ $# -lt 2 ]; then
+				echo "missing runtime profile after $1" >&2
+				exit 1
+			fi
+			runtime_profile=$2
+			shift 2
+			;;
 		--help|-h)
-			echo "Usage: vjs run [--module|-m] <script.js>"
-			echo "   or: vjs [--module|-m] <script.js>"
+			echo "Usage: vjsx run [--module|-m] [--runtime|-r <node|script|browser>] <script.js>"
+			echo "   or: vjsx [--module|-m] [--runtime|-r <node|script|browser>] <script.js>"
 			exit 0
 			;;
 		-*)
@@ -46,6 +56,23 @@ while [ $# -gt 0 ]; do
 			;;
 	esac
 done
+
+case "$runtime_profile" in
+	node|script|browser)
+		:
+		;;
+	*)
+		echo "unknown runtime profile: $runtime_profile" >&2
+		echo "expected one of: node, script, browser" >&2
+		exit 1
+		;;
+esac
+
+if [ "$runtime_profile" = "browser" ] && [ "$as_module" -ne 1 ]; then
+	echo "browser runtime requires module mode" >&2
+	echo "use --module with --runtime browser" >&2
+	exit 1
+fi
 
 if [ -z "$script_file" ]; then
 	echo "missing script path" >&2
@@ -69,9 +96,18 @@ case "$script_file" in
 		;;
 esac
 
-output_file=$(mktemp "${TMPDIR:-/tmp}/vjs-output.XXXXXX")
+case "$script_file" in
+	/*)
+		:
+		;;
+	*)
+		script_dir=$(CDPATH= cd -- "$(dirname "$script_file")" && pwd)
+		script_file=$script_dir/$(basename "$script_file")
+		;;
+esac
+
 cleanup() {
-	rm -f "$output_file" "$args_file"
+	rm -f "$args_file"
 }
 trap cleanup EXIT INT TERM
 
@@ -79,23 +115,16 @@ set +e
 output=$(
 	cd "$repo_root" && \
 	VJS_QUICKJS_PATH="$quickjs_path" \
-	VJS_CLI_RUN=1 \
 	VJS_SCRIPT_FILE="$script_file" \
 	VJS_AS_MODULE="$as_module" \
+	VJS_RUNTIME_PROFILE="$runtime_profile" \
 	VJS_ARGS_FILE="$args_file" \
-	VJS_OUTPUT_FILE="$output_file" \
-	v -silent -d build_quickjs test tests/cli_runner_test.v 2>&1
+		VJS_REPO_ROOT="$repo_root" \
+	VCACHE="${VCACHE:-/tmp/vcache}" \
+	v -d build_quickjs run ./cli_runner_bin 2>&1
 )
 status=$?
 set -e
 
-printf '%s\n' "$output" | sed \
-	-e '/^---- Testing\.\.\. /d' \
-	-e '/^Summary for all V _test\.v files:/d' \
-	-e '/^--------------------------------------------------------------------------------$/d'
-
-if [ "$status" -eq 0 ] && [ -f "$output_file" ]; then
-	cat "$output_file"
-fi
-
-exit "$status"
+printf '%s\n' "$output"
+exit $status

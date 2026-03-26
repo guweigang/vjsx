@@ -1,4 +1,4 @@
-import herudi.vjs { Context }
+import vjsx { Context }
 
 fn type_number(ctx Context) {
 	code := '(() => {
@@ -61,7 +61,7 @@ fn type_array(ctx Context) {
 }
 
 fn main() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 
 	type_number(rt.new_context())
 	type_bool(rt.new_context())

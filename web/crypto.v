@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 import rand
 import crypto.sha1
 import crypto.sha256
@@ -39,11 +39,11 @@ fn crypto_boot(ctx &Context, boot Value) {
 // Add Crypto API to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.crypto_api(ctx)
@@ -53,6 +53,6 @@ fn crypto_boot(ctx &Context, boot Value) {
 pub fn crypto_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	crypto_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/crypto.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/crypto.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

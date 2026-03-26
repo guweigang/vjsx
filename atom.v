@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 @[typedef]
 struct C.JSAtom {}

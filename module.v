@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) int
 

@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 @[typedef]
 struct C.JSContext {}
@@ -92,12 +92,7 @@ fn C.js_std_add_helpers(&C.JSContext, int, &&char)
 fn C.js_load_file(&C.JSContext, &usize, &char) &u8
 fn C.js_module_set_import_meta(&C.JSContext, JSValueConst, bool, bool) int
 fn C.JS_CallConstructor(&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
-$if !build_quickjs ? {
-	fn C.JS_AddIntrinsicBigFloat(&C.JSContext)
-	fn C.JS_AddIntrinsicBigDecimal(&C.JSContext)
-	fn C.JS_AddIntrinsicOperators(&C.JSContext)
-	fn C.JS_EnableBignumExt(&C.JSContext, int)
-}
+fn C.vjsx_js_add_bignum_intrinsics(&C.JSContext)
 
 fn def_set_meta(ctx Context, ref JSValueConst) {
 	C.js_module_set_import_meta(ctx.ref, ref, true, true)
@@ -107,12 +102,7 @@ fn fn_custom_context(config ContextConfig) FnNewContext {
 	return fn [config] (rt &C.JSRuntime) &C.JSContext {
 		ref := C.JS_NewContext(rt)
 		if config.bignum {
-			$if !build_quickjs ? {
-				C.JS_AddIntrinsicBigFloat(ref)
-				C.JS_AddIntrinsicBigDecimal(ref)
-				C.JS_AddIntrinsicOperators(ref)
-				C.JS_EnableBignumExt(ref, 1)
-			}
+			C.vjsx_js_add_bignum_intrinsics(ref)
 		}
 		if config.module_std {
 			C.js_init_module_std(ref, c'std')
@@ -125,7 +115,7 @@ fn fn_custom_context(config ContextConfig) FnNewContext {
 // Create new Context from `Runtime`.
 // Example:
 // ```v
-// rt := vjs.new_runtime()
+// rt := vjsx.new_runtime()
 // ctx := rt.new_context(opts_config)
 // ```
 pub fn (rt Runtime) new_context(config ContextConfig) &Context {
@@ -153,8 +143,8 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 	fname := op.fname
 	flag := op.flag
 	set_meta := op.set_meta
-	if (flag & vjs.type_mask) == vjs.type_module {
-		ref = C.JS_Eval(ctx.ref, input, len, fname, flag | vjs.type_compile_only)
+	if (flag & vjsx.type_mask) == vjsx.type_module {
+		ref = C.JS_Eval(ctx.ref, input, len, fname, flag | vjsx.type_compile_only)
 		if C.JS_IsException(ref) == 0 {
 			set_meta(ctx, ref)
 			ref = C.JS_EvalFunction(ctx.ref, ref)
@@ -192,11 +182,11 @@ pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 // val1 := ctx.eval('1 + 1')!
 //
 // // or module
-// val2 := ctx.eval('1 + 1', vjs.type_module)!
+// val2 := ctx.eval('1 + 1', vjsx.type_module)!
 // ```
 pub fn (ctx &Context) eval(args ...EvalArgs) !Value {
 	input := args[0] as string
-	flag := if args.len == 2 { args[1] as int } else { vjs.type_global }
+	flag := if args.len == 2 { args[1] as int } else { vjsx.type_global }
 	return ctx.js_eval(input, '<input>', flag)
 }
 
@@ -217,7 +207,7 @@ pub fn (ctx &Context) run(args ...EvalArgs) !Value {
 // ctx.eval_module('1 + 1', 'index.js')!
 // ```
 pub fn (ctx &Context) eval_module(input string, fname string) !Value {
-	return ctx.js_eval(input, fname, vjs.type_module)
+	return ctx.js_eval(input, fname, vjsx.type_module)
 }
 
 // Evaluate JS module and flush pending jobs.
@@ -230,7 +220,7 @@ pub fn (ctx &Context) run_module(input string, fname string) !Value {
 // Evaluate File with metadata
 // Example:
 // ```v
-// ctx.eval_file_custom_meta('./path/to/file.js', vjs.type_module, set_meta_fn)!
+// ctx.eval_file_custom_meta('./path/to/file.js', vjsx.type_module, set_meta_fn)!
 // ```
 @[manualfree]
 pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta SetMeta) !Value {
@@ -257,12 +247,12 @@ pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta Set
 // ctx.eval_file('./path/to/file.js')!
 //
 // // or module
-// ctx.eval_file('./path/to/file.js', vjs.type_module)!
+// ctx.eval_file('./path/to/file.js', vjsx.type_module)!
 // ```
 @[manualfree]
 pub fn (ctx &Context) eval_file(args ...EvalArgs) !Value {
 	fname := args[0] as string
-	flag := if args.len == 2 { args[1] as int } else { vjs.type_global }
+	flag := if args.len == 2 { args[1] as int } else { vjsx.type_global }
 	return ctx.eval_file_custom_meta(fname, flag, def_set_meta)
 }
 

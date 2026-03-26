@@ -1,9 +1,9 @@
-import herudi.vjs { Value }
-import herudi.vjs.web
+import vjsx { Value }
+import herudi.vjsx.web
 import os
 
 fn main() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	web.inject(ctx)
@@ -34,7 +34,7 @@ fn main() {
 
 	fs.create()
 
-	value := ctx.eval_file('./js/main.js', vjs.type_module) or { panic(err) }
+	value := ctx.eval_file('./js/main.js', vjsx.type_module) or { panic(err) }
 	ctx.end()
 
 	// free

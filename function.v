@@ -1,4 +1,4 @@
-module vjs
+module vjsx
 
 import rand
 
@@ -128,7 +128,7 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
 		proto.free()
 		return this.ref
 	}
-	class := C.JS_NewCFunction2(ctx.ref, c_ctor, name_ptr, 0, vjs.ctor_code, 0)
+	class := C.JS_NewCFunction2(ctx.ref, c_ctor, name_ptr, 0, vjsx.ctor_code, 0)
 	C.JS_SetConstructor(ctx.ref, class, proto.ref)
 	C.JS_SetClassProto(ctx.ref, ref, proto.ref)
 	proto.free()

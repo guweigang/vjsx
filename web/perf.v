@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, Value }
+import vjsx { Context, Value }
 import time
 
 const offset = time.now().unix_nano()
@@ -15,11 +15,11 @@ fn performance_boot(ctx &Context, boot Value) {
 // Add Performance API to globals.
 // Example:
 // ```v
-// import herudi.vjs
-// import herudi.vjs.web
+// import vjsx
+// import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjs.new_runtime()
+//   rt := vjsx.new_runtime()
 //   ctx := rt.new_context()
 //
 //   web.performance_api(ctx)
@@ -28,6 +28,6 @@ fn performance_boot(ctx &Context, boot Value) {
 pub fn performance_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	performance_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/perf.js', vjs.type_module) or { panic(err) }
+	ctx.eval_file('${@VMODROOT}/web/js/perf.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

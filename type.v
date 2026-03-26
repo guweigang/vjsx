@@ -1,6 +1,6 @@
-module vjs
+module vjsx
 
-// `type` Anything Value in `vjs`
+// `type` Anything Value in `vjsx`
 pub type AnyValue = Value | bool | f64 | i64 | int | string | u32 | u64
 
 // Context JS TypeData.

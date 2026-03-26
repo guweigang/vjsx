@@ -1,7 +1,7 @@
-import vjs { Promise, Value }
+import vjsx { Promise, Value }
 
 fn test_promise() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	res := ctx.new_promise(fn (p Promise) Value {

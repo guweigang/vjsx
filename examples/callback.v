@@ -1,7 +1,7 @@
-import herudi.vjs { Value }
+import vjsx { Value }
 
 fn main() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	global := ctx.js_global()

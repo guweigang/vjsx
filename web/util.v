@@ -1,6 +1,6 @@
 module web
 
-import vjs { Context, JSFunctionThis, Value }
+import vjsx { Context, JSFunctionThis, Value }
 
 type FnWrapBool = fn (this Value, args []Value) bool
 

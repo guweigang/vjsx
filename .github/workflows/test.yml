@@ -9,9 +9,17 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
       fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive_path: libs/qjs_linux_x64.a
+          - os: macos-13
+            archive_path: libs/qjs_macos_x64.a
+          - os: macos-14
+            archive_path: libs/qjs_macos_arm64.a
+          - os: windows-latest
+            archive_path: libs/qjs_win_x64.a
     steps:
       - name: Setup V
         uses: vlang/setup-v@v1.4
@@ -21,15 +29,46 @@ jobs:
       - name: Checkout ${{ github.event.repository.name }}
         uses: actions/checkout@v4
 
+      - name: Prepare Windows x64
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: '"C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+
+      - name: Check bundled archive
+        id: archive
+        shell: bash
+        run: |
+          if [ -f "${{ matrix.archive_path }}" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure QuickJS checkout
+        if: steps.archive.outputs.exists != 'true'
+        id: quickjs
+        shell: bash
+        run: ./.github/scripts/ensure-quickjs.sh
+
       - name: Verify fmt
         run: |
           v fmt -diff .
           v fmt -verify .
 
-      - name: Run Tests Linux and Mac
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      - name: Run Tests Linux and Mac with bundled archive
+        if: steps.archive.outputs.exists == 'true' && matrix.os != 'windows-latest'
         run: v -cg test .
 
-      - name: Run Tests Windows
-        if: matrix.os == 'windows-latest'
+      - name: Run Tests Linux and Mac with local QuickJS source
+        if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
+        shell: bash
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg test .
+
+      - name: Run Tests Windows with bundled archive
+        if: steps.archive.outputs.exists == 'true' && matrix.os == 'windows-latest'
         run: v -cg -cc gcc test .
+
+      - name: Run Tests Windows with local QuickJS source
+        if: steps.archive.outputs.exists != 'true' && matrix.os == 'windows-latest'
+        shell: bash
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc gcc test .

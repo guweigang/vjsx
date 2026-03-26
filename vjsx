@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+vexe=${VEXE:-}
+
+if [ -z "$vexe" ]; then
+	vexe=$(command -v v || true)
+fi
+
+if [ -z "$vexe" ]; then
+	echo "V compiler not found. Set VEXE or add v to PATH." >&2
+	exit 1
+fi
+
+exec "$vexe" run "$repo_root/vjsx_cli.vsh" "$@"

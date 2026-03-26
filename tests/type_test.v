@@ -1,7 +1,7 @@
-import vjs { Value }
+import vjsx { Value }
 
 fn test_type() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	obj := ctx.js_object()

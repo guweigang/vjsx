@@ -1,7 +1,7 @@
-import vjs
+import vjsx
 
 fn test_eval() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	value := ctx.eval('1 + 2') or { panic(err) }
@@ -18,7 +18,7 @@ fn test_eval() {
 }
 
 fn test_multi_eval() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	ctx.eval('const sum = (a, b) => a + b') or { panic(err) }
@@ -40,7 +40,7 @@ fn test_multi_eval() {
 }
 
 fn test_eval_file() {
-	rt := vjs.new_runtime()
+	rt := vjsx.new_runtime()
 	ctx := rt.new_context()
 
 	value := ctx.eval_file('./tests/test.js') or { panic(err) }
