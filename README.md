@@ -3,6 +3,10 @@
 [V](https://vlang.io/) bindings to [QuickJS](https://bellard.org/quickjs/)
 javascript engine. Run JS in V.
 
+The first version of this project was derived from
+[herudi/vjs](https://github.com/herudi/vjs). Thanks to the original author for
+the foundational work that helped kick off `vjsx`.
+
 ## Features
 
 - Evaluate js (code, file, module, etc).
