@@ -154,6 +154,12 @@ fn test_cli_run_javascript_node_package_browser_map() {
 	assert output.output.trim_space() == 'browser build'
 }
 
+fn test_cli_run_javascript_commonjs_helper_named_exports() {
+	output := os.execute('sh ./vjsx --module ./tests/js_pkg_commonjs_runtime/main.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'upstream:ok'
+}
+
 fn test_cli_host_runtime_features() {
 	output_file := os.join_path(@VMODROOT, 'tests', '.host_runtime_output.txt')
 	os.rm(output_file) or {}
