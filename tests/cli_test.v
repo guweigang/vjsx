@@ -24,6 +24,36 @@ fn test_cli_run_with_browser_runtime_profile() {
 	assert output.output.trim_space() == 'object\nobject\nfunction\nfunction\nfunction\nundefined\nobject'
 }
 
+fn test_cli_browser_runtime_crypto_subtle_hmac() {
+	output := os.execute('sh ./vjsx --runtime browser --module ./tests/browser_crypto_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'HMAC:SHA-256\nsecret\nfalse\nsign,verify\n32\ntrue\nfalse\ntrue\ntrue\nHMAC:SHA-512\n1024\ntrue\n128\n64\ntrue\nEd25519:Ed25519\npublic:private\ntrue:false\n64\ntrue\nfalse\n32\nEd25519:public\ntrue\nAES-CBC:128\n16\ntrue\ntrue\nAES-CTR:128\n5\ntrue\n16\nPBKDF2:secret\nae4d0c95af6b46d32d0adff928f06dd0\nAES-CBC:128\n16\nHMAC:SHA-512:256\n64\ntrue\nECDSA:P-256\npublic:private\ntrue\ntrue\nfalse\n65\n[object CryptoKey]\n[object SubtleCrypto]'
+}
+
+fn test_cli_browser_runtime_crypto_hmac_example() {
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/hmac_sign_verify.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == '32\ntrue'
+}
+
+fn test_cli_browser_runtime_crypto_aes_example() {
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/aes_cbc_encrypt_decrypt.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == '16\nhello'
+}
+
+fn test_cli_browser_runtime_crypto_pbkdf2_example() {
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/pbkdf2_derive_aes.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'ae4d0c95af6b46d32d0adff928f06dd0\nAES-CBC:128'
+}
+
+fn test_cli_browser_runtime_crypto_signatures_example() {
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/signatures.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'Ed25519:64:true\nECDSA:71:true'
+}
+
 fn test_cli_browser_runtime_requires_module() {
 	output := os.execute('sh ./vjsx --runtime browser ./tests/browser_runtime_profile.mjs')
 	assert output.exit_code != 0
@@ -82,7 +112,8 @@ fn test_cli_run_typescript_tsconfig_paths() {
 }
 
 fn test_cli_run_typescript_tsconfig_extends() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_extends_runtime', 'project', '.tsconfig_extends_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_extends_runtime', 'project',
+		'.tsconfig_extends_output.txt')
 	os.rm(output_file) or {}
 	output := os.execute('sh ./vjsx --module ./tests/tsconfig_extends_runtime/project/src/main.mts')
 	assert output.exit_code == 0
@@ -164,7 +195,8 @@ fn test_cli_host_fs_path_runtime_features() {
 	assert output.output.contains('.txt')
 	assert output.output.contains('true')
 	assert output.output.contains('false')
-	assert output.output.contains(os.join_path(@VMODROOT, 'tests', '.host_fs_path_runtime_dir', 'nested', 'note.txt'))
+	assert output.output.contains(os.join_path(@VMODROOT, 'tests', '.host_fs_path_runtime_dir',
+		'nested', 'note.txt'))
 	assert !os.exists(dir_path)
 }
 

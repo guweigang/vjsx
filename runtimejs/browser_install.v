@@ -14,9 +14,13 @@ pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeCo
 	global.free()
 	glob, boot := cli_browser_bootstrap(ctx)
 	cli_browser_util_boot(ctx, boot)
+	cli_browser_crypto_boot(ctx, boot)
 	cli_browser_encoding_boot(ctx, boot)
 	cli_browser_fetch_boot(ctx, boot)
 	glob.free()
+	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'crypto.js'), vjsx.type_module) or {
+		panic(err)
+	}
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'stream.js'), vjsx.type_module) or {
 		panic(err)
 	}
