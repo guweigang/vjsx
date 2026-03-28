@@ -151,7 +151,7 @@ The runtime is now split into clearer layers:
 - `ctx.install_runtime_globals(...)`: reusable globals like `Buffer`, timers,
   `URL`, and `URLPattern`
 - `ctx.install_node_compat(...)`: Node-like host features such as `console`,
-  `fs`, `path`, and `process`
+  `fs`, `path`, `process`, `sqlite`, and optional `mysql`
 - `web.inject_browser_host(ctx, ...)`: browser-style host features under
   `web/`, including `window`, DOM bootstrap, and Web APIs
 
@@ -161,6 +161,94 @@ browser-facing modules you want, while still letting higher-level features like
 
 The legacy `ctx.install_host(...)` entrypoint still works as a compatibility
 wrapper around `install_node_compat(...)`.
+
+Database host modules:
+
+- `import { open } from "sqlite"` is available in the default Node-style host
+  profile
+- `import { connect } from "mysql"` is also exposed, but the real V MySQL
+  backend is only compiled when you pass `-d vjsx_mysql`
+- The CLI forwards extra V compiler flags through `VJS_V_FLAGS`, for example:
+  `VJS_V_FLAGS='-d vjsx_mysql' ./vjsx --module app.mjs`
+- End-to-end example files live under `examples/db/`
+
+SQLite example:
+
+```js
+import { open } from "sqlite";
+
+const db = await open({ path: "./app.db", busyTimeout: 1000 });
+await db.exec("create table if not exists users (id integer primary key, name text)");
+await db.execMany("insert into users(name) values (?)", [["alice"], ["bob"]]);
+const firstUser = await db.queryOne("select id, name from users order by id");
+const userCount = await db.scalar("select count(*) from users");
+console.log(firstUser ? firstUser.name : "null", userCount);
+await db.close();
+```
+
+MySQL example:
+
+```js
+import { connect } from "mysql";
+
+const db = await connect({
+  host: "127.0.0.1",
+  port: 3306,
+  user: "root",
+  password: "",
+  database: "mysql",
+});
+const stmt = await db.prepareCached("select id, name from users where name <> ? order by id");
+const rows = await stmt.query(["carol"]);
+console.log(rows.length);
+await stmt.close();
+await db.close();
+```
+
+DB host API shape:
+
+- `sqlite.open({ path, busyTimeout? })`
+- `mysql.connect({ host?, port?, user?|username?, password?, database?|dbname? })`
+- `db.query(sql, params?)`
+- `db.queryOne(sql, params?)`
+- `db.scalar(sql, params?)`
+- `db.queryMany(sql, [[...], [...]])`
+- `db.exec(sql, params?)`
+- `db.execMany(sql, [[...], [...]])`
+- `await db.prepareCached(sql)` reuses the same prepared statement for repeated
+  SQL text until that statement is closed
+- `stmt.close()` and `db.close()` are idempotent, and `db.close()` also marks
+  cached/reusable statements as closed
+- `db.begin()`
+- `db.commit()`
+- `db.rollback()`
+- `db.transaction(async (tx) => { ... })`
+- `await db.prepare(sql)` returning a reusable statement with `query(params?)`,
+  `queryOne(params?)`, `scalar(params?)`, `queryMany([[...], [...]])`,
+  `exec(params?)`, `execMany([[...], [...]])`, and `close()`
+- `db.close()`
+- `mysql` connections also expose `db.ping()`
+- `db.driver` identifies the backend, for example `sqlite` or `mysql`
+- `db.supportsTransactions` tells you whether transaction helpers are available
+- `db.inTransaction` reflects the host connection's current transaction state
+- `db.toString()` and `stmt.toString()` provide compact debug-friendly summaries
+- `db.exec(...)` returns `rows`, `changes`, `rowsAffected`, `lastInsertRowid`,
+  and `insertId`
+- statements expose `driver`, `supportsTransactions`, `sql`, `kind`, and `closed`
+
+When `params` are provided to `mysql.query(...)` or `mysql.exec(...)`, vjsx
+now routes them through V's prepared statement support instead of expanding SQL
+placeholders in user space.
+
+For lifecycle-sensitive code, cached statements are scoped to the connection:
+`prepareCached(...)` returns the same statement for repeated SQL text until that
+statement is closed, and `db.close()` marks all cached/reusable statements as
+closed.
+
+For local or CI integration tests against a live MySQL server, the optional
+`tests/host_mysql_runtime_test.v` probe reads `VJS_TEST_MYSQL_HOST`,
+`VJS_TEST_MYSQL_PORT`, `VJS_TEST_MYSQL_USER`, `VJS_TEST_MYSQL_PASSWORD`,
+`VJS_TEST_MYSQL_DBNAME`, and `VJS_TEST_MYSQL_TABLE`.
 
 Useful presets:
 
