@@ -1,5 +1,9 @@
 # VJSX
 
+<p align="center">
+  <img src="assets/vjsx_brand.jpg" alt="VJSX brand" width="720" />
+</p>
+
 [V](https://vlang.io/) bindings to [QuickJS](https://bellard.org/quickjs/)
 javascript engine. Run JS in V.
 
