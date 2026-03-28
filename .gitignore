@@ -17,6 +17,7 @@ main
 bin/
 /cli_runner_bin/cli_runner_bin
 /cli_runner_bin/*.dSYM/
+/vjsx_cli
 
 # Ignore common editor/system specific metadata
 .DS_Store
@@ -37,4 +38,5 @@ typescript-*.tgz
 thirdparty/typescript/package/
 
 # Local scratch probes under tests/
+tests/.host_*
 tests/.wechat_*

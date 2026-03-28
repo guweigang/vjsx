@@ -8,6 +8,8 @@ pub:
 	fs           bool = true
 	path         bool = true
 	process      bool = true
+	sqlite       bool = true
+	mysql        bool = true
 	runtime      RuntimeGlobalsConfig = RuntimeGlobalsConfig{}
 	fs_roots     []string
 	process_args []string
@@ -50,6 +52,12 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.process {
 		ctx.install_process(config.process_args)
 	}
+	if config.sqlite {
+		ctx.install_sqlite_module(config.fs_roots)
+	}
+	if config.mysql {
+		ctx.install_mysql_module()
+	}
 }
 
 fn (config HostConfig) node_compat_config() NodeCompatConfig {
@@ -58,6 +66,8 @@ fn (config HostConfig) node_compat_config() NodeCompatConfig {
 		fs:           config.fs
 		path:         config.path
 		process:      config.process
+		sqlite:       config.sqlite
+		mysql:        config.mysql
 		runtime:      RuntimeGlobalsConfig{}
 		fs_roots:     config.fs_roots
 		process_args: config.process_args

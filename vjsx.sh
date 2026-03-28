@@ -121,7 +121,7 @@ output=$(
 	VJS_ARGS_FILE="$args_file" \
 		VJS_REPO_ROOT="$repo_root" \
 	VCACHE="${VCACHE:-/tmp/vcache}" \
-	v -d build_quickjs run ./cli_runner_bin 2>&1
+	sh -c 'v ${VJS_V_FLAGS:-} -d build_quickjs run ./cli_runner_bin' 2>&1
 )
 status=$?
 set -e

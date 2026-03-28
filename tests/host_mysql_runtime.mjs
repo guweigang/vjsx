@@ -1,0 +1,96 @@
+import { connect } from "mysql";
+
+const host = process.env.VJS_TEST_MYSQL_HOST || "127.0.0.1";
+const port = Number(process.env.VJS_TEST_MYSQL_PORT || "3306");
+const user = process.env.VJS_TEST_MYSQL_USER || "root";
+const password = process.env.VJS_TEST_MYSQL_PASSWORD || "";
+const database = process.env.VJS_TEST_MYSQL_DBNAME || "mysql";
+const table = process.env.VJS_TEST_MYSQL_TABLE || "vjsx_host_mysql_runtime";
+
+const db = await connect({ host, port, user, password, database });
+console.log(db.driver);
+console.log(String(db.supportsTransactions));
+console.log(db.toString());
+const alive = await db.ping();
+console.log(String(db.inTransaction));
+
+await db.exec(`drop table if exists ${table}`);
+await db.exec(`create table ${table} (id int primary key auto_increment, name text)`);
+await db.begin();
+console.log(String(db.inTransaction));
+const rolled = await db.exec(`insert into ${table}(name) values (?)`, ["temp"]);
+await db.rollback();
+console.log(String(db.inTransaction));
+const afterRollback = await db.query(`select count(*) as count from ${table}`);
+await db.begin();
+const inserted = await db.exec(`insert into ${table}(name) values (?)`, ["alice"]);
+await db.commit();
+const rows = await db.query(`select id, name from ${table} where name = ?`, ["alice"]);
+const firstRow = await db.queryOne(`select id, name from ${table} where name = ? order by id`, ["alice"]);
+const missingRow = await db.queryOne(`select id, name from ${table} where name = ?`, ["nobody"]);
+const countValue = await db.scalar(`select count(*) from ${table}`);
+const missingValue = await db.scalar(`select name from ${table} where name = ?`, ["nobody"]);
+const rowBatches = await db.queryMany(`select id, name from ${table} where name <> ? order by id`, [["temp"], ["alice"]]);
+const insertBatch = await db.execMany(`insert into ${table}(name) values (?)`, [["bob"], ["zoe"]]);
+const cachedSelectOne = await db.prepareCached(`select id, name from ${table} where name <> ? order by id`);
+const cachedSelectTwo = await db.prepareCached(`select id, name from ${table} where name <> ? order by id`);
+const insertStmt = await db.prepare(`insert into ${table}(name) values (?)`);
+const selectStmt = cachedSelectOne;
+const countStmt = await db.prepare(`select count(*) as count from ${table}`);
+console.log(insertStmt.driver);
+console.log(String(insertStmt.supportsTransactions));
+console.log(insertStmt.toString());
+console.log(String(cachedSelectOne === cachedSelectTwo));
+console.log(insertStmt.kind);
+console.log(selectStmt.kind);
+const viaStmt = await insertStmt.exec(["carol"]);
+const viaBatch = await insertStmt.execMany([["dave"], ["erin"]]);
+const stmtRows = await selectStmt.query(["alice"]);
+const stmtFirstRow = await selectStmt.queryOne(["alice"]);
+const stmtCountValue = await countStmt.scalar();
+const stmtRowBatches = await selectStmt.queryMany([["erin"], ["carol"]]);
+await insertStmt.close();
+await insertStmt.close();
+await countStmt.close();
+await cachedSelectOne.close();
+await cachedSelectOne.close();
+const cachedSelectThree = await db.prepareCached(`select id, name from ${table} where name <> ? order by id`);
+await db.exec(`drop table if exists ${table}`);
+
+console.log(String(alive));
+console.log(String(rolled.changes));
+console.log(String(afterRollback[0].count));
+console.log(String(inserted.changes));
+console.log(String(inserted.rowsAffected));
+console.log(String(inserted.lastInsertRowid));
+console.log(String(inserted.insertId));
+console.log(rows.map((row) => `${row.id}:${row.name}`).join(","));
+console.log(firstRow ? `${firstRow.id}:${firstRow.name}` : "null");
+console.log(String(missingRow === null));
+console.log(String(countValue));
+console.log(String(missingValue === null));
+console.log(rowBatches.map((group) => group.map((row) => row.name).join(",")).join("|"));
+console.log(String(insertBatch.length));
+console.log(String(insertBatch[0].insertId));
+console.log(String(insertBatch[1].insertId));
+console.log(String(viaStmt.insertId));
+console.log(String(viaBatch.length));
+console.log(String(viaBatch[0].insertId));
+console.log(String(viaBatch[1].insertId));
+console.log(stmtRows.map((row) => `${row.id}:${row.name}`).join(","));
+console.log(stmtFirstRow ? `${stmtFirstRow.id}:${stmtFirstRow.name}` : "null");
+console.log(String(stmtCountValue));
+console.log(stmtRowBatches.map((group) => group.map((row) => row.name).join(",")).join("|"));
+console.log(String(insertStmt.closed));
+console.log(String(selectStmt.closed));
+console.log(String(cachedSelectThree === cachedSelectOne));
+
+await db.close();
+console.log(String(cachedSelectThree.closed));
+await db.close();
+console.log(String(cachedSelectThree.closed));
+try {
+  await db.prepareCached(`select id, name from ${table} where name <> ? order by id`);
+} catch (err) {
+  console.log(`${err.name}:${err.message}`);
+}

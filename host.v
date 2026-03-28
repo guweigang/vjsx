@@ -11,6 +11,8 @@ pub:
 	fs           bool = true
 	path         bool = true
 	process      bool = true
+	sqlite       bool = true
+	mysql        bool = true
 	fs_roots     []string
 	process_args []string
 	log_fn       HostLogFn = default_host_log

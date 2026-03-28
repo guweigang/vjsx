@@ -13,4 +13,9 @@ if [ -z "$vexe" ]; then
 	exit 1
 fi
 
+if [ -n "${VJS_V_FLAGS:-}" ]; then
+	# shellcheck disable=SC2086
+	exec "$vexe" $VJS_V_FLAGS run "$repo_root/vjsx_cli.vsh" "$@"
+fi
+
 exec "$vexe" run "$repo_root/vjsx_cli.vsh" "$@"
