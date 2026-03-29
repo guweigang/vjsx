@@ -31,7 +31,8 @@ mut:
 fn sql_stmt_kind(query_text string) string {
 	head := query_text.trim_space().to_lower()
 	if head.starts_with('select ') || head.starts_with('with ') || head.starts_with('pragma ')
-		|| head.starts_with('show ') || head.starts_with('describe ') || head.starts_with('explain ') {
+		|| head.starts_with('show ') || head.starts_with('describe ')
+		|| head.starts_with('explain ') {
 		return 'query'
 	}
 	if head.starts_with('insert ') || head.starts_with('update ') || head.starts_with('delete ')
@@ -105,6 +106,19 @@ fn sqlite_close_conn_statements(mut conn HostSqliteConn) {
 		sqlite_mark_stmt_closed(mut stmt)
 	}
 	conn.cached_stmts = map[string]&HostSqliteStmt{}
+}
+
+fn sqlite_close_host_conn(mut conn HostSqliteConn) {
+	if conn.closed {
+		return
+	}
+	if conn.in_tx {
+		sqlite_rollback_transaction(mut conn) or {}
+	}
+	sqlite_close_conn_statements(mut conn)
+	conn.db.close() or {}
+	conn.closed = true
+	conn.in_tx = false
 }
 
 fn sqlite_rows_value(ctx &Context, rows []vsqlite.Row) Value {
@@ -246,7 +260,11 @@ fn sqlite_open_config(arg Value) !HostSqliteOpenConfig {
 	}
 	return HostSqliteOpenConfig{
 		path:         path_value.to_string()
-		busy_timeout: if busy_value.is_undefined() || busy_value.is_null() { 0 } else { busy_value.to_int() }
+		busy_timeout: if busy_value.is_undefined() || busy_value.is_null() {
+			0
+		} else {
+			busy_value.to_int()
+		}
 	}
 }
 
@@ -734,13 +752,13 @@ fn sqlite_conn_object(ctx &Context, mut conn HostSqliteConn) Value {
 		if conn.closed {
 			return promise.resolve(ctx.js_undefined())
 		}
+		sqlite_close_conn_statements(mut conn)
 		conn.db.close() or {
 			close_err = sqlite_error_value(ctx, err.msg(), 'Error')
 			unsafe {
 				goto reject
 			}
 		}
-		sqlite_close_conn_statements(mut conn)
 		conn.closed = true
 		sqlite_set_transaction_state(mut conn, obj, false)
 		return promise.resolve(ctx.js_undefined())
@@ -816,53 +834,53 @@ fn sqlite_conn_object(ctx &Context, mut conn HostSqliteConn) Value {
 				goto reject
 			}
 		}
-			if args.len == 0 || !args[0].is_function() {
-				tx_err = sqlite_error_value(ctx, 'transaction callback is required', 'TypeError')
-				unsafe {
+		if args.len == 0 || !args[0].is_function() {
+			tx_err = sqlite_error_value(ctx, 'transaction callback is required', 'TypeError')
+			unsafe {
 				goto reject
 			}
 		}
-			sqlite_begin_transaction(mut conn) or {
-				tx_err = sqlite_error_value(ctx, err.msg(), 'Error')
-				unsafe {
-					goto reject
-				}
+		sqlite_begin_transaction(mut conn) or {
+			tx_err = sqlite_error_value(ctx, err.msg(), 'Error')
+			unsafe {
+				goto reject
 			}
-			sqlite_set_transaction_state(mut conn, obj, true)
-			callback_result := ctx.call(args[0], obj) or {
-				tx_err = sqlite_rollback_error_value(ctx, mut conn, err.msg())
-				sqlite_set_transaction_state(mut conn, obj, false)
-				unsafe {
-					goto reject
-				}
+		}
+		sqlite_set_transaction_state(mut conn, obj, true)
+		callback_result := ctx.call(args[0], obj) or {
+			tx_err = sqlite_rollback_error_value(ctx, mut conn, err.msg())
+			sqlite_set_transaction_state(mut conn, obj, false)
+			unsafe {
+				goto reject
+			}
 			ctx.js_undefined()
 		}
 		mut resolved_result := callback_result
-			if callback_result.instanceof('Promise') {
-				ignore_rejection := ctx.js_function(fn [ctx] (args []Value) Value {
-					return ctx.js_undefined()
-				})
-				callback_result.call('catch', ignore_rejection)
-				resolved_result = ctx.js_await(callback_result) or {
-					tx_err = sqlite_rollback_error_value(ctx, mut conn, sqlite_error_message(err))
-					sqlite_set_transaction_state(mut conn, obj, false)
-					unsafe {
-						goto reject
-					}
-				ctx.js_undefined()
-			}
-			}
-			sqlite_commit_transaction(mut conn) or {
+		if callback_result.instanceof('Promise') {
+			ignore_rejection := ctx.js_function(fn [ctx] (args []Value) Value {
+				return ctx.js_undefined()
+			})
+			callback_result.call('catch', ignore_rejection)
+			resolved_result = ctx.js_await(callback_result) or {
 				tx_err = sqlite_rollback_error_value(ctx, mut conn, sqlite_error_message(err))
 				sqlite_set_transaction_state(mut conn, obj, false)
 				unsafe {
 					goto reject
 				}
+				ctx.js_undefined()
 			}
+		}
+		sqlite_commit_transaction(mut conn) or {
+			tx_err = sqlite_rollback_error_value(ctx, mut conn, sqlite_error_message(err))
 			sqlite_set_transaction_state(mut conn, obj, false)
-			return promise.resolve(resolved_result)
-			reject:
-			return promise.reject(tx_err)
+			unsafe {
+				goto reject
+			}
+		}
+		sqlite_set_transaction_state(mut conn, obj, false)
+		return promise.resolve(resolved_result)
+		reject:
+		return promise.reject(tx_err)
 	})
 	prepare_fn := ctx.js_function(fn [ctx, mut conn] (args []Value) Value {
 		mut prepare_err := ctx.js_undefined()
@@ -980,7 +998,11 @@ pub fn (ctx &Context) install_sqlite_module(roots []string) {
 				goto reject
 			}
 		}
-		target := if config.path == ':memory:' { config.path } else { write_target_path(config.path, roots) }
+		target := if config.path == ':memory:' {
+			config.path
+		} else {
+			write_target_path(config.path, roots)
+		}
 		mut db := vsqlite.connect(target) or {
 			open_err = sqlite_error_value(ctx, err.msg(), 'Error')
 			unsafe {
@@ -995,6 +1017,9 @@ pub fn (ctx &Context) install_sqlite_module(roots []string) {
 			db:   db
 			path: target
 		}
+		ctx.register_host_cleanup(fn [mut conn] () {
+			sqlite_close_host_conn(mut conn)
+		})
 		return promise.resolve(sqlite_conn_object(ctx, mut conn))
 		reject:
 		return promise.reject(open_err)

@@ -8,12 +8,20 @@ struct C.JSModuleDef {}
 
 // Context structure based on `JSContext` in qjs
 // and implemented into `ref`.
+struct HostCleanupState {
+mut:
+	cleanups []HostCleanup
+}
+
 pub struct Context {
-	ref &C.JSContext
-	rt  Runtime
+	ref                &C.JSContext
+	rt                 Runtime
+	host_cleanup_state &HostCleanupState
 }
 
 type SetMeta = fn (Context, JSValueConst)
+
+type HostCleanup = fn ()
 
 // ContextConfig structure params.
 @[params]
@@ -134,10 +142,26 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 		rt.promise_rejection_tracker()
 	}
 	ctx := &Context{
-		ref: ref
-		rt:  rt
+		ref:                ref
+		rt:                 rt
+		host_cleanup_state: &HostCleanupState{
+			cleanups: []HostCleanup{}
+		}
 	}
 	return ctx
+}
+
+pub fn (ctx &Context) register_host_cleanup(cleanup HostCleanup) {
+	mut cleanup_state := ctx.host_cleanup_state
+	cleanup_state.cleanups << cleanup
+}
+
+fn (ctx &Context) run_host_cleanups() {
+	mut cleanup_state := ctx.host_cleanup_state
+	for index := cleanup_state.cleanups.len - 1; index >= 0; index-- {
+		cleanup_state.cleanups[index]()
+	}
+	cleanup_state.cleanups = []HostCleanup{}
 }
 
 // Core evaluate JS
@@ -298,8 +322,9 @@ pub fn (ctx &Context) call(val Value, args ...AnyValue) !Value {
 pub fn (ctx &Context) dup_context() &Context {
 	ref := C.JS_DupContext(ctx.ref)
 	return &Context{
-		ref: ref
-		rt:  ctx.rt
+		ref:                ref
+		rt:                 ctx.rt
+		host_cleanup_state: ctx.host_cleanup_state
 	}
 }
 
@@ -330,6 +355,7 @@ pub fn (ctx &Context) runtime() Runtime {
 // Only use this when you are managing ownership manually. When using
 // `RuntimeSession`, call `session.close()` instead.
 pub fn (ctx &Context) free() {
+	ctx.run_host_cleanups()
 	C.js_std_free_handlers(ctx.rt.ref)
 	C.JS_FreeContext(ctx.ref)
 }

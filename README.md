@@ -148,6 +148,8 @@ leaking them can surface later as hard-to-diagnose bootstrap failures.
 
 If you want one owner object for embedded use, prefer `vjsx.new_runtime_session()`
 and `session.close()`, which tear down the `Context` and `Runtime` together.
+For Node-style hosts, that teardown also closes tracked `sqlite` / `mysql`
+connections that were left open by JS code.
 
 `vjsx.new_runtime()` and `rt.new_context()` are still available for advanced
 manual ownership cases, but then the caller is responsible for pairing them

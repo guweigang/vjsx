@@ -105,6 +105,19 @@ $if vjsx_mysql ? {
 		conn.cached_stmts = map[string]&HostMySqlStmt{}
 	}
 
+	fn mysql_close_host_conn(mut conn HostMySqlConn) {
+		if conn.closed {
+			return
+		}
+		if conn.in_tx {
+			mysql_rollback_transaction(mut conn) or {}
+		}
+		mysql_close_conn_statements(mut conn)
+		conn.db.close() or {}
+		conn.closed = true
+		conn.in_tx = false
+	}
+
 	fn mysql_rows_value_from_maps(ctx &Context, rows []map[string]string) Value {
 		arr := ctx.js_array()
 		for i, row in rows {
@@ -885,13 +898,13 @@ $if vjsx_mysql ? {
 			if conn.closed {
 				return promise.resolve(ctx.js_undefined())
 			}
+			mysql_close_conn_statements(mut conn)
 			conn.db.close() or {
 				close_err = mysql_error_value(ctx, err.msg(), 'Error')
 				unsafe {
 					goto reject
 				}
 			}
-			mysql_close_conn_statements(mut conn)
 			conn.closed = true
 			mysql_set_transaction_state(mut conn, obj, false)
 			return promise.resolve(ctx.js_undefined())
@@ -1165,6 +1178,9 @@ $if vjsx_mysql ? {
 			mut conn := &HostMySqlConn{
 				db: db
 			}
+			ctx.register_host_cleanup(fn [mut conn] () {
+				mysql_close_host_conn(mut conn)
+			})
 			return promise.resolve(mysql_conn_object(ctx, mut conn))
 			reject:
 			return promise.reject(connect_err)
