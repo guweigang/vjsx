@@ -253,6 +253,9 @@ DB host API shape:
 - `db.toString()` and `stmt.toString()` provide compact debug-friendly summaries
 - `db.exec(...)` returns `rows`, `changes`, `rowsAffected`, `lastInsertRowid`,
   and `insertId`
+
+`process.env` is exposed as a live host view, so reads reflect environment
+variable changes made by the embedding process after the runtime was installed.
 - statements expose `driver`, `supportsTransactions`, `sql`, `kind`, and `closed`
 
 When `params` are provided to `mysql.query(...)` or `mysql.exec(...)`, vjsx
