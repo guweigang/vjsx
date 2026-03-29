@@ -1,8 +1,11 @@
 import vjsx { Promise, Value }
 
 fn test_promise() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	res := ctx.new_promise(fn (p Promise) Value {
 		return p.resolve('foo')
@@ -11,7 +14,4 @@ fn test_promise() {
 
 	res2 := ctx.js_promise().resolve('bar').await()
 	assert res2.str() == 'bar'
-
-	ctx.free()
-	rt.free()
 }

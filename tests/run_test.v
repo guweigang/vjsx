@@ -1,8 +1,11 @@
 import vjsx
 
 fn test_run_helpers() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	value := ctx.run('1 + 2') or { panic(err) }
 	assert value.to_int() == 3
@@ -12,15 +15,11 @@ fn test_run_helpers() {
 	assert file_value.to_string() == 'test foo'
 	file_value.free()
 
-	module_value := ctx.run_module('globalThis.__run_mod = await Promise.resolve("ok")', 'inline.js') or {
-		panic(err)
-	}
+	module_value := ctx.run_module('globalThis.__run_mod = await Promise.resolve("ok")',
+		'inline.js') or { panic(err) }
 	assert module_value.is_undefined()
 	module_value.free()
 	mod_value := ctx.js_global('__run_mod')
 	assert mod_value.to_string() == 'ok'
 	mod_value.free()
-
-	ctx.free()
-	rt.free()
 }

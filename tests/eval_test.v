@@ -1,8 +1,11 @@
 import vjsx
 
 fn test_eval() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	value := ctx.eval('1 + 2') or { panic(err) }
 	ctx.end()
@@ -11,15 +14,15 @@ fn test_eval() {
 	assert value.is_string() == false
 	assert value.to_int() == 3
 
-	// free
 	value.free()
-	ctx.free()
-	rt.free()
 }
 
 fn test_multi_eval() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	ctx.eval('const sum = (a, b) => a + b') or { panic(err) }
 	ctx.eval('const mul = (a, b) => a * b') or { panic(err) }
@@ -32,16 +35,16 @@ fn test_multi_eval() {
 	assert sum.to_int() == 3
 	assert mul.to_int() == 2
 
-	// free
 	mul.free()
 	sum.free()
-	ctx.free()
-	rt.free()
 }
 
 fn test_eval_file() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	value := ctx.eval_file('./tests/test.js') or { panic(err) }
 	ctx.end()
@@ -49,8 +52,5 @@ fn test_eval_file() {
 	assert value.is_string() == true
 	assert value.to_string() == 'test foo'
 
-	// free
 	value.free()
-	ctx.free()
-	rt.free()
 }

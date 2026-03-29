@@ -62,11 +62,17 @@ Create file `main.v` and copy-paste this code.
 import vjsx
 
 fn main() {
-  rt := vjsx.new_runtime()
-  ctx := rt.new_context()
+  mut session := vjsx.new_runtime_session()
+  defer {
+    session.close()
+  }
+  ctx := session.context()
 
   value := ctx.eval('1 + 2') or { panic(err) }
   ctx.end()
+  defer {
+    value.free()
+  }
 
   assert value.is_number() == true
   assert value.is_string() == false
@@ -74,11 +80,6 @@ fn main() {
 
   println(value)
   // 3
-
-  // free
-  value.free()
-  ctx.free()
-  rt.free()
 }
 ```
 
@@ -139,6 +140,18 @@ same loader is now also available from the `vjsx` API through
 It is a good fit for standalone `.ts` scripts, `.mts` modules, and small local
 module graphs. Project-wide features like full `tsc` diagnostics, `references`,
 and broader Node compatibility are still out of scope for now.
+
+When embedding `vjsx` in a long-lived process, always pair each created
+`Runtime`/`Context` with an explicit `free()`. Repeated TypeScript bootstrap
+work in the same process assumes those runtimes are torn down deliberately;
+leaking them can surface later as hard-to-diagnose bootstrap failures.
+
+If you want one owner object for embedded use, prefer `vjsx.new_runtime_session()`
+and `session.close()`, which tear down the `Context` and `Runtime` together.
+
+`vjsx.new_runtime()` and `rt.new_context()` are still available for advanced
+manual ownership cases, but then the caller is responsible for pairing them
+with `ctx.free()` and `rt.free()` correctly.
 
 The wrapper script will use `VJS_QUICKJS_PATH` when it is set. If it is not
 set, it will try `../quickjs` relative to the repository root as a local
@@ -290,12 +303,14 @@ import vjsx
 import herudi.vjsx.web
 
 fn main() {
-  rt := vjsx.new_runtime()
-  ctx := rt.new_context()
-
-  ctx.install_script_runtime(
+  mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
     process_args: ['inline.js']
-  )
+  })
+  defer {
+    session.close()
+  }
+  ctx := session.context()
+
   web.inject_browser_runtime_minimal(ctx)
 }
 ```
@@ -361,8 +376,11 @@ import vjsx
 import herudi.vjsx.web
 
 fn main() {
-  rt := vjsx.new_runtime()
-  ctx := rt.new_context()
+  mut session := vjsx.new_runtime_session()
+  defer {
+    session.close()
+  }
+  ctx := session.context()
 
   // inject all browser host features
   web.inject_browser_host(ctx)

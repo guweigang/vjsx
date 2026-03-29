@@ -21,8 +21,11 @@ pub fn btoa(ctx &Context) Value {
 // import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjsx.new_runtime()
-//   ctx := rt.new_context()
+//   mut session := vjsx.new_runtime_session()
+//   defer {
+//     session.close()
+//   }
+//   ctx := session.context()
 //
 //   web.btoa_api(ctx)
 // }

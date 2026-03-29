@@ -5,14 +5,11 @@ fn test_cli_runner() {
 }
 
 fn test_install_host_compat() {
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 	ctx.install_host(
 		console: false
 		fs:      false
@@ -23,14 +20,11 @@ fn test_install_host_compat() {
 }
 
 fn test_install_runtime_globals_profile() {
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 	ctx.install_runtime_globals(
 		binary: true
 		timer:  false
@@ -47,14 +41,11 @@ fn test_install_runtime_globals_profile() {
 }
 
 fn test_runtime_globals_presets() {
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 	ctx.install_runtime_globals(vjsx.runtime_globals_minimal())
 	value := ctx.eval('typeof atob + "|" + typeof URL + "|" + typeof setTimeout') or { panic(err) }
 	ctx.end()
@@ -65,14 +56,11 @@ fn test_runtime_globals_presets() {
 }
 
 fn test_node_compat_minimal_preset() {
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 	ctx.install_node_compat(vjsx.node_compat_minimal([], ['inline.js']))
 	value := ctx.eval('typeof console + "|" + typeof process + "|" + typeof Buffer + "|" + typeof setTimeout + "|" + process.argv.length') or {
 		panic(err)
@@ -85,17 +73,13 @@ fn test_node_compat_minimal_preset() {
 }
 
 fn test_install_script_runtime_profile() {
-	rt := vjsx.new_runtime()
-	defer {
-		rt.free()
-	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
-	ctx.install_script_runtime(
+	mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
 		process_args: ['inline.js', 'arg-one']
-	)
+	})
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	value := ctx.eval('typeof console + "|" + typeof process + "|" + typeof Buffer + "|" + typeof setTimeout + "|" + process.argv.join(",") + "|" + typeof atob') or {
 		panic(err)
 	}
@@ -107,17 +91,13 @@ fn test_install_script_runtime_profile() {
 }
 
 fn test_install_node_runtime_profile() {
-	rt := vjsx.new_runtime()
-	defer {
-		rt.free()
-	}
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
-	ctx.install_node_runtime(
+	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
-	)
+	})
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	value := ctx.eval('typeof console + "|" + typeof process + "|" + typeof Buffer + "|" + typeof setTimeout') or {
 		panic(err)
 	}

@@ -1,8 +1,11 @@
 import vjsx
 
 fn test_value() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	code := '(() => {
 		return {
@@ -31,6 +34,4 @@ fn test_value() {
 	assert val.get('i').callback().str() == 'foo'
 	assert val.get('j').await().str() == 'foo'
 	val.free()
-	ctx.free()
-	rt.free()
 }

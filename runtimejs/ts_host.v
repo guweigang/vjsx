@@ -3,6 +3,8 @@ module runtimejs
 import os
 import vjsx
 
+const typescript_runtime_ready_key = '__vjs_typescript_runtime_ready'
+
 fn install_typescript_host_bridge(ctx &vjsx.Context) {
 	global := ctx.js_global()
 	host := ctx.js_object()
@@ -98,6 +100,22 @@ fn install_typescript_host_bridge(ctx &vjsx.Context) {
 	global.free()
 }
 
+fn typescript_runtime_is_installed(ctx &vjsx.Context) bool {
+	ready := ctx.js_global(typescript_runtime_ready_key)
+	defer {
+		ready.free()
+	}
+	return !ready.is_undefined() && ready.to_bool()
+}
+
+fn mark_typescript_runtime_installed(ctx &vjsx.Context) {
+	global := ctx.js_global()
+	ready := ctx.js_bool(true)
+	global.set(typescript_runtime_ready_key, ready)
+	ready.free()
+	global.free()
+}
+
 fn typescript_helper_path(name string) string {
 	return os.join_path(@VMODROOT, 'thirdparty', 'typescript', 'lib', name)
 }
@@ -111,6 +129,9 @@ fn install_typescript_helper(ctx &vjsx.Context, name string) ! {
 }
 
 pub fn install_typescript_runtime(ctx &vjsx.Context) ! {
+	if typescript_runtime_is_installed(ctx) {
+		return
+	}
 	ts_path := typescript_runtime_path()
 	if !os.exists(ts_path) {
 		return error('TypeScript runtime not found: ${ts_path}')
@@ -121,4 +142,5 @@ pub fn install_typescript_runtime(ctx &vjsx.Context) ! {
 	install_typescript_helper(ctx, 'vjs_ts_scan.js')!
 	install_typescript_helper(ctx, 'vjs_ts_commonjs.js')!
 	install_typescript_helper(ctx, 'vjs_ts_resolver.js')!
+	mark_typescript_runtime_installed(ctx)
 }

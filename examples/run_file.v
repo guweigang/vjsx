@@ -1,15 +1,11 @@
 import vjsx
 
 fn main() {
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 
 	value := ctx.run_file('./js/foo.js') or { panic(err) }
 	defer {

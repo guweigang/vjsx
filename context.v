@@ -113,10 +113,16 @@ fn fn_custom_context(config ContextConfig) FnNewContext {
 }
 
 // Create new Context from `Runtime`.
+// This is the low-level manual ownership path. Prefer
+// `vjsx.new_runtime_session()` unless you need to manage the Context
+// separately from the Runtime.
 // Example:
 // ```v
 // rt := vjsx.new_runtime()
 // ctx := rt.new_context(opts_config)
+// defer {
+//   ctx.free()
+// }
 // ```
 pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	new_context := fn_custom_context(config)
@@ -129,7 +135,7 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	}
 	ctx := &Context{
 		ref: ref
-		rt: rt
+		rt:  rt
 	}
 	return ctx
 }
@@ -143,8 +149,8 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 	fname := op.fname
 	flag := op.flag
 	set_meta := op.set_meta
-	if (flag & vjsx.type_mask) == vjsx.type_module {
-		ref = C.JS_Eval(ctx.ref, input, len, fname, flag | vjsx.type_compile_only)
+	if (flag & type_mask) == type_module {
+		ref = C.JS_Eval(ctx.ref, input, len, fname, flag | type_compile_only)
 		if C.JS_IsException(ref) == 0 {
 			set_meta(ctx, ref)
 			ref = C.JS_EvalFunction(ctx.ref, ref)
@@ -168,10 +174,10 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 // Example: ctx.js_eval(code, filename, flag)!
 pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 	return ctx.js_eval_core(
-		input: input.str
-		len: usize(input.len)
-		fname: fname.str
-		flag: flag
+		input:    input.str
+		len:      usize(input.len)
+		fname:    fname.str
+		flag:     flag
 		set_meta: fn (ctx Context, ref JSValueConst) {}
 	)!
 }
@@ -186,7 +192,7 @@ pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 // ```
 pub fn (ctx &Context) eval(args ...EvalArgs) !Value {
 	input := args[0] as string
-	flag := if args.len == 2 { args[1] as int } else { vjsx.type_global }
+	flag := if args.len == 2 { args[1] as int } else { type_global }
 	return ctx.js_eval(input, '<input>', flag)
 }
 
@@ -207,7 +213,7 @@ pub fn (ctx &Context) run(args ...EvalArgs) !Value {
 // ctx.eval_module('1 + 1', 'index.js')!
 // ```
 pub fn (ctx &Context) eval_module(input string, fname string) !Value {
-	return ctx.js_eval(input, fname, vjsx.type_module)
+	return ctx.js_eval(input, fname, type_module)
 }
 
 // Evaluate JS module and flush pending jobs.
@@ -231,10 +237,10 @@ pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta Set
 		return error('${fname} file not found')
 	}
 	val := ctx.js_eval_core(
-		input: buf
-		len: buf_len
-		fname: c_fname
-		flag: flag
+		input:    buf
+		len:      buf_len
+		fname:    c_fname
+		flag:     flag
 		set_meta: set_meta
 	)!
 	C.js_free(ctx.ref, buf)
@@ -252,7 +258,7 @@ pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta Set
 @[manualfree]
 pub fn (ctx &Context) eval_file(args ...EvalArgs) !Value {
 	fname := args[0] as string
-	flag := if args.len == 2 { args[1] as int } else { vjsx.type_global }
+	flag := if args.len == 2 { args[1] as int } else { type_global }
 	return ctx.eval_file_custom_meta(fname, flag, def_set_meta)
 }
 
@@ -293,7 +299,7 @@ pub fn (ctx &Context) dup_context() &Context {
 	ref := C.JS_DupContext(ctx.ref)
 	return &Context{
 		ref: ref
-		rt: ctx.rt
+		rt:  ctx.rt
 	}
 }
 
@@ -320,7 +326,9 @@ pub fn (ctx &Context) runtime() Runtime {
 	}
 }
 
-// Free the context
+// Free the context.
+// Only use this when you are managing ownership manually. When using
+// `RuntimeSession`, call `session.close()` instead.
 pub fn (ctx &Context) free() {
 	C.js_std_free_handlers(ctx.rt.ref)
 	C.JS_FreeContext(ctx.ref)

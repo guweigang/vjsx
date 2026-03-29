@@ -1,8 +1,11 @@
 import vjsx { Value }
 
 fn test_type() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	obj := ctx.js_object()
 	obj.set('foo', 'foo')
@@ -57,7 +60,4 @@ fn test_type() {
 		return ctx.js_null()
 	})
 	assert cb.is_function() == true
-
-	ctx.free()
-	rt.free()
 }

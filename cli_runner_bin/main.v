@@ -10,7 +10,7 @@ fn fail(message string) {
 	exit(1)
 }
 
-fn main() {
+fn run() !string {
 	file := os.getenv('VJS_SCRIPT_FILE')
 	as_module := os.getenv('VJS_AS_MODULE') == '1'
 	runtime_profile := os.getenv('VJS_RUNTIME_PROFILE')
@@ -41,15 +41,11 @@ fn main() {
 		os.chdir(prev_dir) or {}
 	}
 
-	rt := vjsx.new_runtime()
+	mut session := vjsx.new_runtime_session()
 	defer {
-		rt.free()
+		session.close()
 	}
-
-	ctx := rt.new_context()
-	defer {
-		ctx.free()
-	}
+	ctx := session.context()
 
 	match runtime_profile {
 		'node' {
@@ -82,6 +78,14 @@ fn main() {
 	}
 
 	if !value.is_undefined() {
-		print(value.to_string())
+		return value.to_string()
+	}
+	return ''
+}
+
+fn main() {
+	output := run() or { fail(err.msg()) }
+	if output != '' {
+		print(output)
 	}
 }

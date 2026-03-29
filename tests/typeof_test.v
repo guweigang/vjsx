@@ -1,8 +1,11 @@
 import vjsx
 
 fn test_typeof() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	code := '(() => {
 		return {
 			a: 1,
@@ -31,6 +34,4 @@ fn test_typeof() {
 	assert val.get('j').instanceof('Promise') == true
 	assert val.get('a').typeof_name() == 'number'
 	val.free()
-	ctx.free()
-	rt.free()
 }

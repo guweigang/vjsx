@@ -3,8 +3,11 @@ import herudi.vjsx.web
 import os
 
 fn main() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	web.inject(ctx)
 
@@ -37,8 +40,5 @@ fn main() {
 	value := ctx.eval_file('./js/main.js', vjsx.type_module) or { panic(err) }
 	ctx.end()
 
-	// free
 	value.free()
-	ctx.free()
-	rt.free()
 }

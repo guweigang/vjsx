@@ -1,6 +1,11 @@
-import vjsx { Context }
+import vjsx
 
-fn type_number(ctx Context) {
+fn type_number() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	code := '(() => {
 		return 1 + 2
 	})()'
@@ -13,10 +18,14 @@ fn type_number(ctx Context) {
 	assert val.typeof_name() == 'number'
 	println('Number => ${val}')
 	val.free()
-	ctx.free()
 }
 
-fn type_bool(ctx Context) {
+fn type_bool() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	code := '(() => {
 		return true
 	})()'
@@ -27,10 +36,14 @@ fn type_bool(ctx Context) {
 	assert val.typeof_name() == 'boolean'
 	println('Bool => ${val}')
 	val.free()
-	ctx.free()
 }
 
-fn type_object(ctx Context) {
+fn type_object() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	code := '(() => {
 		return { name: "john" }
 	})()'
@@ -42,10 +55,14 @@ fn type_object(ctx Context) {
 	assert val.typeof_name() == 'object'
 	println('Object => ${json}')
 	val.free()
-	ctx.free()
 }
 
-fn type_array(ctx Context) {
+fn type_array() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	code := '(() => {
 		return [1, 2]
 	})()'
@@ -57,16 +74,11 @@ fn type_array(ctx Context) {
 	assert val.typeof_name() == 'object'
 	println('Array => ${json}')
 	val.free()
-	ctx.free()
 }
 
 fn main() {
-	rt := vjsx.new_runtime()
-
-	type_number(rt.new_context())
-	type_bool(rt.new_context())
-	type_object(rt.new_context())
-	type_array(rt.new_context())
-
-	rt.free()
+	type_number()
+	type_bool()
+	type_object()
+	type_array()
 }

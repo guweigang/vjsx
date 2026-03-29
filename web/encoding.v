@@ -75,8 +75,11 @@ fn encoding_boot(ctx &Context, boot Value) {
 // import herudi.vjsx.web
 //
 // fn main() {
-//   rt := vjsx.new_runtime()
-//   ctx := rt.new_context()
+//   mut session := vjsx.new_runtime_session()
+//   defer {
+//     session.close()
+//   }
+//   ctx := session.context()
 //
 //   web.encoding_api(ctx)
 // }

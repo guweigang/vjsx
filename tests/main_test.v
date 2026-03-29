@@ -1,8 +1,11 @@
 import vjsx { Value }
 
 fn test_atom() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	atom_str := ctx.new_atom('foo')
 	atom_int := ctx.new_atom(20)
 
@@ -21,13 +24,14 @@ fn test_atom() {
 	obj.free()
 	atom_int.free()
 	atom_str.free()
-	ctx.free()
-	rt.free()
 }
 
 fn test_callback() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 	glob := ctx.js_global()
 	glob.set('my_fn', ctx.js_function(fn [ctx] (args []Value) Value {
 		if args.len == 0 {
@@ -53,16 +57,16 @@ fn test_callback() {
 	assert value.is_string() == true
 	assert value.to_string() == 'foo,bar,baz'
 
-	// free
 	value.free()
 	glob.free()
-	ctx.free()
-	rt.free()
 }
 
 fn test_module() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	mut mod := ctx.js_module('my-module')
 	mod.export('foo', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -83,7 +87,4 @@ fn test_module() {
 
 	ctx.eval(code, vjsx.type_module) or { panic(err) }
 	ctx.end()
-
-	ctx.free()
-	rt.free()
 }

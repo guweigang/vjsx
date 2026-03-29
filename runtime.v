@@ -34,9 +34,15 @@ fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
 fn C.JS_IsJobPending(&C.JSRuntime) bool
 
 // Create new Runtime.
+// This is the low-level manual ownership path. Prefer
+// `vjsx.new_runtime_session()` unless you need to manage the Runtime and
+// Context separately.
 // Example:
 // ```v
 // rt := vjsx.new_runtime()
+// defer {
+//   rt.free()
+// }
 // ```
 pub fn new_runtime() Runtime {
 	rt := Runtime{C.JS_NewRuntime()}
@@ -69,7 +75,9 @@ pub fn (rt Runtime) run_gc() {
 	C.JS_RunGC(rt.ref)
 }
 
-// Free runtime
+// Free runtime.
+// Only use this when you are managing ownership manually. When using
+// `RuntimeSession`, call `session.close()` instead.
 pub fn (rt &Runtime) free() {
 	C.JS_FreeRuntime(rt.ref)
 }

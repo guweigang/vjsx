@@ -1,8 +1,11 @@
 import vjsx
 
 fn main() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	array := ctx.js_array()
 
@@ -22,10 +25,7 @@ fn main() {
 	assert ctx.json_stringify(value) == '[1,"foo","bar",2]'
 	println('result => ${value}')
 
-	// free
 	value.free()
 	global.free()
 	array.free()
-	ctx.free()
-	rt.free()
 }

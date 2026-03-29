@@ -1,8 +1,11 @@
 import vjsx { Value }
 
 fn main() {
-	rt := vjsx.new_runtime()
-	ctx := rt.new_context()
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
 
 	global := ctx.js_global()
 	global.set('my_fn', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -28,9 +31,6 @@ fn main() {
 
 	println('result => ${value}')
 
-	// free
 	value.free()
 	global.free()
-	ctx.free()
-	rt.free()
 }
