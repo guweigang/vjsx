@@ -78,10 +78,58 @@ fn main() {
   assert value.is_string() == false
   assert value.to_int() == 3
 
-  println(value)
+println(value)
   // 3
 }
 ```
+
+## Embedded Host Quick Start
+
+If you are embedding `vjsx` into another V project, start from
+`runtimejs.ExtensionSession` rather than lower-level runtime plumbing.
+
+```v
+import runtimejs
+import vjsx
+
+fn host_api() vjsx.HostValueBuilder {
+	return vjsx.host_object(vjsx.HostObjectField{
+		name:  'app'
+		value: vjsx.host_object(vjsx.HostObjectField{
+			name:  'name'
+			value: vjsx.host_value('demo-host')
+		})
+	})
+}
+
+fn main() {
+	mut extension_session := runtimejs.new_node_extension_session(
+		vjsx.ContextConfig{},
+		vjsx.NodeRuntimeConfig{
+			process_args: ['extension.mjs']
+		},
+		vjsx.HostApiConfig{},
+		host_api(),
+	)
+	defer {
+		extension_session.close()
+	}
+
+	mut extension := extension_session.load_extension('./examples/js/host_extension.mjs',
+		vjsx.ScriptPluginHooks{}) or { panic(err) }
+	defer {
+		extension.close()
+	}
+
+	result := extension.call_export('greet', 'world') or { panic(err) }
+	defer {
+		result.free()
+	}
+	println(result.to_string())
+}
+```
+
+For the full host-first embedding guidance, see [EMBEDDING.md](EMBEDDING.md).
 
 ## Run
 
@@ -100,6 +148,14 @@ Explore [examples](https://github.com/guweigang/vjsx/tree/master/examples)
 
 If you want the smallest file-based example, see
 `examples/run_file.v` together with `examples/js/foo.js`.
+
+If you want the recommended embedded-host flow, see
+`examples/embedding_extension.v` together with
+`examples/js/host_extension.mjs`.
+
+If you also want an example that shows host modules plus manifest-defined hook
+names, see `examples/embedding_extension_manifest.v` together with
+`examples/js/host_extension_manifest.mjs`.
 
 ## CLI
 
@@ -151,6 +207,44 @@ and `session.close()`, which tear down the `Context` and `Runtime` together.
 For Node-style hosts, that teardown also closes tracked `sqlite` / `mysql`
 connections that were left open by JS code.
 
+If you also want TypeScript/module-aware file loading from the same session,
+use `runtimejs.new_script_runtime_session(...)` or
+`runtimejs.new_node_runtime_session(...)`. Those session helpers install the
+runtime bridge so embedders can call higher-level methods like:
+
+- `session.run(path)`
+- `session.run_script(path)`
+- `session.run_module(path)`
+- `session.load_module(path)`
+- `session.import_module(path)`
+- `session.import_module_with_host(path, host_api)`
+- `session.load_plugin(path, hooks)`
+- `session.load_plugin_with_host(path, hooks, host_api)`
+- `session.call_module_export(path, export_name, ...)`
+- `session.call_module_export_with_host(path, export_name, host_api, ...)`
+- `session.call_module_method(path, export_name, method_name, ...)`
+- `session.call_module_method_with_host(path, export_name, method_name, host_api, ...)`
+- `session.call_default_export_method(path, method_name, ...)`
+- `session.call_default_export_method_with_host(path, method_name, host_api, ...)`
+
+For embedded host use, the recommended abstraction ladder is now:
+
+- `vjsx.RuntimeSession`: core lifecycle and loading
+- `runtimejs.ExtensionSession`: default embedder-facing session
+- `runtimejs.ExtensionHandle`: one loaded extension instance with lifecycle
+  hooks plus regular export calls
+
+That path is documented in [EMBEDDING.md](EMBEDDING.md), together with:
+
+- the recommended stopping point to avoid over-design
+- API surface guidance for default vs advanced helpers
+- stability notes for likely long-term vs de-emphasized APIs
+- a convergence checklist for future cleanup without more abstraction growth
+- host API shape guidance
+- `load_extension(...)` usage
+- optional JS/TS manifest support
+- optional manifest `services` support
+
 `vjsx.new_runtime()` and `rt.new_context()` are still available for advanced
 manual ownership cases, but then the caller is responsible for pairing them
 with `ctx.free()` and `rt.free()` correctly.
@@ -170,7 +264,7 @@ The runtime is now split into clearer layers:
 - `ctx.install_runtime_globals(...)`: reusable globals like `Buffer`, timers,
   `URL`, and `URLPattern`
 - `ctx.install_node_compat(...)`: Node-like host features such as `console`,
-  `fs`, `path`, `process`, `sqlite`, and optional `mysql`
+  `fs`, `path`, `os`, `child_process`, `process`, `sqlite`, and optional `mysql`
 - `web.inject_browser_host(ctx, ...)`: browser-style host features under
   `web/`, including `window`, DOM bootstrap, and Web APIs
 
@@ -180,6 +274,17 @@ browser-facing modules you want, while still letting higher-level features like
 
 The legacy `ctx.install_host(...)` entrypoint still works as a compatibility
 wrapper around `install_node_compat(...)`.
+
+For embedders, `ctx.install_host_api(...)` provides a more explicit way to
+expose host globals and modules to JS/TS extension code without hand-rolling
+`js_module(...).create()` at every call site.
+
+Useful embedders helpers include:
+
+- `vjsx.host_value(...)`
+- `vjsx.host_object(...)`
+- `vjsx.host_module_exports(...)`
+- `vjsx.host_module_object(...)`
 
 Database host modules:
 
@@ -372,6 +477,106 @@ ctx.eval(code, vjsx.type_module) or { panic(err) }
 ctx.end()
 ```
 
+## Install Host API
+
+```v
+import vjsx
+
+mut session := vjsx.new_runtime_session()
+defer {
+  session.close()
+}
+ctx := session.context()
+
+ctx.install_host_api(
+  globals: [
+    vjsx.HostGlobalBinding{
+      name:  'appName'
+      value: vjsx.host_value('demo')
+    },
+  ]
+  modules: [
+    vjsx.HostModuleBinding{
+      name: 'host-tools'
+      install: vjsx.host_module_exports(
+        vjsx.HostModuleExport{
+          name:  'answer'
+          value: vjsx.host_value(42)
+        },
+        vjsx.HostModuleExport{
+          name: 'describe'
+          value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
+            return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+              return ctx.js_string('host:' + args[0].str())
+            })
+          }
+        },
+      )
+    },
+  ]
+)
+
+ctx.eval('
+  import hostTools, { answer, describe } from "host-tools";
+  globalThis.result = [
+    appName,
+    String(answer),
+    describe("ok"),
+    String(hostTools.answer)
+  ].join("|");
+', vjsx.type_module) or { panic(err) }
+```
+
+## Install Host Object
+
+```v
+ctx.install_host_api(
+  globals: [
+    vjsx.HostGlobalBinding{
+      name: 'host'
+      value: vjsx.host_object(
+        vjsx.HostObjectField{
+          name:  'name'
+          value: vjsx.host_value('demo')
+        },
+        vjsx.HostObjectField{
+          name: 'math'
+          value: vjsx.host_object(
+            vjsx.HostObjectField{
+              name: 'add'
+              value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
+                return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+                  return ctx.js_int(args[0].to_int() + args[1].to_int())
+                })
+              }
+            },
+          )
+        },
+      )
+    },
+  ]
+  modules: [
+    vjsx.HostModuleBinding{
+      name: 'host-service'
+      install: vjsx.host_module_object(
+        vjsx.HostObjectField{
+          name:  'version'
+          value: vjsx.host_value('v1')
+        },
+        vjsx.HostObjectField{
+          name: 'greet'
+          value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
+            return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+              return ctx.js_string('hello:' + args[0].str())
+            })
+          }
+        },
+      )
+    },
+  ]
+)
+```
+
 ## Web Platform APIs
 
 Inject Web API to vjsx.
@@ -454,18 +659,18 @@ Minimal examples:
 These snippets assume you are running with the browser-style host profile, so
 `crypto.subtle` and `TextEncoder` are already available.
 
-Runnable copies of these snippets live under `examples/crypto/` and can be run
+Runnable copies of these snippets live under `examples/webcrypto/` and can be run
 with:
 
 ```bash
-./vjsx --runtime browser --module ./examples/crypto/<file>.mjs
+./vjsx --runtime browser --module ./examples/webcrypto/<file>.mjs
 ```
 
-See also: `examples/crypto/README.md`
+See also: `examples/webcrypto/README.md`
 
 HMAC sign/verify:
 
-File: `examples/crypto/hmac_sign_verify.mjs`
+File: `examples/webcrypto/hmac_sign_verify.mjs`
 
 ```js
 const text = new TextEncoder().encode("hello");
@@ -484,7 +689,7 @@ console.log(sig.byteLength, ok);
 
 AES-CBC encrypt/decrypt:
 
-File: `examples/crypto/aes_cbc_encrypt_decrypt.mjs`
+File: `examples/webcrypto/aes_cbc_encrypt_decrypt.mjs`
 
 ```js
 const text = new TextEncoder().encode("hello");
@@ -504,7 +709,7 @@ console.log(encrypted.byteLength, new TextDecoder().decode(decrypted));
 
 PBKDF2 derive an AES key:
 
-File: `examples/crypto/pbkdf2_derive_aes.mjs`
+File: `examples/webcrypto/pbkdf2_derive_aes.mjs`
 
 ```js
 const password = new TextEncoder().encode("password");
@@ -534,7 +739,7 @@ console.log(aesKey.algorithm.name, aesKey.algorithm.length);
 
 Ed25519 and ECDSA:
 
-File: `examples/crypto/signatures.mjs`
+File: `examples/webcrypto/signatures.mjs`
 
 ```js
 const text = new TextEncoder().encode("hello");

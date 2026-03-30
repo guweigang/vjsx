@@ -1,5 +1,5 @@
 /* Credit: All VJS Author */
-import * as os from "os";
+import * as os from "qjs:os";
 
 globalThis.setTimeout = os.setTimeout;
 globalThis.clearTimeout = os.clearTimeout;

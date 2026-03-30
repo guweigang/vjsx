@@ -115,7 +115,7 @@ fn fn_custom_context(config ContextConfig) FnNewContext {
 		if config.module_std {
 			C.js_init_module_std(ref, c'std')
 		}
-		C.js_init_module_os(ref, c'os')
+		C.js_init_module_os(ref, c'qjs:os')
 		return ref
 	}
 }

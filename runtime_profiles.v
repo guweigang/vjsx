@@ -24,12 +24,15 @@ pub:
 // Install a lightweight script runtime profile.
 pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 	ctx.install_node_compat(NodeCompatConfig{
-		fs:           false
-		runtime:      runtime_globals_minimal()
-		fs_roots:     config.fs_roots
-		process_args: config.process_args
-		log_fn:       config.log_fn
-		error_fn:     config.error_fn
+		fs:            false
+		http:          false
+		https:         false
+		child_process: false
+		runtime:       runtime_globals_minimal()
+		fs_roots:      config.fs_roots
+		process_args:  config.process_args
+		log_fn:        config.log_fn
+		error_fn:      config.error_fn
 	})
 }
 

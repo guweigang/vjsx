@@ -9,8 +9,23 @@ struct ModuleRewrite {
 	resolved string
 }
 
+const node_builtin_module_specifiers = [
+	'fs',
+	'path',
+	'os',
+	'http',
+	'https',
+	'child_process',
+	'sqlite',
+	'mysql',
+]
+
 fn is_local_module_specifier(specifier string) bool {
 	return specifier.starts_with('./') || specifier.starts_with('../')
+}
+
+fn is_node_builtin_module_specifier(specifier string) bool {
+	return specifier in node_builtin_module_specifiers
 }
 
 fn typescript_runtime_path() string {

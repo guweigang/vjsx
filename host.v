@@ -7,16 +7,20 @@ pub type HostLogFn = fn (line string)
 @[params]
 pub struct HostConfig {
 pub:
-	console      bool = true
-	fs           bool = true
-	path         bool = true
-	process      bool = true
-	sqlite       bool = true
-	mysql        bool = true
-	fs_roots     []string
-	process_args []string
-	log_fn       HostLogFn = default_host_log
-	error_fn     HostLogFn = default_host_error
+	console       bool = true
+	fs            bool = true
+	path          bool = true
+	os            bool = true
+	http          bool = true
+	https         bool = true
+	child_process bool = true
+	process       bool = true
+	sqlite        bool = true
+	mysql         bool = true
+	fs_roots      []string
+	process_args  []string
+	log_fn        HostLogFn = default_host_log
+	error_fn      HostLogFn = default_host_error
 }
 
 fn default_host_log(line string) {

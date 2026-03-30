@@ -1,9 +1,65 @@
 import os
 
+fn expected_node_platform() string {
+	return match os.user_os() {
+		'macos' { 'darwin' }
+		'windows' { 'win32' }
+		else { os.user_os() }
+	}
+}
+
+fn expected_node_arch() string {
+	machine := os.uname().machine.to_lower()
+	return match machine {
+		'x86_64', 'amd64' {
+			'x64'
+		}
+		'x86', 'i386', 'i686' {
+			'ia32'
+		}
+		'aarch64', 'arm64' {
+			'arm64'
+		}
+		'armv7l', 'armv7', 'armv6l', 'armv6' {
+			'arm'
+		}
+		'ppc64le' {
+			'ppc64'
+		}
+		else {
+			if machine == '' {
+				'unknown'
+			} else {
+				machine
+			}
+		}
+	}
+}
+
+fn expected_node_endianness() string {
+	$if little_endian {
+		return 'LE'
+	} $else {
+		return 'BE'
+	}
+}
+
 fn test_cli_run_file() {
 	output := os.execute('sh ./vjsx ./tests/test.js')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == 'test foo'
+}
+
+fn test_cli_run_commonjs_file() {
+	output := os.execute('sh ./vjsx ./tests/cjs_runtime.cjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'cjs${os.path_separator}dep-ok\ntrue\ntrue'
+}
+
+fn test_cli_run_commonjs_shebang_and_json_file() {
+	output := os.execute('sh ./vjsx ./tests/cjs_shebang_runtime.cjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'json-ok'
 }
 
 fn test_cli_run_module_example() {
@@ -31,25 +87,25 @@ fn test_cli_browser_runtime_crypto_subtle_hmac() {
 }
 
 fn test_cli_browser_runtime_crypto_hmac_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/hmac_sign_verify.mjs')
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/hmac_sign_verify.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == '32\ntrue'
 }
 
 fn test_cli_browser_runtime_crypto_aes_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/aes_cbc_encrypt_decrypt.mjs')
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/aes_cbc_encrypt_decrypt.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == '16\nhello'
 }
 
 fn test_cli_browser_runtime_crypto_pbkdf2_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/pbkdf2_derive_aes.mjs')
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/pbkdf2_derive_aes.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == 'ae4d0c95af6b46d32d0adff928f06dd0\nAES-CBC:128'
 }
 
 fn test_cli_browser_runtime_crypto_signatures_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/crypto/signatures.mjs')
+	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/signatures.mjs')
 	assert output.exit_code == 0
 	lines := output.output.trim_space().split_into_lines()
 	assert lines.len == 2
@@ -283,6 +339,42 @@ fn test_cli_host_process_runtime_features() {
 	assert output.output.contains('marker-value')
 	assert !os.exists(source_path)
 	assert !os.exists(copy_path)
+}
+
+fn test_cli_host_process_more_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_process_more_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'js-value\ntrue\n${expected_node_platform()}\n${expected_node_arch()}\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue'
+}
+
+fn test_cli_host_process_exit_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_process_exit_runtime.mjs')
+	assert output.exit_code == 7
+	assert output.output.trim_space() == ''
+}
+
+fn test_cli_host_child_process_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_child_process_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'inherit-child\nhello-child\nafter-inherit\nafter-ignore\n0\ntrue\nhello-child\ntrue\ntrue\nhello-child\n7\nchild-fail'
+}
+
+fn test_cli_host_child_process_async_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_child_process_async_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'execFile:hello-async\ntrue\nhello-async\ntrue\nexecFile-exit:0\nexecFile-close:0\ntrue\nshell-async\ntrue\nlistenerCount:1\nlistenerCountAfterOff:0\nstdio:true:true:true\nlisteners:1\nemit:ok\nemitReturn:true\nlistenerCountAfterEmit:1\nlistenerCountAfterRemoveAll:0\nspawn:hello-async\nspawn-exit:0\nspawn-close:0\nspawn-shell:shell-spawn\nfork:fork-arg|fork-env|tests\nfork-close:0\npipe:hello-async\nunpipe:true\n5\n\nasync-fail\ntrue\nlive:echo:line-from-stdin\nliveerr:done\nlive-close:0:null\nkill:ready\ntrue\nkill-close:null:SIGTERM'
+}
+
+fn test_cli_host_fs_sync_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_fs_sync_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'sync text\ntrue\ntrue\ncopied.txt,nested,source.txt\nsync text\nfalse'
+}
+
+fn test_cli_host_os_runtime_features() {
+	output := os.execute('sh ./vjsx --module ./tests/host_os_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'object\ntrue\ntrue\ntrue\ntrue\n${expected_node_platform()}\n${expected_node_arch()}\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n${expected_node_endianness()}\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue'
 }
 
 fn test_cli_host_next_runtime_features() {

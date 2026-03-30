@@ -4,17 +4,21 @@ module vjsx
 @[params]
 pub struct NodeCompatConfig {
 pub:
-	console      bool = true
-	fs           bool = true
-	path         bool = true
-	process      bool = true
-	sqlite       bool = true
-	mysql        bool = true
-	runtime      RuntimeGlobalsConfig = RuntimeGlobalsConfig{}
-	fs_roots     []string
-	process_args []string
-	log_fn       HostLogFn = default_host_log
-	error_fn     HostLogFn = default_host_error
+	console       bool                 = true
+	fs            bool                 = true
+	path          bool                 = true
+	os            bool                 = true
+	http          bool                 = true
+	https         bool                 = true
+	child_process bool                 = true
+	process       bool                 = true
+	sqlite        bool                 = true
+	mysql         bool                 = true
+	runtime       RuntimeGlobalsConfig = RuntimeGlobalsConfig{}
+	fs_roots      []string
+	process_args  []string
+	log_fn        HostLogFn = default_host_log
+	error_fn      HostLogFn = default_host_error
 }
 
 // Full Node-like compatibility preset.
@@ -30,10 +34,13 @@ pub fn node_compat_full(fs_roots []string, process_args []string) NodeCompatConf
 // Keeps console/path/process plus core runtime globals, but skips `fs`.
 pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatConfig {
 	return NodeCompatConfig{
-		fs:           false
-		runtime:      runtime_globals_minimal()
-		fs_roots:     fs_roots
-		process_args: process_args
+		fs:            false
+		http:          false
+		https:         false
+		child_process: false
+		runtime:       runtime_globals_minimal()
+		fs_roots:      fs_roots
+		process_args:  process_args
 	}
 }
 
@@ -49,6 +56,18 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.path {
 		ctx.install_path_module()
 	}
+	if config.os {
+		ctx.install_os_module()
+	}
+	if config.http {
+		ctx.install_http_module()
+	}
+	if config.https {
+		ctx.install_https_module()
+	}
+	if config.child_process {
+		ctx.install_child_process_module(config.fs_roots)
+	}
 	if config.process {
 		ctx.install_process(config.process_args)
 	}
@@ -62,16 +81,20 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 
 fn (config HostConfig) node_compat_config() NodeCompatConfig {
 	return NodeCompatConfig{
-		console:      config.console
-		fs:           config.fs
-		path:         config.path
-		process:      config.process
-		sqlite:       config.sqlite
-		mysql:        config.mysql
-		runtime:      RuntimeGlobalsConfig{}
-		fs_roots:     config.fs_roots
-		process_args: config.process_args
-		log_fn:       config.log_fn
-		error_fn:     config.error_fn
+		console:       config.console
+		fs:            config.fs
+		path:          config.path
+		os:            config.os
+		http:          config.http
+		https:         config.https
+		child_process: config.child_process
+		process:       config.process
+		sqlite:        config.sqlite
+		mysql:         config.mysql
+		runtime:       RuntimeGlobalsConfig{}
+		fs_roots:      config.fs_roots
+		process_args:  config.process_args
+		log_fn:        config.log_fn
+		error_fn:      config.error_fn
 	}
 }

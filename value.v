@@ -47,6 +47,7 @@ fn C.JS_DupValue(&C.JSContext, JSValueConst) C.JSValue
 fn C.JS_GetArrayBuffer(&C.JSContext, &usize, JSValueConst) byteptr
 fn C.JS_DeleteProperty(&C.JSContext, JSValueConst, C.JSAtom, int) int
 fn C.JS_HasProperty(&C.JSContext, JSValueConst, C.JSAtom) int
+fn C.JS_StrictEq(&C.JSContext, JSValueConst, JSValueConst) int
 
 // Duplicate value
 pub fn (v Value) dup_value() Value {
@@ -301,6 +302,11 @@ pub fn (v Value) call(key string, args ...AnyValue) Value {
 		return v.ctx.js_string(v.ctx.js_exception().msg())
 	}
 	return ret
+}
+
+// Strict equality check, mirroring JS `===`.
+pub fn (v Value) strict_eq(other Value) bool {
+	return C.JS_StrictEq(v.ctx.ref, v.ref, other.ref) == 1
 }
 
 // Free Value
