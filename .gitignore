@@ -40,3 +40,6 @@ thirdparty/typescript/package/
 # Local scratch probes under tests/
 tests/.host_*
 tests/.wechat_*
+
+# Generated JS/TS runtime build directories
+*.vjsbuild/
