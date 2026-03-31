@@ -9,6 +9,8 @@ pub struct Runtime {
 	ref &C.JSRuntime
 }
 
+pub const default_runtime_max_stack_size = u32(16 * 1024 * 1024)
+
 // JSError structure.
 @[params]
 pub struct JSError {
@@ -60,7 +62,7 @@ pub fn (rt Runtime) set_memory_limit(limit u32) {
 	C.JS_SetMemoryLimit(rt.ref, usize(limit))
 }
 
-// Set maximum stack size. (default to 255)
+// Set maximum stack size in bytes.
 pub fn (rt Runtime) set_max_stack_size(stack_size u32) {
 	C.JS_SetMaxStackSize(rt.ref, usize(stack_size))
 }

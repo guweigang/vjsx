@@ -29,6 +29,7 @@ pub struct ContextConfig {
 	unhandled_rejection bool = true
 	bignum              bool = true
 	module_std          bool
+	max_stack_size      u32 = default_runtime_max_stack_size
 }
 
 // EvalCoreConfig structure params.
@@ -134,6 +135,9 @@ fn fn_custom_context(config ContextConfig) FnNewContext {
 // ```
 pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	new_context := fn_custom_context(config)
+	if config.max_stack_size > 0 {
+		rt.set_max_stack_size(config.max_stack_size)
+	}
 	C.js_std_set_worker_new_context_func(new_context)
 	C.js_std_init_handlers(rt.ref)
 	ref := new_context(rt.ref)

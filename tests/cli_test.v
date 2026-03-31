@@ -152,6 +152,12 @@ fn test_cli_run_plain_typescript_module_without_emit() {
 	assert output.output.trim_space() == '1'
 }
 
+fn test_cli_run_typescript_module_with_object_literal_methods() {
+	output := os.execute('sh ./vjsx --module ./tests/ts_object_literal_runtime.mts')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'plain:ok'
+}
+
 fn test_cli_run_typescript_module_graph() {
 	output_file := os.join_path(@VMODROOT, 'tests', '.ts_graph_output.txt')
 	os.rm(output_file) or {}
