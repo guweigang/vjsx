@@ -61,6 +61,12 @@ fn validate_script_type(script_file string, as_module bool) bool {
 
 fn run_cli_runner(env map[string]string) int {
 	vexe := os.getenv_opt('VEXE') or { @VEXE }
+	extra_v_flags := os.getenv('VJS_V_FLAGS').trim_space()
+	flags_part := if extra_v_flags == '' {
+		'-d build_quickjs'
+	} else {
+		'${extra_v_flags} -d build_quickjs'
+	}
 	command := 'cd ${shell_quote(repo_root)} && '
 		+ 'VJS_QUICKJS_PATH=${shell_quote(env['VJS_QUICKJS_PATH'])} '
 		+ 'VJS_SCRIPT_FILE=${shell_quote(env['VJS_SCRIPT_FILE'])} '
@@ -69,7 +75,7 @@ fn run_cli_runner(env map[string]string) int {
 		+ 'VJS_ARGS_FILE=${shell_quote(env['VJS_ARGS_FILE'])} '
 		+ 'VJS_REPO_ROOT=${shell_quote(env['VJS_REPO_ROOT'])} '
 		+ 'VCACHE=${shell_quote(env['VCACHE'])} '
-		+ '${shell_quote(vexe)} -d build_quickjs run ./cli_runner_bin 2>&1'
+		+ '${shell_quote(vexe)} ${flags_part} run ./cli_runner_bin 2>&1'
 	result := os.execute(command)
 	print(result.output)
 	return result.exit_code

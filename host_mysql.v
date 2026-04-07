@@ -26,7 +26,13 @@ $if vjsx_mysql ? {
 		rows        []map[string]string
 	}
 
-	@[heap]
+	struct HostMySqlExecResult {
+		rows           []map[string]string
+		changes        i64
+		rows_affected  i64
+		last_insert_id i64
+	}
+
 	struct HostMySqlStmt {
 	mut:
 		conn       &HostMySqlConn = unsafe { nil }
@@ -147,7 +153,7 @@ $if vjsx_mysql ? {
 		if rows.rows.len == 0 {
 			return ctx.js_null()
 		}
-		first_row := rows.rows[0]
+		first_row := rows.rows[0].clone()
 		if rows.field_names.len > 0 {
 			first_name := rows.field_names[0]
 			if first_name in first_row {
@@ -282,8 +288,8 @@ $if vjsx_mysql ? {
 				[][]HostMySqlParam{}
 			}
 			results := ctx.js_array()
-			for i, params in batches {
-				rows := mysql_exec_prepared_query_params(mut stmt.conn.db, stmt.query_text, params) or {
+				for i, params in batches {
+					rows := mysql_query_maps_with_params(mut stmt.conn.db, stmt.query_text, params) or {
 					results.free()
 					query_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
@@ -314,20 +320,50 @@ $if vjsx_mysql ? {
 					goto reject
 				}
 			}
-			rows := mysql_exec_maps(mut stmt.conn, stmt.query_text, args, 0) or {
+			result := ctx.js_object()
+			params := mysql_params(args, 0) or {
 				exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
 				unsafe {
 					goto reject
 				}
-				HostMySqlPreparedRows{}
+				[]HostMySqlParam{}
 			}
-			result := ctx.js_object()
-			rows_value := mysql_rows_value_from_maps(ctx, rows.rows)
+			mut exec_rows := HostMySqlPreparedRows{}
+			mut changes := i64(0)
+			mut rows_affected := i64(0)
+			mut last_insert_id := i64(0)
+			if params.len > 0 {
+				exec_meta := mysql_exec_result_with_params(mut stmt.conn.db, stmt.query_text, params) or {
+					exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
+					unsafe {
+						goto reject
+					}
+					HostMySqlExecResult{}
+				}
+				exec_rows = HostMySqlPreparedRows{
+					rows: exec_meta.rows
+				}
+				changes = exec_meta.changes
+				rows_affected = exec_meta.rows_affected
+				last_insert_id = exec_meta.last_insert_id
+			} else {
+				exec_rows = mysql_exec_maps(mut stmt.conn, stmt.query_text, args, 0) or {
+					exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
+					unsafe {
+						goto reject
+					}
+					HostMySqlPreparedRows{}
+				}
+				changes = i64(stmt.conn.db.affected_rows())
+				rows_affected = i64(stmt.conn.db.affected_rows())
+				last_insert_id = stmt.conn.db.last_id()
+			}
+			rows_value := mysql_rows_value_from_maps(ctx, exec_rows.rows)
 			result.set('rows', rows_value)
-			result.set('changes', i64(stmt.conn.db.affected_rows()))
-			result.set('rowsAffected', i64(stmt.conn.db.affected_rows()))
-			result.set('lastInsertRowid', stmt.conn.db.last_id())
-			result.set('insertId', stmt.conn.db.last_id())
+			result.set('changes', changes)
+			result.set('rowsAffected', rows_affected)
+			result.set('lastInsertRowid', last_insert_id)
+			result.set('insertId', last_insert_id)
 			rows_value.free()
 			return promise.resolve(result)
 			reject:
@@ -357,21 +393,21 @@ $if vjsx_mysql ? {
 			}
 			results := ctx.js_array()
 			for i, params in batches {
-				rows := mysql_exec_prepared_query_params(mut stmt.conn.db, stmt.query_text, params) or {
+				exec_meta := mysql_exec_result_with_params(mut stmt.conn.db, stmt.query_text, params) or {
 					results.free()
 					exec_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
 						goto reject
 					}
-					HostMySqlPreparedRows{}
+					HostMySqlExecResult{}
 				}
 				result := ctx.js_object()
-				rows_value := mysql_rows_value_from_maps(ctx, rows.rows)
+				rows_value := mysql_rows_value_from_maps(ctx, exec_meta.rows)
 				result.set('rows', rows_value)
-				result.set('changes', i64(stmt.conn.db.affected_rows()))
-				result.set('rowsAffected', i64(stmt.conn.db.affected_rows()))
-				result.set('lastInsertRowid', stmt.conn.db.last_id())
-				result.set('insertId', stmt.conn.db.last_id())
+				result.set('changes', exec_meta.changes)
+				result.set('rowsAffected', exec_meta.rows_affected)
+				result.set('lastInsertRowid', exec_meta.last_insert_id)
+				result.set('insertId', exec_meta.last_insert_id)
 				rows_value.free()
 				results.set(i, result)
 				result.free()
@@ -487,91 +523,54 @@ $if vjsx_mysql ? {
 		return batches
 	}
 
-	fn mysql_bind_stmt_params(mut stmt vmysql.Stmt, params []HostMySqlParam) !int {
-		if params.len == 0 {
-			return 0
-		}
-		for param in params {
-			if param.is_null {
-				stmt.bind_null()
-			} else {
-				stmt.bind_text(param.value)
-			}
-		}
-		stmt.bind_params()!
-		return params.len
-	}
-
-	fn mysql_exec_prepared_query_params(mut db vmysql.DB, query string, params []HostMySqlParam) !HostMySqlPreparedRows {
+	fn mysql_stmt_query_columns(mut db vmysql.DB, query string) ![]string {
 		mut stmt := db.init_stmt(query)
 		defer {
 			stmt.close() or {}
 		}
 		stmt.prepare()!
-		mysql_bind_stmt_params(mut stmt, params)!
-		stmt.execute()!
 		metadata := stmt.gen_metadata()
 		if metadata == unsafe { nil } {
-			return HostMySqlPreparedRows{}
+			return []string{}
 		}
 		field_count := vmysql.Result{
 			result: metadata
 		}.n_fields()
 		field_defs := stmt.fetch_fields(metadata)
-		mut field_names := []string{cap: field_count}
+		mut columns := []string{cap: field_count}
 		for i in 0 .. field_count {
-			field_names << v_str(field_defs[i].name)
+			columns << unsafe { cstring_to_vstring(field_defs[i].name) }
 		}
-		mut lengths := []u32{len: field_count}
-		mut is_null := []bool{len: field_count}
-		mut data_ptrs := []&u8{len: field_count, init: unsafe { nil }}
-		stmt.bind_res(field_defs, data_ptrs, lengths, is_null, field_count)
-		stmt.bind_result_buffer()!
-		stmt.store_result()!
 		C.mysql_free_result(metadata)
-		mut rows := []map[string]string{}
-		for {
-			status := stmt.fetch_stmt()!
-			if status == 100 {
-				break
-			}
-			mut row := map[string]string{}
-			for i, name in field_names {
-				if is_null[i] {
-					row[name] = ''
-					continue
-				}
-				mut value_len := lengths[i]
-				mut value_is_null := false
-				buffer_len := if value_len > 0 { value_len + 1 } else { u32(1) }
-				mut buffer := []u8{len: int(buffer_len)}
-				mut bind := C.MYSQL_BIND{
-					buffer_type:   C.MYSQL_TYPE_STRING
-					buffer:        buffer.data
-					buffer_length: buffer_len
-					length:        &value_len
-					is_null:       &value_is_null
-				}
-				stmt.fetch_column(&bind, i)!
-				row[name] = if value_is_null { '' } else { buffer[..int(value_len)].bytestr() }
-			}
-			rows << row
-		}
-		return HostMySqlPreparedRows{
-			field_names: field_names
-			rows:        rows
-		}
+		return columns
 	}
 
-	fn mysql_exec_prepared_query(mut db vmysql.DB, query string, args []Value, index int) !HostMySqlPreparedRows {
-		params := mysql_params(args, index)!
-		return mysql_exec_prepared_query_params(mut db, query, params)!
+	fn mysql_query_maps_with_params(mut db vmysql.DB, query_text string, params []HostMySqlParam) !HostMySqlPreparedRows {
+		columns := mysql_stmt_query_columns(mut db, query_text) or { []string{} }
+		stmt := db.prepare(query_text)!
+		defer {
+			stmt.close()
+		}
+		response := stmt.execute(params.map(if it.is_null { '' } else { it.value }))!
+		mut rows := []map[string]string{}
+		for response_row in response {
+			mut item := map[string]string{}
+			for i, value in response_row.vals {
+				key := if i < columns.len && columns[i] != '' { columns[i] } else { '${i}' }
+				item[key] = value
+			}
+			rows << item
+		}
+		return HostMySqlPreparedRows{
+			field_names: columns
+			rows:        rows
+		}
 	}
 
 	fn mysql_query_maps(mut conn HostMySqlConn, query_text string, args []Value, index int) !HostMySqlPreparedRows {
 		params := mysql_params(args, index)!
 		return if params.len > 0 {
-			mysql_exec_prepared_query_params(mut conn.db, query_text, params)!
+			mysql_query_maps_with_params(mut conn.db, query_text, params)!
 		} else {
 			mut result := conn.db.query(query_text)!
 			defer {
@@ -583,10 +582,40 @@ $if vjsx_mysql ? {
 		}
 	}
 
+	fn mysql_exec_result_with_params(mut db vmysql.DB, query_text string, params []HostMySqlParam) !HostMySqlExecResult {
+		mut stmt := db.init_stmt(query_text)
+		defer {
+			stmt.close() or {}
+		}
+		stmt.prepare()!
+		for param in params {
+			if param.is_null {
+				stmt.bind_null()
+			} else {
+				stmt.bind_text(param.value)
+			}
+		}
+		if params.len > 0 {
+			stmt.bind_params()!
+		}
+		stmt.execute()!
+		affected := i64(db.affected_rows())
+		last_id := db.last_id()
+		return HostMySqlExecResult{
+			rows:           []map[string]string{}
+			changes:        affected
+			rows_affected:  affected
+			last_insert_id: last_id
+		}
+	}
+
 	fn mysql_exec_maps(mut conn HostMySqlConn, query_text string, args []Value, index int) !HostMySqlPreparedRows {
 		params := mysql_params(args, index)!
 		return if params.len > 0 {
-			mysql_exec_prepared_query_params(mut conn.db, query_text, params)!
+			exec_meta := mysql_exec_result_with_params(mut conn.db, query_text, params)!
+			HostMySqlPreparedRows{
+				rows: exec_meta.rows
+			}
 		} else {
 			response := conn.db.exec(query_text)!
 			mut maps := []map[string]string{}
@@ -792,8 +821,8 @@ $if vjsx_mysql ? {
 				[][]HostMySqlParam{}
 			}
 			results := ctx.js_array()
-			for i, params in batches {
-				rows := mysql_exec_prepared_query_params(mut conn.db, query_text, params) or {
+				for i, params in batches {
+					rows := mysql_query_maps_with_params(mut conn.db, query_text, params) or {
 					results.free()
 					query_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
@@ -825,20 +854,50 @@ $if vjsx_mysql ? {
 				}
 			}
 			query_text := args[0].to_string()
-			rows := mysql_exec_maps(mut conn, query_text, args, 1) or {
+			result := ctx.js_object()
+			params := mysql_params(args, 1) or {
 				exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
 				unsafe {
 					goto reject
 				}
-				HostMySqlPreparedRows{}
+				[]HostMySqlParam{}
 			}
-			result := ctx.js_object()
-			rows_value := mysql_rows_value_from_maps(ctx, rows.rows)
+			mut exec_rows := HostMySqlPreparedRows{}
+			mut changes := i64(0)
+			mut rows_affected := i64(0)
+			mut last_insert_id := i64(0)
+			if params.len > 0 {
+				exec_meta := mysql_exec_result_with_params(mut conn.db, query_text, params) or {
+					exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
+					unsafe {
+						goto reject
+					}
+					HostMySqlExecResult{}
+				}
+				exec_rows = HostMySqlPreparedRows{
+					rows: exec_meta.rows
+				}
+				changes = exec_meta.changes
+				rows_affected = exec_meta.rows_affected
+				last_insert_id = exec_meta.last_insert_id
+			} else {
+				exec_rows = mysql_exec_maps(mut conn, query_text, args, 1) or {
+					exec_err = mysql_error_value(ctx, err.msg(), mysql_error_name_from_message(err.msg()))
+					unsafe {
+						goto reject
+					}
+					HostMySqlPreparedRows{}
+				}
+				changes = i64(conn.db.affected_rows())
+				rows_affected = i64(conn.db.affected_rows())
+				last_insert_id = conn.db.last_id()
+			}
+			rows_value := mysql_rows_value_from_maps(ctx, exec_rows.rows)
 			result.set('rows', rows_value)
-			result.set('changes', i64(conn.db.affected_rows()))
-			result.set('rowsAffected', i64(conn.db.affected_rows()))
-			result.set('lastInsertRowid', conn.db.last_id())
-			result.set('insertId', conn.db.last_id())
+			result.set('changes', changes)
+			result.set('rowsAffected', rows_affected)
+			result.set('lastInsertRowid', last_insert_id)
+			result.set('insertId', last_insert_id)
 			rows_value.free()
 			return promise.resolve(result)
 			reject:
@@ -869,21 +928,21 @@ $if vjsx_mysql ? {
 			}
 			results := ctx.js_array()
 			for i, params in batches {
-				rows := mysql_exec_prepared_query_params(mut conn.db, query_text, params) or {
+				exec_meta := mysql_exec_result_with_params(mut conn.db, query_text, params) or {
 					results.free()
 					exec_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
 						goto reject
 					}
-					HostMySqlPreparedRows{}
+					HostMySqlExecResult{}
 				}
 				result := ctx.js_object()
-				rows_value := mysql_rows_value_from_maps(ctx, rows.rows)
+				rows_value := mysql_rows_value_from_maps(ctx, exec_meta.rows)
 				result.set('rows', rows_value)
-				result.set('changes', i64(conn.db.affected_rows()))
-				result.set('rowsAffected', i64(conn.db.affected_rows()))
-				result.set('lastInsertRowid', conn.db.last_id())
-				result.set('insertId', conn.db.last_id())
+				result.set('changes', exec_meta.changes)
+				result.set('rowsAffected', exec_meta.rows_affected)
+				result.set('lastInsertRowid', exec_meta.last_insert_id)
+				result.set('insertId', exec_meta.last_insert_id)
 				rows_value.free()
 				results.set(i, result)
 				result.free()
