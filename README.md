@@ -264,7 +264,8 @@ The runtime is now split into clearer layers:
 - `ctx.install_runtime_globals(...)`: reusable globals like `Buffer`, timers,
   `URL`, and `URLPattern`
 - `ctx.install_node_compat(...)`: Node-like host features such as `console`,
-  `fs`, `path`, `os`, `child_process`, `process`, `sqlite`, and optional `mysql`
+  `fs`, `path`, `os`, `child_process`, `process`, standard `fetch` globals,
+  `sqlite`, and optional `mysql`
 - `web.inject_browser_host(ctx, ...)`: browser-style host features under
   `web/`, including `window`, DOM bootstrap, and Web APIs
 

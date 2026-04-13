@@ -13,6 +13,7 @@ pub:
 	os            bool = true
 	http          bool = true
 	https         bool = true
+	fetch         bool = true
 	child_process bool = true
 	process       bool = true
 	sqlite        bool = true

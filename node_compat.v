@@ -10,6 +10,7 @@ pub:
 	os            bool                 = true
 	http          bool                 = true
 	https         bool                 = true
+	fetch         bool                 = true
 	child_process bool                 = true
 	process       bool                 = true
 	sqlite        bool                 = true
@@ -37,6 +38,7 @@ pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatC
 		fs:            false
 		http:          false
 		https:         false
+		fetch:         false
 		child_process: false
 		runtime:       runtime_globals_minimal()
 		fs_roots:      fs_roots
@@ -50,6 +52,9 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 		ctx.install_console(config.log_fn, config.error_fn)
 	}
 	ctx.install_runtime_globals(config.runtime)
+	if config.fetch {
+		ctx.install_fetch_globals()
+	}
 	if config.fs {
 		ctx.install_fs_module(config.fs_roots)
 	}
@@ -87,6 +92,7 @@ fn (config HostConfig) node_compat_config() NodeCompatConfig {
 		os:            config.os
 		http:          config.http
 		https:         config.https
+		fetch:         config.fetch
 		child_process: config.child_process
 		process:       config.process
 		sqlite:        config.sqlite
