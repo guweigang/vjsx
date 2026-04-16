@@ -19,5 +19,5 @@ import vjsx { Context }
 // }
 // ```
 pub fn stream_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/stream.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/stream.js', vjsx.type_module) or { panic(err) }
 }

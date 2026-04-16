@@ -20,6 +20,7 @@ pub:
 	mysql         bool = true
 	fs_roots      []string
 	process_args  []string
+	asset_root    string
 	log_fn        HostLogFn = default_host_log
 	error_fn      HostLogFn = default_host_error
 }

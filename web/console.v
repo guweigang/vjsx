@@ -33,6 +33,6 @@ pub fn console_api(ctx &Context) {
 	create_util(ctx)
 	glob, boot := get_bootstrap(ctx)
 	console_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/console.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/console.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

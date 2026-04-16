@@ -19,5 +19,5 @@ import vjsx { Context }
 // }
 // ```
 pub fn blob_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/blob.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/blob.js', vjsx.type_module) or { panic(err) }
 }

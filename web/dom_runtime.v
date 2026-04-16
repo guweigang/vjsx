@@ -7,5 +7,5 @@ import vjsx { Context }
 // minimal browser-like host (`document`, `window`, `getComputedStyle`,
 // `document.implementation.createHTMLDocument`, and safer selector handling).
 pub fn dom_runtime_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/dom_runtime.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/dom_runtime.js', vjsx.type_module) or { panic(err) }
 }

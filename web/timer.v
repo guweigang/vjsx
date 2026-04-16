@@ -19,5 +19,5 @@ import vjsx { Context }
 // }
 // ```
 pub fn timer_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/timer.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/timer.js', vjsx.type_module) or { panic(err) }
 }

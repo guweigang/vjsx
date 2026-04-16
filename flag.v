@@ -30,12 +30,18 @@ $if build_quickjs ? {
 		#flag @VMODROOT/libs/misc/udivti3.c
 		#flag @VMODROOT/libs/misc/udivmodti4.c
 	}
-	$if x64 {
-		$if linux {
+	$if linux {
+		$if amd64 {
 			#flag @VMODROOT/libs/qjs_linux_x64.a
-		} $else $if macos {
+		}
+	} $else $if macos {
+		$if amd64 {
 			#flag @VMODROOT/libs/qjs_macos_x64.a
-		} $else $if windows {
+		} $else $if arm64 {
+			#flag @VMODROOT/libs/qjs_macos_arm64.a
+		}
+	} $else $if windows {
+		$if amd64 {
 			#flag @VMODROOT/libs/qjs_win_x64.a
 		}
 	}

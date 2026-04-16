@@ -5,6 +5,7 @@ import vjsx { Context }
 @[params]
 pub struct BrowserHostConfig {
 pub:
+	asset_root  string
 	window      bool = true
 	dom         bool = true
 	atob        bool = true
@@ -52,6 +53,7 @@ fn normalize_browser_host_config(config BrowserHostConfig) BrowserHostConfig {
 	blob := config.blob || config.fetch
 	form_data := config.form_data || config.fetch
 	return BrowserHostConfig{
+		asset_root:  config.asset_root
 		window:      config.window
 		dom:         config.dom
 		atob:        config.atob
@@ -73,6 +75,10 @@ fn normalize_browser_host_config(config BrowserHostConfig) BrowserHostConfig {
 
 fn eval_module_file(ctx &Context, path string) {
 	ctx.eval_file(path, vjsx.type_module) or { panic(err) }
+}
+
+fn eval_runtime_module_file(ctx &Context, rel_path string) {
+	ctx.eval_runtime_file(rel_path, vjsx.type_module) or { panic(err) }
 }
 
 fn get_bootstrap(ctx &Context) (vjsx.Value, vjsx.Value) {
@@ -114,6 +120,9 @@ pub fn delete_bootstrap(ctx &Context) bool {
 // ```
 pub fn inject_browser_host(ctx &Context, config BrowserHostConfig) {
 	normalized := normalize_browser_host_config(config)
+	if normalized.asset_root != '' {
+		ctx.set_asset_root(normalized.asset_root)
+	}
 	if normalized.window {
 		window_api(ctx)
 	}
@@ -149,41 +158,41 @@ pub fn inject_browser_host(ctx &Context, config BrowserHostConfig) {
 		fetch_boot(ctx, boot)
 	}
 	if normalized.console {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/console.js')
+		eval_runtime_module_file(ctx, 'web/js/console.js')
 	}
 	if normalized.performance {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/perf.js')
+		eval_runtime_module_file(ctx, 'web/js/perf.js')
 	}
 	if normalized.timer {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/timer.js')
+		eval_runtime_module_file(ctx, 'web/js/timer.js')
 	}
 	if normalized.stream {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/stream.js')
+		eval_runtime_module_file(ctx, 'web/js/stream.js')
 	}
 	if normalized.encoding {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/encoding.js')
+		eval_runtime_module_file(ctx, 'web/js/encoding.js')
 	}
 	if normalized.url {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/url.js')
-		eval_module_file(ctx, '${@VMODROOT}/web/js/url_pattern.js')
+		eval_runtime_module_file(ctx, 'web/js/url.js')
+		eval_runtime_module_file(ctx, 'web/js/url_pattern.js')
 	}
 	if normalized.crypto {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/crypto.js')
+		eval_runtime_module_file(ctx, 'web/js/crypto.js')
 	}
 	if normalized.navigator {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/navigator.js')
+		eval_runtime_module_file(ctx, 'web/js/navigator.js')
 	}
 	if normalized.blob {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/blob.js')
+		eval_runtime_module_file(ctx, 'web/js/blob.js')
 	}
 	if normalized.form_data {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/form_data.js')
+		eval_runtime_module_file(ctx, 'web/js/form_data.js')
 	}
 	if normalized.fetch {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/fetch.js')
+		eval_runtime_module_file(ctx, 'web/js/fetch.js')
 	}
 	if normalized.event {
-		eval_module_file(ctx, '${@VMODROOT}/web/js/event.js')
+		eval_runtime_module_file(ctx, 'web/js/event.js')
 	}
 	glob.delete('__bootstrap')
 	glob.free()

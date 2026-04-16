@@ -17,6 +17,8 @@ pub struct Context {
 	ref                &C.JSContext
 	rt                 Runtime
 	host_cleanup_state &HostCleanupState
+mut:
+	asset_root string
 }
 
 type SetMeta = fn (Context, JSValueConst)
@@ -26,10 +28,12 @@ type HostCleanup = fn ()
 // ContextConfig structure params.
 @[params]
 pub struct ContextConfig {
+pub:
 	unhandled_rejection bool = true
 	bignum              bool = true
 	module_std          bool
 	max_stack_size      u32 = default_runtime_max_stack_size
+	asset_root          string
 }
 
 // EvalCoreConfig structure params.
@@ -151,6 +155,7 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 		host_cleanup_state: &HostCleanupState{
 			cleanups: []HostCleanup{}
 		}
+		asset_root:         config.asset_root
 	}
 	return ctx
 }
@@ -329,6 +334,7 @@ pub fn (ctx &Context) dup_context() &Context {
 		ref:                ref
 		rt:                 ctx.rt
 		host_cleanup_state: ctx.host_cleanup_state
+		asset_root:         ctx.asset_root
 	}
 }
 

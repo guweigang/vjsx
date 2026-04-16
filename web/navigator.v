@@ -36,6 +36,6 @@ fn navigator_boot(ctx &Context, boot Value) {
 pub fn navigator_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	navigator_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/navigator.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/navigator.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

@@ -18,6 +18,7 @@ pub:
 	runtime       RuntimeGlobalsConfig = RuntimeGlobalsConfig{}
 	fs_roots      []string
 	process_args  []string
+	asset_root    string
 	log_fn        HostLogFn = default_host_log
 	error_fn      HostLogFn = default_host_error
 }
@@ -48,6 +49,9 @@ pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatC
 
 // Install a Node-like compatibility host into the current context.
 pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
+	if config.asset_root != '' {
+		ctx.set_asset_root(config.asset_root)
+	}
 	if config.console {
 		ctx.install_console(config.log_fn, config.error_fn)
 	}
@@ -100,6 +104,7 @@ fn (config HostConfig) node_compat_config() NodeCompatConfig {
 		runtime:       RuntimeGlobalsConfig{}
 		fs_roots:      config.fs_roots
 		process_args:  config.process_args
+		asset_root:    config.asset_root
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	}

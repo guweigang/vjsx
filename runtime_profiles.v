@@ -7,6 +7,7 @@ pub struct ScriptRuntimeConfig {
 pub:
 	fs_roots     []string
 	process_args []string
+	asset_root   string
 	fetch        bool      = true
 	log_fn       HostLogFn = default_host_log
 	error_fn     HostLogFn = default_host_error
@@ -18,6 +19,7 @@ pub struct NodeRuntimeConfig {
 pub:
 	fs_roots     []string
 	process_args []string
+	asset_root   string
 	fetch        bool      = true
 	log_fn       HostLogFn = default_host_log
 	error_fn     HostLogFn = default_host_error
@@ -34,6 +36,7 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 		runtime:       runtime_globals_minimal()
 		fs_roots:      config.fs_roots
 		process_args:  config.process_args
+		asset_root:    config.asset_root
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	})
@@ -46,6 +49,7 @@ pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
 		fetch:        config.fetch
 		fs_roots:     config.fs_roots
 		process_args: config.process_args
+		asset_root:   config.asset_root
 		log_fn:       config.log_fn
 		error_fn:     config.error_fn
 	})

@@ -31,6 +31,6 @@ fn performance_boot(ctx &Context, boot Value) {
 pub fn performance_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	performance_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/perf.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/perf.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

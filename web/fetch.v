@@ -89,6 +89,6 @@ fn fetch_boot(ctx &Context, boot Value) {
 pub fn fetch_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	fetch_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/fetch.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/fetch.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }

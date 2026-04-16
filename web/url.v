@@ -19,6 +19,6 @@ import vjsx { Context }
 // }
 // ```
 pub fn url_api(ctx &Context) {
-	ctx.eval_file('${@VMODROOT}/web/js/url.js', vjsx.type_module) or { panic(err) }
-	ctx.eval_file('${@VMODROOT}/web/js/url_pattern.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/url.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/url_pattern.js', vjsx.type_module) or { panic(err) }
 }

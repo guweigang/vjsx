@@ -13,16 +13,16 @@ pub fn (ctx &Context) install_binary_globals() {
 		return ctx.js_string(ret)
 	}))
 	global.free()
-	ctx.eval_file('${@VMODROOT}/web/js/buffer.js', type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/buffer.js', type_module) or { panic(err) }
 }
 
 // Install timer globals (`setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`).
 pub fn (ctx &Context) install_timer_globals() {
-	ctx.eval_file('${@VMODROOT}/web/js/timer.js', type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/timer.js', type_module) or { panic(err) }
 }
 
 // Install URL globals (`URL`, `URLSearchParams`, `URLPattern`).
 pub fn (ctx &Context) install_url_globals() {
-	ctx.eval_file('${@VMODROOT}/web/js/url.js', type_module) or { panic(err) }
-	ctx.eval_file('${@VMODROOT}/web/js/url_pattern.js', type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/url.js', type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/url_pattern.js', type_module) or { panic(err) }
 }

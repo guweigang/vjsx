@@ -258,6 +258,6 @@ fn crypto_boot(ctx &Context, boot Value) {
 pub fn crypto_api(ctx &Context) {
 	glob, boot := get_bootstrap(ctx)
 	crypto_boot(ctx, boot)
-	ctx.eval_file('${@VMODROOT}/web/js/crypto.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/crypto.js', vjsx.type_module) or { panic(err) }
 	glob.free()
 }
