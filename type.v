@@ -75,7 +75,11 @@ pub fn (ctx &Context) json_stringify_op(val Value, rep Value, ind AnyValue) stri
 	indent := ctx.any_to_val(ind)
 	ref := C.JS_JSONStringify(ctx.ref, val.ref, rep.ref, indent.ref)
 	ptr := C.JS_ToCString(ctx.ref, ref)
-	ret := v_str(ptr)
+	ret := if isnil(ptr) {
+		''
+	} else {
+		v_str(ptr)
+	}
 	C.JS_FreeCString(ctx.ref, ptr)
 	return ret
 }
