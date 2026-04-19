@@ -210,6 +210,11 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 
 // Evaluate JS with complete params
 // Example: ctx.js_eval(code, filename, flag)!
+// Check if exception occurred.
+pub fn (ctx &Context) has_exception() bool {
+	return ctx.ref_ptr() != 0 && ctx.js_exception_value().is_exception()
+}
+
 pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 	return ctx.js_eval_core(
 		input:    input.str
