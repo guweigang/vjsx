@@ -12,6 +12,7 @@ struct C.JSPropertyEnum {
 // Atom structure based on `JSAtom` in qjs
 // and implemented into `ref`.
 pub struct Atom {
+pub:
 	ref C.JSAtom
 	ctx Context
 }

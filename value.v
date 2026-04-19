@@ -16,8 +16,8 @@ struct C.JSValue {
 // Value structure based on `JSValue` in qjs
 // and implemented into `ref`.
 pub struct Value {
-	ref C.JSValue
 pub:
+	ref C.JSValue
 	ctx Context
 }
 
