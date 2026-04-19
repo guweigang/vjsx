@@ -49,6 +49,11 @@ pub fn (ctx &Context) js_exception() &JSError {
 	return err
 }
 
+// Get raw JS Exception as Value.
+pub fn (ctx &Context) js_exception_value() Value {
+	return ctx.c_val(C.JS_GetException(ctx.ref))
+}
+
 // Create JS Null.
 pub fn (ctx &Context) js_null() Value {
 	return ctx.c_tag(2)
