@@ -103,7 +103,7 @@ fn C.JS_EvalFunction(&C.JSContext, C.JSValue) C.JSValue
 fn C.js_std_await(&C.JSContext, C.JSValue) C.JSValue
 fn C.js_std_set_worker_new_context_func(FnNewContext)
 fn C.JS_SetModuleLoaderFunc(&C.JSRuntime, &JSModuleNormalizeFunc, &JSModuleLoaderFunc, voidptr)
-fn C.js_module_loader(&C.JSContext, &char, voidptr) &C.JSModuleDef
+fn C.vjsx_js_module_loader(&C.JSContext, &char, voidptr) &C.JSModuleDef
 fn C.js_std_loop(&C.JSContext)
 fn C.JS_GetRuntime(&C.JSContext) &C.JSRuntime
 fn C.js_std_free_handlers(&C.JSRuntime)
@@ -151,7 +151,7 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	C.js_std_set_worker_new_context_func(new_context)
 	C.js_std_init_handlers(rt.ref)
 	ref := new_context(rt.ref)
-	C.JS_SetModuleLoaderFunc(rt.ref, C.NULL, &C.js_module_loader, C.NULL)
+	C.JS_SetModuleLoaderFunc(rt.ref, C.NULL, &vjsx_runtime_module_loader, C.NULL)
 	if config.unhandled_rejection {
 		rt.promise_rejection_tracker()
 	}

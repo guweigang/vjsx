@@ -22,4 +22,12 @@ static inline void vjsx_js_add_bignum_intrinsics(JSContext *ctx) {
 }
 #endif
 
+static inline JSModuleDef *vjsx_js_value_to_module_def(JSValue value) {
+	return (JSModuleDef *)JS_VALUE_GET_PTR(value);
+}
+
+static inline JSModuleDef *vjsx_js_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
+	return js_module_loader(ctx, module_name, opaque, JS_UNDEFINED);
+}
+
 #endif
