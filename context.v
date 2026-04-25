@@ -19,7 +19,7 @@ pub:
 	rt                 Runtime
 	host_cleanup_state &HostCleanupState
 mut:
-	asset_root         string
+	asset_root string
 }
 
 pub fn (ctx &Context) ref_ptr() voidptr {
@@ -359,9 +359,40 @@ pub fn (ctx &Context) loop() {
 	C.js_std_loop(ctx.ref)
 }
 
+// Execute a single ready microtask / promise continuation if one is pending.
+// Returns `true` when one job ran.
+pub fn (ctx &Context) pump_once() !bool {
+	return ctx.runtime().execute_pending_job()
+}
+
+// Report whether the QuickJS job queue already has ready work.
+pub fn (ctx &Context) has_ready_task() bool {
+	return ctx.runtime().is_job_pending()
+}
+
+// Drain currently ready microtasks / promise continuations without blocking for
+// future timers or host events.
+pub fn (ctx &Context) drain_ready_tasks() !int {
+	mut drained := 0
+	for {
+		ran := ctx.pump_once()!
+		if !ran {
+			break
+		}
+		drained++
+	}
+	return drained
+}
+
+// Drive the underlying QuickJS stdlib loop until it becomes idle. This may
+// block while waiting for timers or other stdlib-backed async sources.
+pub fn (ctx &Context) pump_until_idle() {
+	ctx.loop()
+}
+
 // Context end
 pub fn (ctx &Context) end() {
-	ctx.loop()
+	ctx.pump_until_idle()
 }
 
 // Get runtime from context

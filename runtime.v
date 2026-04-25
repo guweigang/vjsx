@@ -34,6 +34,7 @@ fn C.JS_SetMaxStackSize(&C.JSRuntime, usize)
 fn C.JS_SetGCThreshold(&C.JSRuntime, usize)
 fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
 fn C.JS_IsJobPending(&C.JSRuntime) bool
+fn C.JS_ExecutePendingJob(&C.JSRuntime, &&C.JSContext) int
 
 // Create new Runtime.
 // This is the low-level manual ownership path. Prefer
@@ -55,6 +56,24 @@ pub fn new_runtime() Runtime {
 // Check if job is pending
 pub fn (rt Runtime) is_job_pending() bool {
 	return C.JS_IsJobPending(rt.ref)
+}
+
+// Execute a single pending QuickJS job if one is ready.
+// Returns `true` when a job ran, `false` when the queue was empty.
+pub fn (rt Runtime) execute_pending_job() !bool {
+	mut job_ctx := &C.JSContext(unsafe { nil })
+	status := C.JS_ExecutePendingJob(rt.ref, &job_ctx)
+	if status < 0 {
+		if !isnil(job_ctx) {
+			return (&Context{
+				ref:                job_ctx
+				rt:                 rt
+				host_cleanup_state: &HostCleanupState{}
+			}).js_exception()
+		}
+		return error('failed to execute pending QuickJS job')
+	}
+	return status > 0
 }
 
 // Set limit memory. (default to unlimited)

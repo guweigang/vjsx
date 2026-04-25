@@ -2,6 +2,44 @@ import os
 import vjsx
 import runtimejs
 
+const runtime_session_test_wake_log_env = 'VJSX_RUNTIME_SESSION_TEST_WAKE_LOG'
+
+fn runtime_session_test_reset_wakeup_hooks(path string) {
+	os.setenv(runtime_session_test_wake_log_env, path, true)
+	if os.exists(path) {
+		os.rm(path) or {}
+	}
+}
+
+fn runtime_session_test_append_wakeup_log(line string) {
+	path := os.getenv_opt(runtime_session_test_wake_log_env) or { return }
+	existing := os.read_file(path) or { '' }
+	mut next := line
+	if existing != '' {
+		next = existing + '\n' + line
+	}
+	os.write_file(path, next) or {}
+}
+
+fn runtime_session_test_read_wakeup_log(path string) []string {
+	if !os.exists(path) {
+		return []string{}
+	}
+	raw := os.read_file(path) or { return []string{} }
+	if raw.trim_space() == '' {
+		return []string{}
+	}
+	return raw.split_into_lines()
+}
+
+fn runtime_session_test_record_wake(req vjsx.RuntimeSessionWakeRequest) {
+	runtime_session_test_append_wakeup_log('wake:${req.session_id}:${req.wake_at_ms}:${req.reason}')
+}
+
+fn runtime_session_test_record_wake_cancel(req vjsx.RuntimeSessionWakeCancelRequest) {
+	runtime_session_test_append_wakeup_log('cancel:${req.session_id}:${req.reason}')
+}
+
 fn test_runtime_session_close_is_idempotent() {
 	mut session := vjsx.new_runtime_session()
 	ctx := session.context()
@@ -28,6 +66,198 @@ fn test_runtime_session_close_is_idempotent_after_host_installs() {
 	session.close()
 	session.close()
 	assert session.is_closed() == true
+}
+
+fn test_runtime_session_pump_apis_drive_ready_tasks() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	value := ctx.eval('
+		globalThis.__pump_value = "pending";
+		Promise.resolve().then(() => {
+			globalThis.__pump_value = "done";
+		});
+	') or {
+		panic(err)
+	}
+	defer {
+		value.free()
+	}
+	assert session.has_ready_task() == true
+	assert session.drain_ready_tasks() or { panic(err) } == 1
+	assert session.has_ready_task() == false
+	result := ctx.js_global('__pump_value')
+	defer {
+		result.free()
+	}
+	assert result.to_string() == 'done'
+}
+
+fn test_runtime_session_pump_once_runs_single_job() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	value := ctx.eval('
+		globalThis.__pump_once_steps = [];
+		Promise.resolve()
+			.then(() => globalThis.__pump_once_steps.push("first"))
+			.then(() => globalThis.__pump_once_steps.push("second"));
+	') or {
+		panic(err)
+	}
+	defer {
+		value.free()
+	}
+	assert session.pump_once() or { panic(err) }
+	after_first := ctx.eval('globalThis.__pump_once_steps.join(",")') or { panic(err) }
+	defer {
+		after_first.free()
+	}
+	assert after_first.to_string() == 'first'
+	assert session.pump_once() or { panic(err) }
+	after_second := ctx.eval('globalThis.__pump_once_steps.join(",")') or { panic(err) }
+	defer {
+		after_second.free()
+	}
+	assert after_second.to_string() == 'first,second'
+	assert (session.pump_once() or { panic(err) }) == false
+}
+
+fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_wakeup.log')
+	runtime_session_test_reset_wakeup_hooks(log_path)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_wake_log_env)
+		os.rm(log_path) or {}
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:               fn () i64 {
+			return 4242
+		}
+		wake_fn:              runtime_session_test_record_wake
+		cancel_wake_fn:       runtime_session_test_record_wake_cancel
+		runtime_owned_timers: true
+		session_id:           'session-a'
+	})
+	assert session.runtime_owns_timers() == true
+	assert session.now_ms() == 4242
+	assert session.has_pending_wakeup() == false
+	assert session.has_ready_tasks() == false
+	assert session.needs_wakeup() == false
+	assert session.next_wakeup_at() == none
+	session.request_wakeup_at(9001, 'timer-ready')
+	assert session.has_pending_wakeup()
+	assert session.needs_wakeup()
+	assert session.next_wakeup_at() or { panic(err) } == 9001
+	mut wake_log := runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 1
+	assert wake_log[0] == 'wake:session-a:9001:timer-ready'
+	requested_after := session.request_wakeup_after(250, 'delay-ready')
+	assert requested_after == 4492
+	assert session.next_wakeup_at() or { panic(err) } == 4492
+	wake_log = runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 2
+	assert wake_log[1] == 'wake:session-a:4492:delay-ready'
+	config := session.event_loop_config()
+	assert config.session_id == 'session-a'
+	assert config.runtime_owned_timers == true
+	session.clear_wakeup_request()
+	assert session.has_pending_wakeup() == false
+	assert session.needs_wakeup() == false
+	assert session.next_wakeup_at() == none
+	wake_log = runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 3
+	assert wake_log[2] == 'cancel:session-a:cleared'
+}
+
+fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_timer_wakeup.log')
+	runtime_session_test_reset_wakeup_hooks(log_path)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_wake_log_env)
+		os.rm(log_path) or {}
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:         fn () i64 {
+			return 1000
+		}
+		wake_fn:        runtime_session_test_record_wake
+		cancel_wake_fn: runtime_session_test_record_wake_cancel
+		session_id:     'timer-session'
+	})
+	session.install_timer_wakeup_bridge()
+	ctx := session.context()
+	ctx.install_timer_globals()
+	value := ctx.eval('
+		globalThis.__timer_wrapper_value = "pending";
+		globalThis.__timer_wrapper_handle = setTimeout(() => {
+			globalThis.__timer_wrapper_value = "done";
+		}, 10);
+	') or {
+		panic(err)
+	}
+	defer {
+		value.free()
+	}
+	wake_log := runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 1
+	assert wake_log[0] == 'wake:timer-session:1010:timer'
+	assert session.next_wakeup_at() or { panic(err) } == 1010
+	session.pump_until_idle()
+	result := ctx.js_global('__timer_wrapper_value')
+	defer {
+		result.free()
+	}
+	assert result.to_string() == 'done'
+	after_pump_log := runtime_session_test_read_wakeup_log(log_path)
+	assert after_pump_log.len == 2
+	assert after_pump_log[1] == 'cancel:timer-session:cleared'
+	assert session.next_wakeup_at() == none
+}
+
+fn test_runtime_session_resolve_value_and_call_global_resolved() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	setup := ctx.eval('
+		globalThis.__resolve_direct = Promise.resolve("settled");
+		globalThis.__resolve_fn = (value) => Promise.resolve("ok:" + value);
+		globalThis.__plain_fn = (value) => "plain:" + value;
+	') or {
+		panic(err)
+	}
+	defer {
+		setup.free()
+	}
+	promise_value := ctx.js_global('__resolve_direct')
+	defer {
+		promise_value.free()
+	}
+	resolved := session.resolve_value(promise_value) or { panic(err) }
+	defer {
+		resolved.free()
+	}
+	assert resolved.to_string() == 'settled'
+	from_global := session.call_global_resolved('__resolve_fn', 'demo') or { panic(err) }
+	defer {
+		from_global.free()
+	}
+	assert from_global.to_string() == 'ok:demo'
+	plain_global := session.call_global_resolved('__plain_fn', 'demo') or { panic(err) }
+	defer {
+		plain_global.free()
+	}
+	assert plain_global.to_string() == 'plain:demo'
 }
 
 fn test_script_runtime_session_installs_profile() {
