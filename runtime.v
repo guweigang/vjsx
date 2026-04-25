@@ -68,7 +68,10 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 			return (&Context{
 				ref:                job_ctx
 				rt:                 rt
-				host_cleanup_state: &HostCleanupState{}
+				host_cleanup_state: &HostCleanupState{
+					cleanups:          []HostCleanup{}
+					installed_modules: map[string]bool{}
+				}
 			}).js_exception()
 		}
 		return error('failed to execute pending QuickJS job')

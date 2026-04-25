@@ -11,13 +11,19 @@ pub fn (ctx &Context) resolve_value(val Value) !Value {
 
 // Resolve a JS value within the managed session.
 pub fn (session RuntimeSession) resolve_value(val Value) !Value {
-	return session.context.resolve_value(val)
+	return session.context.resolve_value(val) or {
+		session.record_runtime_error('resolve_value', err.msg())
+		return err
+	}
 }
 
 // Call a JS function through the managed session without exposing raw Context
 // call sites to embedders.
 pub fn (session RuntimeSession) call(val Value, args ...AnyValue) !Value {
-	return session.context.call(val, ...args)
+	return session.context.call(val, ...args) or {
+		session.record_runtime_error('call', err.msg())
+		return err
+	}
 }
 
 // Call a global function by name through the managed session.
@@ -27,6 +33,7 @@ pub fn (session RuntimeSession) call_global(name string, args ...AnyValue) !Valu
 		handler.free()
 	}
 	if handler.is_undefined() || !handler.is_function() {
+		session.record_runtime_error('call_global', 'global function not found: ${name}')
 		return error('global function not found: ${name}')
 	}
 	return session.call(handler, ...args)

@@ -5,6 +5,8 @@ module vjsx
 pub struct RuntimeGlobalsConfig {
 pub:
 	binary bool = true
+	event  bool = true
+	abort  bool = true
 	timer  bool = true
 	url    bool = true
 }
@@ -27,6 +29,12 @@ pub fn runtime_globals_minimal() RuntimeGlobalsConfig {
 pub fn (ctx &Context) install_runtime_globals(config RuntimeGlobalsConfig) {
 	if config.binary {
 		ctx.install_binary_globals()
+	}
+	if config.event {
+		ctx.install_event_globals()
+	}
+	if config.abort {
+		ctx.install_abort_globals()
 	}
 	if config.timer {
 		ctx.install_timer_globals()

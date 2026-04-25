@@ -33,11 +33,15 @@ fn runtime_session_test_read_wakeup_log(path string) []string {
 }
 
 fn runtime_session_test_record_wake(req vjsx.RuntimeSessionWakeRequest) {
-	runtime_session_test_append_wakeup_log('wake:${req.session_id}:${req.wake_at_ms}:${req.reason}')
+	runtime_session_test_append_wakeup_log('wake:${req.session_id}:${req.wake_at_ms}:${req.generation}:${req.reason}')
 }
 
 fn runtime_session_test_record_wake_cancel(req vjsx.RuntimeSessionWakeCancelRequest) {
-	runtime_session_test_append_wakeup_log('cancel:${req.session_id}:${req.reason}')
+	runtime_session_test_append_wakeup_log('cancel:${req.session_id}:${req.generation}:${req.reason}')
+}
+
+fn runtime_session_test_record_diagnostic(diagnostic vjsx.RuntimeSessionDiagnostic) {
+	runtime_session_test_append_wakeup_log('diagnostic:${diagnostic.session_id}:${diagnostic.kind}:${diagnostic.at_ms}:${diagnostic.message.contains('async boom')}')
 }
 
 fn test_runtime_session_close_is_idempotent() {
@@ -127,6 +131,104 @@ fn test_runtime_session_pump_once_runs_single_job() {
 	assert (session.pump_once() or { panic(err) }) == false
 }
 
+fn test_runtime_session_records_async_job_diagnostics() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_diagnostics.log')
+	runtime_session_test_reset_wakeup_hooks(log_path)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_wake_log_env)
+		os.rm(log_path) or {}
+		session.close()
+	}
+	session.set_diagnostic_handler(runtime_session_test_record_diagnostic)
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:     fn () i64 {
+			return 12345
+		}
+		session_id: 'diagnostic-session'
+	})
+	ctx := session.context()
+	value := ctx.eval('
+		globalThis.__diagnostic_rejected = Promise.resolve().then(() => {
+			throw new Error("async boom");
+		});
+	') or {
+		panic(err)
+	}
+	defer {
+		value.free()
+	}
+	assert session.diagnostic_error_count() == 0
+	promise_value := ctx.js_global('__diagnostic_rejected')
+	defer {
+		promise_value.free()
+	}
+	session.resolve_value(promise_value) or { assert err.msg().contains('async boom') }
+	assert session.diagnostic_error_count() == 1
+	diagnostic := session.last_diagnostic() or { panic(err) }
+	assert diagnostic.session_id == 'diagnostic-session'
+	assert diagnostic.kind == 'resolve_value'
+	assert diagnostic.message.contains('async boom')
+	assert diagnostic.at_ms == 12345
+	snapshot := session.debug_snapshot()
+	assert snapshot.async_error_count == 1
+	assert snapshot.last_error_message.contains('async boom')
+	diagnostic_log := runtime_session_test_read_wakeup_log(log_path)
+	assert diagnostic_log.len == 1
+	assert diagnostic_log[0] == 'diagnostic:diagnostic-session:resolve_value:12345:true'
+	session.clear_diagnostics()
+	assert session.diagnostic_error_count() == 0
+}
+
+fn test_runtime_session_diagnostics_are_bounded() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	session.configure_limits(vjsx.RuntimeSessionLimits{
+		max_diagnostics: 2
+	})
+	session.call_global('missing_a') or {}
+	session.call_global('missing_b') or {}
+	session.call_global('missing_c') or {}
+	assert session.diagnostic_error_count() == 2
+	assert session.dropped_diagnostic_count() == 1
+	diagnostics := session.diagnostics()
+	assert diagnostics.len == 2
+	assert diagnostics[0].message.contains('missing_b')
+	assert diagnostics[1].message.contains('missing_c')
+	snapshot := session.debug_snapshot()
+	assert snapshot.async_error_count == 2
+	assert snapshot.dropped_diagnostic_count == 1
+}
+
+fn test_runtime_session_timer_wakeup_hints_are_bounded() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	session.configure_limits(vjsx.RuntimeSessionLimits{
+		max_timer_wakeup_hints: 1
+	})
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:     fn () i64 {
+			return 8000
+		}
+		session_id: 'limit-session'
+	})
+	assert session.request_timer_wakeup_after('timer-a', 10) == 8010
+	assert session.request_timer_wakeup_after('timer-b', 20) == -1
+	assert session.rejected_timer_wakeup_hint_count() == 1
+	assert session.diagnostic_error_count() == 1
+	diagnostic := session.last_diagnostic() or { panic(err) }
+	assert diagnostic.kind == 'timer_wakeup_hint_limit'
+	snapshot := session.debug_snapshot()
+	assert snapshot.timer_wakeup_hint_count == 1
+	assert snapshot.timer_wakeup_hint_limit == 1
+	assert snapshot.rejected_timer_wakeup_hint_count == 1
+	assert snapshot.async_error_count == 1
+}
+
 fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_wakeup.log')
 	runtime_session_test_reset_wakeup_hooks(log_path)
@@ -157,13 +259,19 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	assert session.next_wakeup_at() or { panic(err) } == 9001
 	mut wake_log := runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 1
-	assert wake_log[0] == 'wake:session-a:9001:timer-ready'
+	assert wake_log[0] == 'wake:session-a:9001:1:timer-ready'
+	assert session.wakeup_generation() == 1
+	session.request_wakeup_at(9001, 'same-wakeup')
+	wake_log = runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 1
+	assert session.wakeup_generation() == 1
 	requested_after := session.request_wakeup_after(250, 'delay-ready')
 	assert requested_after == 4492
 	assert session.next_wakeup_at() or { panic(err) } == 4492
 	wake_log = runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 2
-	assert wake_log[1] == 'wake:session-a:4492:delay-ready'
+	assert wake_log[1] == 'wake:session-a:4492:2:delay-ready'
+	assert session.wakeup_generation() == 2
 	config := session.event_loop_config()
 	assert config.session_id == 'session-a'
 	assert config.runtime_owned_timers == true
@@ -173,7 +281,8 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	assert session.next_wakeup_at() == none
 	wake_log = runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 3
-	assert wake_log[2] == 'cancel:session-a:cleared'
+	assert wake_log[2] == 'cancel:session-a:2:cleared'
+	assert session.wakeup_generation() == 0
 }
 
 fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
@@ -193,7 +302,6 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 		cancel_wake_fn: runtime_session_test_record_wake_cancel
 		session_id:     'timer-session'
 	})
-	session.install_timer_wakeup_bridge()
 	ctx := session.context()
 	ctx.install_timer_globals()
 	value := ctx.eval('
@@ -209,8 +317,9 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 	}
 	wake_log := runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 1
-	assert wake_log[0] == 'wake:timer-session:1010:timer'
+	assert wake_log[0] == 'wake:timer-session:1010:1:timer'
 	assert session.next_wakeup_at() or { panic(err) } == 1010
+	assert session.wakeup_generation() == 1
 	session.pump_until_idle()
 	result := ctx.js_global('__timer_wrapper_value')
 	defer {
@@ -219,8 +328,81 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 	assert result.to_string() == 'done'
 	after_pump_log := runtime_session_test_read_wakeup_log(log_path)
 	assert after_pump_log.len == 2
-	assert after_pump_log[1] == 'cancel:timer-session:cleared'
+	assert after_pump_log[1] == 'cancel:timer-session:1:cleared'
 	assert session.next_wakeup_at() == none
+}
+
+fn test_runtime_session_close_clears_event_loop_wakeup_state() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_close_wakeup.log')
+	runtime_session_test_reset_wakeup_hooks(log_path)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_wake_log_env)
+		os.rm(log_path) or {}
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:         fn () i64 {
+			return 5000
+		}
+		wake_fn:        runtime_session_test_record_wake
+		cancel_wake_fn: runtime_session_test_record_wake_cancel
+		session_id:     'closing-session'
+	})
+	session.request_timer_wakeup_after('timer-a', 25)
+	assert session.has_pending_wakeup()
+	assert session.next_wakeup_at() or { panic(err) } == 5025
+	session.close()
+	assert session.is_closed()
+	assert session.has_pending_wakeup() == false
+	assert session.needs_wakeup() == false
+	assert session.next_wakeup_at() == none
+	assert session.request_wakeup_after(10, 'after-close') == -1
+	assert session.request_timer_wakeup_after('timer-b', 10) == -1
+	wake_log := runtime_session_test_read_wakeup_log(log_path)
+	assert wake_log.len == 2
+	assert wake_log[0] == 'wake:closing-session:5025:1:timer'
+	assert wake_log[1] == 'cancel:closing-session:1:cleared'
+}
+
+fn test_runtime_session_debug_snapshot_reports_async_state() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn:               fn () i64 {
+			return 7000
+		}
+		runtime_owned_timers: true
+		session_id:           'debug-session'
+	})
+	ctx := session.context()
+	value := ctx.eval('Promise.resolve().then(() => {})') or { panic(err) }
+	session.request_timer_wakeup_after('timer-a', 40)
+	session.request_timer_wakeup_after('timer-b', 10)
+	snapshot := session.debug_snapshot()
+	assert snapshot.session_id == 'debug-session'
+	assert snapshot.closed == false
+	assert snapshot.runtime_owned_timers == true
+	assert snapshot.has_ready_task == true
+	assert snapshot.has_pending_wakeup == true
+	assert snapshot.needs_wakeup == true
+	assert snapshot.next_wakeup_at_ms == 7010
+	assert snapshot.wakeup_generation == 2
+	assert snapshot.timer_wakeup_hint_count == 2
+	assert snapshot.next_timer_wakeup_at_ms == 7010
+	value.free()
+	session.close()
+	closed_snapshot := session.debug_snapshot()
+	assert closed_snapshot.closed == true
+	assert closed_snapshot.has_ready_task == false
+	assert closed_snapshot.has_pending_wakeup == false
+	assert closed_snapshot.needs_wakeup == false
+	assert closed_snapshot.next_wakeup_at_ms == -1
+	assert closed_snapshot.wakeup_generation == 0
+	assert closed_snapshot.timer_wakeup_hint_count == 0
+	assert closed_snapshot.next_timer_wakeup_at_ms == -1
 }
 
 fn test_runtime_session_resolve_value_and_call_global_resolved() {

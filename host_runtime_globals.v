@@ -21,6 +21,16 @@ pub fn (ctx &Context) install_timer_globals() {
 	ctx.eval_runtime_file('web/js/timer.js', type_module) or { panic(err) }
 }
 
+// Install event globals (`Event`, `CustomEvent`, `EventTarget`).
+pub fn (ctx &Context) install_event_globals() {
+	ctx.eval_runtime_file('web/js/event.js', type_module) or { panic(err) }
+}
+
+// Install cancellation globals (`AbortController`, `AbortSignal`).
+pub fn (ctx &Context) install_abort_globals() {
+	ctx.eval_runtime_file('web/js/abort.js', type_module) or { panic(err) }
+}
+
 // Install URL globals (`URL`, `URLSearchParams`, `URLPattern`).
 pub fn (ctx &Context) install_url_globals() {
 	ctx.eval_runtime_file('web/js/url.js', type_module) or { panic(err) }

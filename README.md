@@ -276,6 +276,9 @@ browser-facing modules you want, while still letting higher-level features like
 The legacy `ctx.install_host(...)` entrypoint still works as a compatibility
 wrapper around `install_node_compat(...)`.
 
+For the embedding ownership, event-loop, timer, diagnostics, limits, and profile
+contracts, see [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
+
 For embedders, `ctx.install_host_api(...)` provides a more explicit way to
 expose host globals and modules to JS/TS extension code without hand-rolling
 `js_module(...).create()` at every call site.

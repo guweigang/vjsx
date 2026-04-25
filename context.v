@@ -10,7 +10,8 @@ struct C.JSModuleDef {}
 // and implemented into `ref`.
 struct HostCleanupState {
 mut:
-	cleanups []HostCleanup
+	cleanups          []HostCleanup
+	installed_modules map[string]bool
 }
 
 pub struct Context {
@@ -158,7 +159,8 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 		ref:                ref
 		rt:                 rt
 		host_cleanup_state: &HostCleanupState{
-			cleanups: []HostCleanup{}
+			cleanups:          []HostCleanup{}
+			installed_modules: map[string]bool{}
 		}
 		asset_root:         config.asset_root
 	}

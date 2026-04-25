@@ -22,7 +22,9 @@ pub struct RuntimeSession {
 mut:
 	closed           bool
 	bridge           RuntimeSessionBridge
-	event_loop_state &RuntimeSessionEventLoopState = new_runtime_session_event_loop_state()
+	event_loop_state &RuntimeSessionEventLoopState  = new_runtime_session_event_loop_state()
+	diagnostic_state &RuntimeSessionDiagnosticState = new_runtime_session_diagnostic_state()
+	limit_state      &RuntimeSessionLimitState      = new_runtime_session_limit_state()
 }
 
 fn runtime_session_bridge_missing_run(_ctx &Context, _script_path string, _as_module bool, _temp_root string) !Value {
@@ -97,13 +99,24 @@ pub fn (session RuntimeSession) has_ready_task() bool {
 // Execute one ready microtask / promise continuation if available.
 // Returns `true` when one job ran.
 pub fn (session RuntimeSession) pump_once() !bool {
-	return session.context.pump_once()
+	return session.context.pump_once() or {
+		session.record_runtime_error('quickjs_job', err.msg())
+		return err
+	}
 }
 
 // Drain all currently ready microtasks / promise continuations without waiting
 // for future timers or host events.
 pub fn (session RuntimeSession) drain_ready_tasks() !int {
-	return session.context.drain_ready_tasks()
+	mut drained := 0
+	for {
+		ran := session.pump_once()!
+		if !ran {
+			break
+		}
+		drained++
+	}
+	return drained
 }
 
 // Drive the underlying QuickJS stdlib loop until the session becomes idle.
@@ -273,6 +286,7 @@ pub fn (mut session RuntimeSession) close() {
 	if session.closed {
 		return
 	}
+	session.close_event_loop()
 	session.context.free()
 	session.runtime.free()
 	session.closed = true

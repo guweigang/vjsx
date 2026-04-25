@@ -23,7 +23,7 @@ mut:
 // ```
 pub fn (ctx &Context) js_module(name string) Module {
 	return Module{
-		ctx: ctx
+		ctx:  ctx
 		name: name
 	}
 }
@@ -108,5 +108,26 @@ pub fn (mut m Module) create() &C.JSModuleDef {
 	for export in exports {
 		C.JS_AddModuleExport(m.ctx.ref, ref, export)
 	}
+	m.ctx.register_runtime_module(m.name)
 	return ref
+}
+
+pub fn (ctx &Context) register_runtime_module(name string) {
+	mut cleanup_state := ctx.host_cleanup_state
+	cleanup_state.installed_modules[name] = true
+}
+
+pub fn (ctx &Context) has_runtime_module(name string) bool {
+	return ctx.host_cleanup_state.installed_modules[name] or { false }
+}
+
+pub fn (ctx &Context) runtime_modules() []string {
+	mut modules := []string{}
+	for name, installed in ctx.host_cleanup_state.installed_modules {
+		if installed {
+			modules << name
+		}
+	}
+	modules.sort()
+	return modules
 }

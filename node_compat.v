@@ -5,6 +5,7 @@ module vjsx
 pub struct NodeCompatConfig {
 pub:
 	console       bool                 = true
+	timers        bool                 = true
 	fs            bool                 = true
 	path          bool                 = true
 	os            bool                 = true
@@ -37,6 +38,7 @@ pub fn node_compat_full(fs_roots []string, process_args []string) NodeCompatConf
 pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatConfig {
 	return NodeCompatConfig{
 		fs:            false
+		timers:        true
 		http:          false
 		https:         false
 		fetch:         false
@@ -56,6 +58,9 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 		ctx.install_console(config.log_fn, config.error_fn)
 	}
 	ctx.install_runtime_globals(config.runtime)
+	if config.timers {
+		ctx.install_node_timers_promises_module()
+	}
 	if config.fetch {
 		ctx.install_fetch_globals()
 	}
