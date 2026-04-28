@@ -9,7 +9,7 @@ function makeIterator(items) {
       return { done: value === undefined, value: value };
     },
   };
-  if (support.iterable) {
+  if (typeof Symbol === "function" && Symbol.iterator) {
     iterator[Symbol.iterator] = function () {
       return iterator;
     };

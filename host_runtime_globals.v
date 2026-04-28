@@ -12,7 +12,15 @@ pub fn (ctx &Context) install_binary_globals() {
 		ret := base64.decode_str(args[0].str())
 		return ctx.js_string(ret)
 	}))
+	global.set('structuredClone', ctx.js_function(fn [ctx] (args []Value) Value {
+		if args.len == 0 {
+			return ctx.js_undefined()
+		}
+		source := args[0].json_stringify()
+		return ctx.eval('(' + source + ')') or { ctx.js_throw(err.msg()) }
+	}))
 	global.free()
+	ctx.eval_runtime_file('web/js/typed_array.js', type_module) or { panic(err) }
 	ctx.eval_runtime_file('web/js/buffer.js', type_module) or { panic(err) }
 }
 

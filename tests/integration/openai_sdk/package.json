@@ -1,0 +1,13 @@
+{
+  "name": "vjsx-openai-sdk-integration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "./run.sh"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "latest",
+    "ai": "latest",
+    "openai": "latest"
+  }
+}
