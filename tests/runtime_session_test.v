@@ -32,6 +32,15 @@ fn runtime_session_test_read_wakeup_log(path string) []string {
 	return raw.split_into_lines()
 }
 
+fn runtime_session_test_append_stream_log(path string, line string) {
+	existing := os.read_file(path) or { '' }
+	mut next := line
+	if existing != '' {
+		next = existing + '\n' + line
+	}
+	os.write_file(path, next) or {}
+}
+
 fn runtime_session_test_record_wake(req vjsx.RuntimeSessionWakeRequest) {
 	runtime_session_test_append_wakeup_log('wake:${req.session_id}:${req.wake_at_ms}:${req.generation}:${req.reason}')
 }
@@ -440,6 +449,99 @@ fn test_runtime_session_resolve_value_and_call_global_resolved() {
 		plain_global.free()
 	}
 	assert plain_global.to_string() == 'plain:demo'
+}
+
+fn test_runtime_session_streams_async_iterable_with_backpressure_pull() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_stream_test.log')
+	os.rm(log_path) or {}
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.rm(log_path) or {}
+		session.close()
+	}
+	ctx := session.context()
+	setup := ctx.eval('
+		globalThis.__stream_next_count = 0;
+		globalThis.__stream_cancelled = "";
+		globalThis.__stream_value = {
+			async *[Symbol.asyncIterator]() {
+				try {
+					for (const value of ["one", "two", "three"]) {
+						globalThis.__stream_next_count++;
+						await Promise.resolve();
+						yield value;
+					}
+				} finally {
+					globalThis.__stream_cancelled = "yes";
+				}
+			}
+		};
+	') or {
+		panic(err)
+	}
+	defer {
+		setup.free()
+	}
+	stream_value := ctx.js_global('__stream_value')
+	defer {
+		stream_value.free()
+	}
+	assert session.is_streamable_value(stream_value) == true
+	completed := session.stream_value(stream_value, fn [log_path] (frame vjsx.Value) !bool {
+		runtime_session_test_append_stream_log(log_path, frame.to_string())
+		return runtime_session_test_read_wakeup_log(log_path).len < 2
+	}) or {
+		panic(err)
+	}
+	assert completed == false
+	frames := runtime_session_test_read_wakeup_log(log_path)
+	assert frames == ['one', 'two']
+	next_count := ctx.js_global('__stream_next_count')
+	defer {
+		next_count.free()
+	}
+	assert next_count.to_int() == 2
+	cancelled := ctx.js_global('__stream_cancelled')
+	defer {
+		cancelled.free()
+	}
+	assert cancelled.to_string() == 'yes'
+}
+
+fn test_runtime_session_stream_callback_can_encode_frames() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_sse_test.log')
+	os.rm(log_path) or {}
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.rm(log_path) or {}
+		session.close()
+	}
+	ctx := session.context()
+	setup := ctx.eval('
+		globalThis.__sse_stream_value = {
+			async *[Symbol.asyncIterator]() {
+				yield { choices: [{ delta: { content: "hi" } }] };
+			}
+		};
+	') or {
+		panic(err)
+	}
+	defer {
+		setup.free()
+	}
+	stream_value := ctx.js_global('__sse_stream_value')
+	defer {
+		stream_value.free()
+	}
+	completed := session.stream_value(stream_value, fn [log_path] (frame vjsx.Value) !bool {
+		runtime_session_test_append_stream_log(log_path, frame.json_stringify())
+		return true
+	}) or {
+		panic(err)
+	}
+	assert completed == true
+	frames := runtime_session_test_read_wakeup_log(log_path)
+	assert frames == ['{"choices":[{"delta":{"content":"hi"}}]}']
 }
 
 fn test_script_runtime_session_installs_profile() {
