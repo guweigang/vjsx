@@ -36,7 +36,7 @@ $if build_quickjs ? {
 		}
 	} $else $if macos {
 		$if amd64 {
-			#flag @VMODROOT/libs/qjs_macos_x64.a
+			$compile_error('vjsx does not ship a bundled macOS x64 QuickJS archive. Set VJS_QUICKJS_PATH to a QuickJS source checkout and build with `-d build_quickjs`.')
 		} $else $if arm64 {
 			#flag @VMODROOT/libs/qjs_macos_arm64.a
 		}

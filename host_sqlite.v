@@ -276,7 +276,7 @@ fn sqlite_stmt_object(ctx &Context, mut stmt HostSqliteStmt) Value {
 	obj.set('kind', sql_stmt_kind(stmt.query_text))
 	obj.set('closed', stmt.closed)
 	stmt.obj_ref = obj.dup_value()
-	to_string_fn := ctx.js_function(fn [ctx, stmt] (args []Value) Value {
+	to_string_fn := ctx.js_function(fn [ctx, mut stmt] (args []Value) Value {
 		return ctx.js_string('sqlite.Statement{kind: ${sql_stmt_kind(stmt.query_text)}, closed: ${stmt.closed}, sql: ${stmt.query_text}}')
 	})
 	query_fn := ctx.js_function(fn [ctx, mut stmt] (args []Value) Value {
@@ -523,7 +523,7 @@ fn sqlite_conn_object(ctx &Context, mut conn HostSqliteConn) Value {
 	obj.set('supportsTransactions', true)
 	obj.set('path', conn.path)
 	obj.set('inTransaction', conn.in_tx)
-	to_string_fn := ctx.js_function(fn [ctx, conn] (args []Value) Value {
+	to_string_fn := ctx.js_function(fn [ctx, mut conn] (args []Value) Value {
 		return ctx.js_string('sqlite.Connection{path: ${conn.path}, closed: ${conn.closed}, inTransaction: ${conn.in_tx}}')
 	})
 	query_fn := ctx.js_function(fn [ctx, mut conn] (args []Value) Value {

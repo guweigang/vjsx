@@ -187,7 +187,7 @@ fn child_process_sync_options(value Value) !ChildProcessSyncOptions {
 	return options
 }
 
-fn child_process_fork_invocation(ctx &Context, args []Value) !ChildProcessForkInvocation {
+fn child_process_fork_invocation(args []Value) !ChildProcessForkInvocation {
 	if args.len == 0 {
 		return error('modulePath is required')
 	}
@@ -480,16 +480,16 @@ fn child_process_event_emitter(ctx &Context) Value {
 
 fn child_process_stream_object(ctx &Context) Value {
 	stream := child_process_event_emitter(ctx)
-	set_encoding_fn := ctx.js_function_this(fn [ctx] (this Value, args []Value) Value {
+	set_encoding_fn := ctx.js_function_this(fn (this Value, args []Value) Value {
 		if args.len > 0 {
 			this.set('_vjsxEncoding', args[0].str())
 		}
 		return this.dup_value()
 	})
-	resume_fn := ctx.js_function_this(fn [ctx] (this Value, args []Value) Value {
+	resume_fn := ctx.js_function_this(fn (this Value, args []Value) Value {
 		return this.dup_value()
 	})
-	pause_fn := ctx.js_function_this(fn [ctx] (this Value, args []Value) Value {
+	pause_fn := ctx.js_function_this(fn (this Value, args []Value) Value {
 		return this.dup_value()
 	})
 	pipe_fn := ctx.js_function_this(fn [ctx] (this Value, args []Value) Value {
@@ -560,7 +560,7 @@ fn child_process_stream_object(ctx &Context) Value {
 	return stream
 }
 
-fn child_process_pipe_stream_chunk(ctx &Context, stream Value, chunk Value) {
+fn child_process_pipe_stream_chunk(stream Value, chunk Value) {
 	pipe_dests := stream.get('_vjsxPipeDests')
 	defer {
 		pipe_dests.free()
@@ -605,7 +605,7 @@ fn child_process_emit_stream_data(ctx &Context, stream Value, text string) {
 	encoding_value.free()
 	chunk := child_process_output_value(ctx, text, encoding)
 	child_process_emit(ctx, stream, 'data', [chunk])
-	child_process_pipe_stream_chunk(ctx, stream, chunk)
+	child_process_pipe_stream_chunk(stream, chunk)
 	chunk.free()
 }
 
@@ -1451,7 +1451,7 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		}
 	})
 	fork_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
-		invocation := child_process_fork_invocation(ctx, args) or {
+		invocation := child_process_fork_invocation(args) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
 		command, argv, options := child_process_fork_command(invocation, roots) or {
