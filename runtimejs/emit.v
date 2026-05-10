@@ -6,7 +6,7 @@ import vjsx
 fn ensure_runtime_support_files(root string) ! {
 	support_path := emitted_dom_runtime_module_path(root)
 	os.mkdir_all(os.dir(support_path))!
-	os.write_file(support_path, os.read_file(dom_runtime_module_source_path())!)!
+	os.write_file(support_path, vjsx.embedded_runtime_asset_source('web/js/dom_runtime.js')!)!
 }
 
 fn prepend_dom_runtime_import(source string, target_path string, root string) string {
@@ -118,8 +118,7 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 		emit_runtime_module_graph(ctx, resolved, root, config_json, mut seen)!
 		rewrites << ModuleRewrite{
 			from:     specifier
-			to:       file_relative_specifier(target_path, mirrored_runtime_path(root,
-				resolved))
+			to:       file_relative_specifier(target_path, mirrored_runtime_path(root, resolved))
 			resolved: resolved
 		}
 	}
@@ -135,8 +134,9 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 		}
 	} else {
 		source := os.read_file(source_path)!
-		if vjsx.is_javascript_file(source_path)
-			&& (is_commonjs_module(ctx, source_path) or { false }) {
+		if vjsx.is_javascript_file(source_path) && (is_commonjs_module(ctx, source_path) or {
+			false
+		}) {
 			export_names := list_commonjs_exports(ctx, source_path) or { []string{} }
 			reexport_targets := list_commonjs_reexports(ctx, source_path) or { []string{} }
 			os.write_file(target_path, prepend_dom_runtime_import(render_commonjs_module(source,
@@ -151,7 +151,9 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 pub fn build_runtime_module_entry(ctx &vjsx.Context, script_path string, as_module bool, temp_root string) !string {
 	config_json := load_typescript_config(ctx, script_path) or { '' }
 	if !as_module {
-		if vjsx.is_javascript_file(script_path) && (is_commonjs_module(ctx, script_path) or { false }) {
+		if vjsx.is_javascript_file(script_path) && (is_commonjs_module(ctx, script_path) or {
+			false
+		}) {
 			root := if temp_root == '' { script_path + '.vjsbuild' } else { temp_root }
 			os.rmdir_all(root) or {}
 			os.mkdir_all(root)!

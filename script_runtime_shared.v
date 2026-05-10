@@ -67,10 +67,6 @@ fn file_relative_specifier(from_path string, to_path string) string {
 	return rel.replace('\\', '/')
 }
 
-fn dom_runtime_module_source_path() string {
-	return os.join_path(@VMODROOT, 'web', 'js', 'dom_runtime.js')
-}
-
 fn emitted_dom_runtime_module_path(root string) string {
 	return os.join_path(root, '__vjs_runtime', 'dom_runtime.js')
 }
