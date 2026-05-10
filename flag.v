@@ -11,6 +11,9 @@ $if build_quickjs ? {
 		#flag -Dasm=__asm__
 	}
 	$if msvc {
+		#flag /std:c11
+		#flag /experimental:c11atomics
+		#flag -D_WINSOCKAPI_
 		#flag -D_CRT_SECURE_NO_WARNINGS
 		#flag -D_CRT_NONSTDC_NO_DEPRECATE
 	}
