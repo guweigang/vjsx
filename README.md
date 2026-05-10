@@ -129,7 +129,8 @@ fn main() {
 }
 ```
 
-For the full host-first embedding guidance, see [EMBEDDING.md](EMBEDDING.md).
+For the full host-first embedding guidance, see
+[`docs/EMBEDDING.md`](docs/EMBEDDING.md).
 
 ## Run
 
@@ -193,6 +194,8 @@ Options:
 This is runtime transpilation backed by the bundled `typescript.js`, and the
 same loader is now also available from the `vjsx` API through
 `ctx.install_typescript_runtime()` and `ctx.run_runtime_entry(...)`.
+The JS/TS runtime asset loading rules are documented in
+[`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
 It is a good fit for standalone `.ts` scripts, `.mts` modules, and small local
 module graphs. Project-wide features like full `tsc` diagnostics, `references`,
 and broader Node compatibility are still out of scope for now.
@@ -234,7 +237,8 @@ For embedded host use, the recommended abstraction ladder is now:
 - `runtimejs.ExtensionHandle`: one loaded extension instance with lifecycle
   hooks plus regular export calls
 
-That path is documented in [EMBEDDING.md](EMBEDDING.md), together with:
+That path is documented in [`docs/EMBEDDING.md`](docs/EMBEDDING.md), together
+with:
 
 - the recommended stopping point to avoid over-design
 - API surface guidance for default vs advanced helpers
@@ -296,7 +300,8 @@ Database host modules:
   profile
 - `import { connect } from "mysql"` is also exposed, but the real V MySQL
   backend is only compiled when you pass `-d vjsx_mysql`
-- The CLI forwards extra V compiler flags through `VJS_V_FLAGS`, for example:
+- The CLI uses `-cc clang` by default and forwards extra V compiler flags
+  through `VJS_V_FLAGS`, for example:
   `VJS_V_FLAGS='-d vjsx_mysql' ./vjsx --module app.mjs`
 - End-to-end example files live under `examples/db/`
 

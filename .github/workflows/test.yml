@@ -57,12 +57,12 @@ jobs:
 
       - name: Run Tests Linux and Mac with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os != 'windows-latest'
-        run: v -cg test .
+        run: v -cg -cc clang test .
 
       - name: Run Tests Linux and Mac with local QuickJS source
         if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
         shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg test .
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc clang test .
 
       - name: Run Tests Windows with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os == 'windows-latest'

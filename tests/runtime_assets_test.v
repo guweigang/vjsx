@@ -20,6 +20,13 @@ fn collect_runtime_js_assets(root string, dir string) []string {
 fn test_embedded_runtime_asset_registry_covers_web_js_assets() {
 	root := os.join_path(@VMODROOT, 'web', 'js')
 	mut disk_assets := collect_runtime_js_assets(@VMODROOT, root)
+	disk_assets << [
+		'thirdparty/typescript/lib/typescript.js',
+		'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
+		'thirdparty/typescript/lib/vjs_ts_commonjs.js',
+		'thirdparty/typescript/lib/vjs_ts_resolver.js',
+		'thirdparty/typescript/lib/vjs_ts_scan.js',
+	]
 	mut embedded_assets := vjsx.embedded_runtime_asset_paths()
 	disk_assets.sort()
 	embedded_assets.sort()
@@ -57,9 +64,8 @@ fn test_eval_runtime_file_uses_context_asset_root() {
 	defer {
 		os.rmdir_all(asset_root) or {}
 	}
-	os.write_file(os.join_path(asset_root, 'web', 'js', 'test.js'), 'globalThis.__runtime_asset_value = "asset-ok";') or {
-		panic(err)
-	}
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'test.js'),
+		'globalThis.__runtime_asset_value = "asset-ok";') or { panic(err) }
 
 	rt := vjsx.new_runtime()
 	defer {

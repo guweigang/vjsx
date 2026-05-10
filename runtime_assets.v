@@ -1,6 +1,8 @@
 module vjsx
 
+import compress.gzip
 import os
+import v.embed_file
 
 const runtime_asset_env_var = 'VJSX_ASSET_ROOT'
 const runtime_asset_dev_root = @VMODROOT
@@ -30,6 +32,11 @@ const runtime_asset_typed_array_js = $embed_file('web/js/typed_array.js')
 const runtime_asset_url_js = $embed_file('web/js/url.js')
 const runtime_asset_url_pattern_js = $embed_file('web/js/url_pattern.js')
 const runtime_asset_util_js = $embed_file('web/js/util.js')
+const runtime_asset_typescript_js_gz = $embed_file('thirdparty/typescript/lib/typescript.js.gz')
+const runtime_asset_vjs_ts_bootstrap_js = $embed_file('thirdparty/typescript/lib/vjs_ts_bootstrap.js')
+const runtime_asset_vjs_ts_commonjs_js = $embed_file('thirdparty/typescript/lib/vjs_ts_commonjs.js')
+const runtime_asset_vjs_ts_resolver_js = $embed_file('thirdparty/typescript/lib/vjs_ts_resolver.js')
+const runtime_asset_vjs_ts_scan_js = $embed_file('thirdparty/typescript/lib/vjs_ts_scan.js')
 
 fn C.vjsx_js_value_to_module_def(C.JSValue) &C.JSModuleDef
 
@@ -88,8 +95,19 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'web/js/url.js' { runtime_asset_url_js.to_string() }
 		'web/js/url_pattern.js' { runtime_asset_url_pattern_js.to_string() }
 		'web/js/util.js' { runtime_asset_util_js.to_string() }
+		'thirdparty/typescript/lib/typescript.js' { runtime_embedded_gzip_asset_source(runtime_asset_typescript_js_gz)! }
+		'thirdparty/typescript/lib/vjs_ts_bootstrap.js' { runtime_asset_vjs_ts_bootstrap_js.to_string() }
+		'thirdparty/typescript/lib/vjs_ts_commonjs.js' { runtime_asset_vjs_ts_commonjs_js.to_string() }
+		'thirdparty/typescript/lib/vjs_ts_resolver.js' { runtime_asset_vjs_ts_resolver_js.to_string() }
+		'thirdparty/typescript/lib/vjs_ts_scan.js' { runtime_asset_vjs_ts_scan_js.to_string() }
 		else { error('vjsx embedded runtime asset not found: ${rel_path}') }
 	}
+}
+
+fn runtime_embedded_gzip_asset_source(asset &embed_file.EmbedFileData) !string {
+	bytes := asset.to_bytes()
+	decompressed := gzip.decompress(bytes)!
+	return decompressed.bytestr()
 }
 
 pub fn has_embedded_runtime_asset(rel_path string) bool {
@@ -141,7 +159,8 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}
 	source_path := os.join_path(runtime_asset_dev_root, rel_path)
-	ref := C.JS_Eval(ctx, source.str, usize(source.len), source_path.str, type_module | type_compile_only)
+	ref := C.JS_Eval(ctx, source.str, usize(source.len), source_path.str,
+		type_module | type_compile_only)
 	if C.JS_IsException(ref) == 1 {
 		return unsafe { nil }
 	}
@@ -228,5 +247,10 @@ pub fn embedded_runtime_asset_paths() []string {
 		'web/js/url.js',
 		'web/js/url_pattern.js',
 		'web/js/util.js',
+		'thirdparty/typescript/lib/typescript.js',
+		'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
+		'thirdparty/typescript/lib/vjs_ts_commonjs.js',
+		'thirdparty/typescript/lib/vjs_ts_resolver.js',
+		'thirdparty/typescript/lib/vjs_ts_scan.js',
 	]
 }

@@ -24,10 +24,6 @@ fn is_local_module_specifier(specifier string) bool {
 	return specifier.starts_with('./') || specifier.starts_with('../')
 }
 
-fn typescript_runtime_path() string {
-	return os.join_path(@VMODROOT, 'thirdparty', 'typescript', 'lib', 'typescript.js')
-}
-
 fn run_transpiled_source(ctx &Context, source string, script_name string, flag int) !Value {
 	value := ctx.js_eval(source, script_name, flag)!
 	ctx.end()

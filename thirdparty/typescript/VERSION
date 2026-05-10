@@ -1,0 +1,24 @@
+# TypeScript Vendor Notes
+
+This directory vendors the TypeScript compiler runtime used by vjsx for runtime
+transpilation.
+
+- Source: https://www.npmjs.com/package/typescript
+- Version: 5.9.3
+- License: Apache-2.0, retained in `LICENSE.txt`
+
+Runtime files embedded into the vjsx binary:
+
+- `lib/typescript.js`
+- `lib/vjs_ts_bootstrap.js`
+- `lib/vjs_ts_scan.js`
+- `lib/vjs_ts_commonjs.js`
+- `lib/vjs_ts_resolver.js`
+
+`lib/typescript.js.gz` is a generated, deterministic gzip copy used only to keep
+the embedded compiler asset small enough for the default V compile path.
+
+To update, replace `package.json`, `LICENSE.txt`, and `lib/typescript.js` from
+the npm TypeScript package, regenerate `lib/typescript.js.gz` with
+`gzip -n -9 -c lib/typescript.js > lib/typescript.js.gz`, then keep the vjsx
+helper files in `lib/` and run the TypeScript/runtime asset tests.

@@ -111,6 +111,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+v_flags=${VJS_V_FLAGS:-}
+case " $v_flags " in
+	*" -cc "*|*" -cc="*|*" -cc")
+		:
+		;;
+	*)
+		v_flags="-cc clang${v_flags:+ $v_flags}"
+		;;
+esac
+
 set +e
 output=$(
 	cd "$repo_root" && \
@@ -120,8 +130,9 @@ output=$(
 	VJS_RUNTIME_PROFILE="$runtime_profile" \
 	VJS_ARGS_FILE="$args_file" \
 		VJS_REPO_ROOT="$repo_root" \
+	VJS_EFFECTIVE_V_FLAGS="$v_flags" \
 	VCACHE="${VCACHE:-/tmp/vcache}" \
-	sh -c 'v ${VJS_V_FLAGS:-} -d build_quickjs run ./cli_runner_bin' 2>&1
+	sh -c 'v ${VJS_EFFECTIVE_V_FLAGS:-} -d build_quickjs run ./cli_runner_bin' 2>&1
 )
 status=$?
 set -e

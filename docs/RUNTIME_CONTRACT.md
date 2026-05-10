@@ -156,6 +156,44 @@ ctx.runtime_modules()
 Profile kind inference is intended for diagnostics and tests. Hosts should still
 install the profile they need explicitly.
 
+## Runtime Asset Contract
+
+Runtime JavaScript and TypeScript support files are `vjsx` implementation
+details. Embedders should depend on the public `vjsx` / `runtimejs` APIs, not on
+the repository layout or a copied `thirdparty` tree.
+
+The loading boundary is:
+
+- Source ownership lives in `vjsx`.
+- Release binaries embed the runtime assets they need to run JS/TS entries.
+- `VJSX_ASSET_ROOT` and `ContextConfig.asset_root` are development override
+  hooks only. They may replace an asset while developing, but production must
+  not require them.
+- If an override file is absent, the embedded asset is the source of truth.
+
+The embedded runtime asset set includes the Web/Node compatibility files under
+`web/js/` and the TypeScript runtime files:
+
+- `thirdparty/typescript/lib/typescript.js`
+- `thirdparty/typescript/lib/vjs_ts_bootstrap.js`
+- `thirdparty/typescript/lib/vjs_ts_scan.js`
+- `thirdparty/typescript/lib/vjs_ts_commonjs.js`
+- `thirdparty/typescript/lib/vjs_ts_resolver.js`
+
+`thirdparty/typescript/lib/typescript.js.gz` is a generated binary-size helper
+for embedding. It is not a separate runtime contract; callers still request the
+logical asset path `thirdparty/typescript/lib/typescript.js`.
+
+Third-party license and version records must remain in the vendored source tree:
+
+- `thirdparty/typescript/package.json`
+- `thirdparty/typescript/LICENSE.txt`
+- `thirdparty/typescript/VERSION`
+
+Tests should cover both the asset registry and the release-style behavior where
+`asset_root` points at an empty or incomplete directory and `.ts` / `.mts`
+entries still run from embedded assets.
+
 ## Host Integration Guidance
 
 Hosts should:

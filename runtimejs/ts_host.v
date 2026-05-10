@@ -116,31 +116,28 @@ fn mark_typescript_runtime_installed(ctx &vjsx.Context) {
 	global.free()
 }
 
-fn typescript_helper_path(name string) string {
-	return os.join_path(@VMODROOT, 'thirdparty', 'typescript', 'lib', name)
-}
-
-fn install_typescript_helper(ctx &vjsx.Context, name string) ! {
-	path := typescript_helper_path(name)
-	if !os.exists(path) {
-		return error('TypeScript helper not found: ${path}')
+fn run_typescript_runtime_asset(ctx &vjsx.Context, rel_path string, label string) ! {
+	value := ctx.eval_runtime_file(rel_path) or {
+		return error('failed to load ${label}: ${err.msg()}')
 	}
-	ctx.run_file(path) or { return error('failed to load TypeScript helper ${name}: ${err.msg()}') }
+	value.free()
+	ctx.end()
 }
 
 pub fn install_typescript_runtime(ctx &vjsx.Context) ! {
 	if typescript_runtime_is_installed(ctx) {
 		return
 	}
-	ts_path := typescript_runtime_path()
-	if !os.exists(ts_path) {
-		return error('TypeScript runtime not found: ${ts_path}')
-	}
 	install_typescript_host_bridge(ctx)
-	ctx.run_file(ts_path) or { return error('failed to load TypeScript runtime: ${err.msg()}') }
-	install_typescript_helper(ctx, 'vjs_ts_bootstrap.js')!
-	install_typescript_helper(ctx, 'vjs_ts_scan.js')!
-	install_typescript_helper(ctx, 'vjs_ts_commonjs.js')!
-	install_typescript_helper(ctx, 'vjs_ts_resolver.js')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/typescript.js',
+		'TypeScript runtime')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
+		'TypeScript bootstrap helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_scan.js',
+		'TypeScript scan helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_commonjs.js',
+		'TypeScript CommonJS helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_resolver.js',
+		'TypeScript resolver helper')!
 	mark_typescript_runtime_installed(ctx)
 }

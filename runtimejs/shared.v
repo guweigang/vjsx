@@ -28,10 +28,6 @@ fn is_node_builtin_module_specifier(specifier string) bool {
 	return specifier in node_builtin_module_specifiers
 }
 
-fn typescript_runtime_path() string {
-	return os.join_path(@VMODROOT, 'thirdparty', 'typescript', 'lib', 'typescript.js')
-}
-
 fn run_transpiled_source(ctx &vjsx.Context, source string, script_name string, flag int) !vjsx.Value {
 	value := ctx.js_eval(source, script_name, flag)!
 	ctx.end()
