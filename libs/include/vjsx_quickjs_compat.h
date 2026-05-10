@@ -6,6 +6,7 @@
 #if defined(VJSX_QUICKJS_NG)
 #define JS_IsArray(ctx, val) JS_IsArray(val)
 #define JS_IsError(ctx, val) JS_IsError(val)
+#define JS_StrictEq(ctx, op1, op2) JS_IsStrictEqual(ctx, op1, op2)
 #endif
 
 /*
