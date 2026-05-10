@@ -6,10 +6,18 @@ $if build_quickjs ? {
 
 $if build_quickjs ? {
 	#flag -I $env('VJS_QUICKJS_PATH')
-	#flag -std=gnu11
-	#flag -Dasm=__asm__
+	$if !msvc {
+		#flag -std=gnu11
+		#flag -Dasm=__asm__
+	}
+	$if msvc {
+		#flag -D_CRT_SECURE_NO_WARNINGS
+		#flag -D_CRT_NONSTDC_NO_DEPRECATE
+	}
 	#flag -DNDEBUG
-	#flag -D_GNU_SOURCE
+	$if !windows {
+		#flag -D_GNU_SOURCE
+	}
 	#flag -DCONFIG_BIGNUM
 	#flag -DCONFIG_VERSION='"local"'
 	#flag $env('VJS_QUICKJS_PATH')/quickjs.c
@@ -47,7 +55,9 @@ $if build_quickjs ? {
 	}
 }
 
-#flag -lpthread -lm
+$if !windows {
+	#flag -lpthread -lm
+}
 #include "quickjs-libc.h"
 #include "quickjs.h"
 #include "vjsx_quickjs_compat.h"
