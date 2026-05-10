@@ -1,11 +1,11 @@
 module vjsx
 
 $if build_quickjs ? {
+	#flag -I $env('VJS_QUICKJS_PATH')
 	#flag -I @VMODROOT/libs/include
 }
 
 $if build_quickjs ? {
-	#flag -I $env('VJS_QUICKJS_PATH')
 	$if !msvc {
 		#flag -std=gnu11
 		#flag -Dasm=__asm__
@@ -13,6 +13,9 @@ $if build_quickjs ? {
 	$if msvc {
 		#flag -D_CRT_SECURE_NO_WARNINGS
 		#flag -D_CRT_NONSTDC_NO_DEPRECATE
+	}
+	$if quickjs_ng ? {
+		#flag -DVJSX_QUICKJS_NG
 	}
 	#flag -DNDEBUG
 	$if !windows {
@@ -24,7 +27,10 @@ $if build_quickjs ? {
 	#flag $env('VJS_QUICKJS_PATH')/dtoa.c
 	#flag $env('VJS_QUICKJS_PATH')/libregexp.c
 	#flag $env('VJS_QUICKJS_PATH')/libunicode.c
-	#flag $env('VJS_QUICKJS_PATH')/cutils.c
+	$if quickjs_ng ? {
+	} $else {
+		#flag $env('VJS_QUICKJS_PATH')/cutils.c
+	}
 	#flag $env('VJS_QUICKJS_PATH')/quickjs-libc.c
 	$if linux {
 		#flag -ldl

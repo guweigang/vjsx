@@ -3,6 +3,11 @@
 
 #include "quickjs.h"
 
+#if defined(VJSX_QUICKJS_NG)
+#define JS_IsArray(ctx, val) JS_IsArray(val)
+#define JS_IsError(ctx, val) JS_IsError(val)
+#endif
+
 /*
  * Some QuickJS builds expose BigFloat/BigDecimal initialization helpers,
  * while others do not. Keep the default path portable by making this a
