@@ -9,6 +9,14 @@ $if build_quickjs ? {
 	$if !msvc {
 		#flag -std=gnu11
 		#flag -Dasm=__asm__
+		$if tinyc {
+			#flag -D__ATOMIC_SEQ_CST=5
+		}
+		$if quickjs_legacy ? {
+			$if tinyc && arm64 {
+				#flag -U__aarch64__
+			}
+		}
 	}
 	$if msvc {
 		#flag /std:c11
@@ -17,7 +25,8 @@ $if build_quickjs ? {
 		#flag -D_CRT_SECURE_NO_WARNINGS
 		#flag -D_CRT_NONSTDC_NO_DEPRECATE
 	}
-	$if quickjs_ng ? {
+	$if quickjs_legacy ? {
+	} $else {
 		#flag -DVJSX_QUICKJS_NG
 	}
 	#flag -DNDEBUG
@@ -25,13 +34,12 @@ $if build_quickjs ? {
 		#flag -D_GNU_SOURCE
 	}
 	#flag -DCONFIG_BIGNUM
-	#flag -DCONFIG_VERSION='"local"'
+	#flag -DCONFIG_VERSION="local"
 	#flag $env('VJS_QUICKJS_PATH')/quickjs.c
 	#flag $env('VJS_QUICKJS_PATH')/dtoa.c
 	#flag $env('VJS_QUICKJS_PATH')/libregexp.c
 	#flag $env('VJS_QUICKJS_PATH')/libunicode.c
-	$if quickjs_ng ? {
-	} $else {
+	$if quickjs_legacy ? {
 		#flag $env('VJS_QUICKJS_PATH')/cutils.c
 	}
 	#flag $env('VJS_QUICKJS_PATH')/quickjs-libc.c
@@ -39,29 +47,7 @@ $if build_quickjs ? {
 		#flag -ldl
 	}
 } $else {
-	#flag -I @VMODROOT/libs/include
-
-	$if tinyc && !windows {
-		// misc for tcc
-		#flag @VMODROOT/libs/misc/divti3.c
-		#flag @VMODROOT/libs/misc/udivti3.c
-		#flag @VMODROOT/libs/misc/udivmodti4.c
-	}
-	$if linux {
-		$if amd64 {
-			#flag @VMODROOT/libs/qjs_linux_x64.a
-		}
-	} $else $if macos {
-		$if amd64 {
-			$compile_error('vjsx does not ship a bundled macOS x64 QuickJS archive. Set VJS_QUICKJS_PATH to a QuickJS source checkout and build with `-d build_quickjs`.')
-		} $else $if arm64 {
-			#flag @VMODROOT/libs/qjs_macos_arm64.a
-		}
-	} $else $if windows {
-		$if amd64 {
-			#flag @VMODROOT/libs/qjs_win_x64.a
-		}
-	}
+	$compile_error('vjsx no longer uses bundled QuickJS archives. Set VJS_QUICKJS_PATH to a compatible source checkout and build with `-d build_quickjs`, or use `scripts/ensure-quickjs.sh` to prepare the managed checkout.')
 }
 
 $if !windows {

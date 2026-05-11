@@ -48,7 +48,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ensure QuickJS checkout
+      - name: Ensure quickjs-ng checkout
         if: steps.archive.outputs.exists != 'true'
         id: quickjs
         shell: bash

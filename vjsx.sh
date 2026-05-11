@@ -5,12 +5,24 @@ repo_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 repo_parent=$(dirname "$repo_root")
 quickjs_path=${VJS_QUICKJS_PATH:-}
 
-if [ -z "$quickjs_path" ] && [ -d "$repo_root/../quickjs" ]; then
+is_vjsx_quickjs_checkout() {
+	[ -f "$1/quickjs.c" ] &&
+		[ -f "$1/quickjs-c-atomics.h" ] &&
+		grep -q 'QJS_VERSION_MAJOR' "$1/quickjs.h" 2>/dev/null
+}
+
+if [ -z "$quickjs_path" ] && is_vjsx_quickjs_checkout "$repo_root/../quickjs"; then
 	quickjs_path="$repo_root/../quickjs"
 fi
+if [ -z "$quickjs_path" ] && is_vjsx_quickjs_checkout "$repo_root/../quickjs-ng"; then
+	quickjs_path="$repo_root/../quickjs-ng"
+fi
+if [ -z "$quickjs_path" ]; then
+	quickjs_path=$(VJS_QUICKJS_WORK_ROOT="${VJS_QUICKJS_WORK_ROOT:-$PWD}" "$repo_root/scripts/ensure-quickjs.sh")
+fi
 
-if [ -z "$quickjs_path" ] || [ ! -d "$quickjs_path" ]; then
-	echo "QuickJS source not found. Set VJS_QUICKJS_PATH to your quickjs checkout." >&2
+if [ -z "$quickjs_path" ] || ! is_vjsx_quickjs_checkout "$quickjs_path"; then
+	echo "compatible QuickJS source not found. Set VJS_QUICKJS_PATH or let vjsx download its managed checkout." >&2
 	exit 1
 fi
 

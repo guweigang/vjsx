@@ -4,7 +4,7 @@
   <img src="assets/vjsx_brand.jpg" alt="VJSX brand" width="720" />
 </p>
 
-[V](https://vlang.io/) bindings to [QuickJS](https://bellard.org/quickjs/)
+[V](https://vlang.io/) bindings to [quickjs-ng](https://quickjs-ng.github.io/quickjs/)
 javascript engine. Run JS in V.
 
 The first version of this project was derived from
@@ -28,31 +28,41 @@ the foundational work that helped kick off `vjsx`.
 v install vjsx
 ```
 
-## Build With Local QuickJS Source
+## Build With Local quickjs-ng Source
 
-If you already have a local QuickJS checkout, you can compile `vjsx` against the
-source tree directly instead of the bundled prebuilt archives.
+`vjsx` can compile against a managed local QuickJS source checkout directly
+instead of the bundled prebuilt archives. The managed checkout is currently
+quickjs-ng, but hosts do not need to know that implementation detail.
 
 This is useful when:
 
 - you are on an unsupported architecture such as `macOS arm64`
-- you want to use a newer QuickJS version
+- you want to use a newer quickjs-ng version
 - you do not want to maintain extra prebuilt `.a` files inside this repo
 
 Example:
 
 ```bash
-VJS_QUICKJS_PATH=/Users/guweigang/Source/quickjs \
+VJS_QUICKJS_PATH=$(./scripts/ensure-quickjs.sh) \
 v -d build_quickjs run main.v
 ```
 
 Notes:
 
-- `VJS_QUICKJS_PATH` should point to the QuickJS source root that contains
+- `vjsx` wrapper scripts download a managed checkout to `.deps/quickjs` under
+  the calling repository when no compatible local checkout is found.
+- Direct `v` invocations should use `scripts/ensure-quickjs.sh` to prepare and
+  print the managed checkout path before compilation starts.
+- Set `VJS_QUICKJS_WORK_ROOT` to choose where `.deps/quickjs` is created, or
+  `QUICKJS_DIR` to choose the exact checkout path.
+- `VJS_QUICKJS_PATH` can still point to an explicit source root that contains
   `quickjs.c`, `quickjs-libc.c`, `quickjs.h`, and `quickjs-libc.h`.
 - In this mode `vjsx` compiles QuickJS C sources directly.
-- Without `-d build_quickjs`, `vjsx` uses the bundled headers under
-  `libs/include/` together with the prebuilt archives in `libs/`.
+- Legacy Bellard QuickJS source builds are still available with
+  `-d quickjs_legacy`.
+- `-d build_quickjs` is required for new builds. vjsx no longer ships bundled
+  QuickJS archives because the managed source checkout is the compatibility
+  boundary.
 
 ## Basic Usage
 
@@ -138,10 +148,10 @@ For the full host-first embedding guidance, see
 v run main.v
 ```
 
-With a local QuickJS checkout:
+With the managed local QuickJS source checkout:
 
 ```bash
-VJS_QUICKJS_PATH=/Users/guweigang/Source/quickjs \
+VJS_QUICKJS_PATH=$(./scripts/ensure-quickjs.sh) \
 v -d build_quickjs run main.v
 ```
 
@@ -254,8 +264,9 @@ manual ownership cases, but then the caller is responsible for pairing them
 with `ctx.free()` and `rt.free()` correctly.
 
 The wrapper script will use `VJS_QUICKJS_PATH` when it is set. If it is not
-set, it will try `../quickjs` relative to the repository root as a local
-convenience fallback.
+set, it will try compatible `../quickjs` and `../quickjs-ng` checkouts relative
+to the repository root, then download a managed checkout under
+the calling repository's `.deps/quickjs`.
 
 > Currently support linux/mac/win (x64).
 

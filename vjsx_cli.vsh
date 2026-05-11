@@ -20,12 +20,30 @@ fn shell_quote(value string) string {
 	return "'" + value.replace("'", '\'"\'"\'') + "'"
 }
 
+fn is_vjsx_quickjs_checkout(path string) bool {
+	return os.is_file(os.join_path(path, 'quickjs.c')) && os.is_file(os.join_path(path, 'quickjs-c-atomics.h')) && os.read_file(os.join_path(path, 'quickjs.h')) or {
+		''
+	}.contains('QJS_VERSION_MAJOR')
+}
+
 fn default_quickjs_path() string {
-	candidate := os.real_path(os.join_path(repo_root, '..', 'quickjs'))
-	if os.is_dir(candidate) {
-		return candidate
+	for dirname in ['quickjs', 'quickjs-ng'] {
+		candidate := os.real_path(os.join_path(repo_root, '..', dirname))
+		if is_vjsx_quickjs_checkout(candidate) {
+			return candidate
+		}
 	}
 	return ''
+}
+
+fn ensure_quickjs_path() string {
+	script := os.join_path(repo_root, 'scripts', 'ensure-quickjs.sh')
+	work_root := os.getenv_opt('VJS_QUICKJS_WORK_ROOT') or { os.getwd() }
+	result := os.execute('VJS_QUICKJS_WORK_ROOT=${shell_quote(work_root)} ${shell_quote(script)}')
+	if result.exit_code != 0 {
+		fail(result.output.trim_space())
+	}
+	return result.output.trim_space()
 }
 
 fn make_args_file(script_args []string) !string {
@@ -92,8 +110,11 @@ fn main() {
 	if quickjs_path == '' {
 		quickjs_path = default_quickjs_path()
 	}
-	if quickjs_path == '' || !os.is_dir(quickjs_path) {
-		fail('QuickJS source not found. Set VJS_QUICKJS_PATH to your quickjs checkout.')
+	if quickjs_path == '' {
+		quickjs_path = ensure_quickjs_path()
+	}
+	if quickjs_path == '' || !is_vjsx_quickjs_checkout(quickjs_path) {
+		fail('compatible QuickJS source not found. Set VJS_QUICKJS_PATH or let vjsx download its managed checkout.')
 	}
 
 	mut args := os.args[1..].clone()

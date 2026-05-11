@@ -13,12 +13,12 @@ if(NOT EXISTS "${DEFAULT_QUICKJS_DIR}/quickjs.c")
   set(DEFAULT_QUICKJS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../quickjs")
 endif()
 
-set(QUICKJS_DIR "${DEFAULT_QUICKJS_DIR}" CACHE PATH "Path to a QuickJS source checkout")
+set(QUICKJS_DIR "${DEFAULT_QUICKJS_DIR}" CACHE PATH "Path to a quickjs-ng source checkout")
 
 if(NOT EXISTS "${QUICKJS_DIR}/quickjs.c")
   message(
     FATAL_ERROR
-      "QuickJS source not found. Set QUICKJS_DIR to a checkout containing quickjs.c.")
+      "quickjs-ng source not found. Set QUICKJS_DIR to a checkout containing quickjs.c.")
 endif()
 
 set(qjs_cflags -Wall -D_GNU_SOURCE)
@@ -37,8 +37,46 @@ else()
        -Wno-unused-but-set-variable)
 endif()
 
-file(READ ${QUICKJS_DIR}/VERSION QJS_VERSION_STR)
-string(REGEX REPLACE "\n$" "" QJS_VERSION_STR "${QJS_VERSION_STR}")
+if(EXISTS "${QUICKJS_DIR}/VERSION")
+  file(READ ${QUICKJS_DIR}/VERSION QJS_VERSION_STR)
+  string(REGEX REPLACE "\n$" "" QJS_VERSION_STR "${QJS_VERSION_STR}")
+else()
+  file(STRINGS "${QUICKJS_DIR}/quickjs.h" QUICKJS_VERSION_LINES
+       REGEX "QJS_VERSION_(MAJOR|MINOR|PATCH|SUFFIX)")
+  string(REGEX MATCH "QJS_VERSION_MAJOR[ \t]+([0-9]+)" _
+               "${QUICKJS_VERSION_LINES}")
+  set(QJS_VERSION_MAJOR "${CMAKE_MATCH_1}")
+  string(REGEX MATCH "QJS_VERSION_MINOR[ \t]+([0-9]+)" _
+               "${QUICKJS_VERSION_LINES}")
+  set(QJS_VERSION_MINOR "${CMAKE_MATCH_1}")
+  string(REGEX MATCH "QJS_VERSION_PATCH[ \t]+([0-9]+)" _
+               "${QUICKJS_VERSION_LINES}")
+  set(QJS_VERSION_PATCH "${CMAKE_MATCH_1}")
+  string(REGEX MATCH "QJS_VERSION_SUFFIX[ \t]+\"([^\"]*)\"" _
+               "${QUICKJS_VERSION_LINES}")
+  set(QJS_VERSION_SUFFIX "${CMAKE_MATCH_1}")
+  if(QJS_VERSION_MAJOR STREQUAL "" OR QJS_VERSION_MINOR STREQUAL ""
+     OR QJS_VERSION_PATCH STREQUAL "")
+    set(QJS_VERSION_STR "local")
+  else()
+    set(QJS_VERSION_STR
+        "${QJS_VERSION_MAJOR}.${QJS_VERSION_MINOR}.${QJS_VERSION_PATCH}${QJS_VERSION_SUFFIX}")
+  endif()
+endif()
+
+set(qjs_sources ${QUICKJS_DIR}/dtoa.c ${QUICKJS_DIR}/libregexp.c
+                ${QUICKJS_DIR}/libunicode.c ${QUICKJS_DIR}/quickjs.c
+                ${QUICKJS_DIR}/quickjs-libc.c)
+
+if(EXISTS "${QUICKJS_DIR}/libbf.c")
+  list(APPEND qjs_sources ${QUICKJS_DIR}/libbf.c)
+endif()
+
+if(EXISTS "${QUICKJS_DIR}/cutils.c")
+  list(APPEND qjs_sources ${QUICKJS_DIR}/cutils.c)
+else()
+  list(APPEND qjs_cflags -DQUICKJS_NG_BUILD -DQJS_BUILD_LIBC)
+endif()
 
 message(
   STATUS
@@ -49,9 +87,7 @@ message(
       CFLAGS:        ${qjs_cflags}
 ")
 
-add_library(qjs STATIC ${QUICKJS_DIR}/cutils.c ${QUICKJS_DIR}/libbf.c
-                       ${QUICKJS_DIR}/libregexp.c ${QUICKJS_DIR}/libunicode.c
-                       ${QUICKJS_DIR}/quickjs.c ${QUICKJS_DIR}/quickjs-libc.c)
+add_library(qjs STATIC ${qjs_sources})
 set_target_properties(qjs PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 target_compile_options(qjs PRIVATE ${qjs_cflags})
 target_compile_definitions(qjs PUBLIC QJS_VERSION_STR="${QJS_VERSION_STR}")
