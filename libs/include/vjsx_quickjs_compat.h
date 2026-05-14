@@ -1,6 +1,9 @@
 #ifndef VJSX_QUICKJS_COMPAT_H
 #define VJSX_QUICKJS_COMPAT_H
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "quickjs.h"
 
 #if defined(VJSX_QUICKJS_NG)
@@ -30,7 +33,38 @@ static inline void vjsx_js_add_bignum_intrinsics(JSContext *ctx) {
 
 static inline void vjsx_js_eval_out(JSContext *ctx, const char *input, size_t input_len,
                                     const char *filename, int eval_flags, JSValue *out) {
-	*out = JS_Eval(ctx, input, input_len, filename, eval_flags);
+	char *input_copy = NULL;
+	char *filename_copy = NULL;
+	if (input_len > 0) {
+		input_copy = (char *)malloc(input_len + 1);
+		if (input_copy == NULL) {
+			*out = JS_ThrowOutOfMemory(ctx);
+			return;
+		}
+		memcpy(input_copy, input, input_len);
+		input_copy[input_len] = '\0';
+	} else {
+		input_copy = (char *)malloc(1);
+		if (input_copy == NULL) {
+			*out = JS_ThrowOutOfMemory(ctx);
+			return;
+		}
+		input_copy[0] = '\0';
+	}
+	if (filename != NULL) {
+		size_t filename_len = strlen(filename);
+		filename_copy = (char *)malloc(filename_len + 1);
+		if (filename_copy == NULL) {
+			free(input_copy);
+			*out = JS_ThrowOutOfMemory(ctx);
+			return;
+		}
+		memcpy(filename_copy, filename, filename_len + 1);
+	}
+	*out = JS_Eval(ctx, input_copy, input_len, filename_copy != NULL ? filename_copy : "<input>",
+	               eval_flags);
+	free(filename_copy);
+	free(input_copy);
 }
 
 static inline void vjsx_js_eval_function_out(JSContext *ctx, JSValue func_obj, JSValue *out) {
