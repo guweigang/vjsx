@@ -159,8 +159,9 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}
 	source_path := os.join_path(runtime_asset_dev_root, rel_path)
-	ref := C.JS_Eval(ctx, source.str, usize(source.len), source_path.str,
-		type_module | type_compile_only)
+	mut ref := C.JSValue{}
+	C.vjsx_js_eval_out(ctx, source.str, usize(source.len), source_path.str,
+		type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return unsafe { nil }
 	}

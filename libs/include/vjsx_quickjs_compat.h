@@ -28,6 +28,19 @@ static inline void vjsx_js_add_bignum_intrinsics(JSContext *ctx) {
 }
 #endif
 
+static inline void vjsx_js_eval_out(JSContext *ctx, const char *input, size_t input_len,
+                                    const char *filename, int eval_flags, JSValue *out) {
+	*out = JS_Eval(ctx, input, input_len, filename, eval_flags);
+}
+
+static inline void vjsx_js_eval_function_out(JSContext *ctx, JSValue func_obj, JSValue *out) {
+	*out = JS_EvalFunction(ctx, func_obj);
+}
+
+static inline void vjsx_js_std_await_out(JSContext *ctx, JSValue val, JSValue *out) {
+	*out = js_std_await(ctx, val);
+}
+
 static inline JSModuleDef *vjsx_js_value_to_module_def(JSValue value) {
 	return (JSModuleDef *)JS_VALUE_GET_PTR(value);
 }

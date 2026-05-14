@@ -206,7 +206,9 @@ pub fn (ctx &Context) js_global(keys ...string) Value {
 // JS call await.
 pub fn (ctx &Context) js_await(val Value) !Value {
 	dup := val.dup_value()
-	ret := ctx.c_val(C.js_std_await(ctx.ref, dup.ref))
+	mut ref := ctx.js_undefined().ref
+	C.vjsx_js_std_await_out(ctx.ref, dup.ref, &ref)
+	ret := ctx.c_val(ref)
 	if ret.is_exception() {
 		return ctx.js_exception()
 	}

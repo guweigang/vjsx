@@ -97,10 +97,10 @@ fn C.JS_NewContext(&C.JSRuntime) &C.JSContext
 fn C.JS_FreeContext(&C.JSContext)
 fn C.js_std_dump_error(&C.JSContext)
 fn C.js_free(&C.JSContext, voidptr)
-fn C.JS_Eval(&C.JSContext, &char, usize, &char, int) C.JSValue
+fn C.vjsx_js_eval_out(&C.JSContext, &char, usize, &char, int, &C.JSValue)
 fn C.JS_DupContext(&C.JSContext) &C.JSContext
-fn C.JS_EvalFunction(&C.JSContext, C.JSValue) C.JSValue
-fn C.js_std_await(&C.JSContext, C.JSValue) C.JSValue
+fn C.vjsx_js_eval_function_out(&C.JSContext, C.JSValue, &C.JSValue)
+fn C.vjsx_js_std_await_out(&C.JSContext, C.JSValue, &C.JSValue)
 fn C.js_std_set_worker_new_context_func(FnNewContext)
 fn C.JS_SetModuleLoaderFunc(&C.JSRuntime, &JSModuleNormalizeFunc, &JSModuleLoaderFunc, voidptr)
 fn C.vjsx_js_module_loader(&C.JSContext, &char, voidptr) &C.JSModuleDef
@@ -190,14 +190,14 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 	flag := op.flag
 	set_meta := op.set_meta
 	if (flag & type_mask) == type_module {
-		ref = C.JS_Eval(ctx.ref, input, len, fname, flag | type_compile_only)
+		C.vjsx_js_eval_out(ctx.ref, input, len, fname, flag | type_compile_only, &ref)
 		if C.JS_IsException(ref) == 0 {
 			set_meta(ctx, ref)
-			ref = C.JS_EvalFunction(ctx.ref, ref)
+			C.vjsx_js_eval_function_out(ctx.ref, ref, &ref)
 		}
-		ref = C.js_std_await(ctx.ref, ref)
+		C.vjsx_js_std_await_out(ctx.ref, ref, &ref)
 	} else {
-		ref = C.JS_Eval(ctx.ref, input, len, fname, flag)
+		C.vjsx_js_eval_out(ctx.ref, input, len, fname, flag, &ref)
 	}
 	val := ctx.c_val(ref)
 	unsafe {
@@ -320,7 +320,9 @@ pub fn (ctx &Context) run_file(args ...EvalArgs) !Value {
 
 // Evaluate Function
 pub fn (ctx &Context) eval_function(val Value) Value {
-	return ctx.c_val(C.JS_EvalFunction(ctx.ref, val.ref))
+	mut ref := ctx.js_undefined().ref
+	C.vjsx_js_eval_function_out(ctx.ref, val.ref, &ref)
+	return ctx.c_val(ref)
 }
 
 // Callback this from Context
