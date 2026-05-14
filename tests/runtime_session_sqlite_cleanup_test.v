@@ -2,6 +2,9 @@ import os
 import vjsx
 
 fn test_runtime_session_close_closes_unclosed_sqlite_connections() {
+	$if !vjsx_sqlite ? {
+		return
+	}
 	base_dir := os.join_path(@VMODROOT, 'tests', '.tmp_runtime_session_sqlite_cleanup')
 	os.mkdir_all(base_dir) or { panic(err) }
 	db_path := os.join_path(base_dir, 'cleanup.db')
