@@ -1,11 +1,26 @@
 module vjsx
 
-$if build_quickjs ? {
+$if link_quickjs ? {
+	#flag -I $env('VJS_QUICKJS_PATH')
+	#flag -I @VMODROOT/libs/include
+} $else $if build_quickjs ? {
 	#flag -I $env('VJS_QUICKJS_PATH')
 	#flag -I @VMODROOT/libs/include
 }
 
-$if build_quickjs ? {
+$if link_quickjs ? {
+	$if quickjs_legacy ? {
+	} $else {
+		#flag -DVJSX_QUICKJS_NG
+	}
+	#flag -DNDEBUG
+	#flag -DCONFIG_BIGNUM
+	#flag -DCONFIG_VERSION="local"
+	#flag $env('VJS_QUICKJS_LIB_PATH')
+	$if linux {
+		#flag -ldl
+	}
+} $else $if build_quickjs ? {
 	$if !msvc {
 		#flag -std=gnu11
 		#flag -Dasm=__asm__
@@ -47,7 +62,7 @@ $if build_quickjs ? {
 		#flag -ldl
 	}
 } $else {
-	$compile_error('vjsx no longer uses bundled QuickJS archives. Set VJS_QUICKJS_PATH to a compatible source checkout and build with `-d build_quickjs`, or use `scripts/ensure-quickjs.sh` to prepare the managed checkout.')
+	$compile_error('vjsx no longer uses bundled QuickJS archives. Set VJS_QUICKJS_PATH to a compatible source checkout and build with `-d build_quickjs`, or set VJS_QUICKJS_LIB_PATH and build with `-d link_quickjs` to link a prebuilt quickjs-ng static library.')
 }
 
 $if !windows {
