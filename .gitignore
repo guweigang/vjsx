@@ -29,6 +29,7 @@ bin/
 
 # ENV
 .env
+.deps/
 
 # vweb and database
 *.db

@@ -59,7 +59,12 @@ fn runtime_relative_path(from string, to string) string {
 
 fn mirrored_runtime_path(root string, source_path string) string {
 	normalized := source_path.replace('\\', '/')
-	trimmed := if normalized.starts_with('/') { normalized[1..] } else { normalized }
+	mut trimmed := normalized.trim_left('/')
+	if trimmed.len >= 2 && trimmed[1] == 58 {
+		drive := trimmed[0].ascii_str().to_lower()
+		rest := trimmed[2..].trim_left('/')
+		trimmed = if rest == '' { '_drive_${drive}' } else { '_drive_${drive}/${rest}' }
+	}
 	return os.join_path(root, trimmed)
 }
 
