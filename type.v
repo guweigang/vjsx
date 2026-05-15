@@ -91,17 +91,11 @@ pub fn (ctx &Context) json_stringify(val Value) string {
 }
 
 // Convert value string to `js_object`.
-@[manualfree]
 pub fn (ctx &Context) json_parse(str string) Value {
 	len := str.len
 	c_str := str.str
 	c_fname := ''.str
-	ret := ctx.c_val(C.JS_ParseJSON(ctx.ref, c_str, usize(len), c_fname))
-	unsafe {
-		free(c_fname)
-		free(c_str)
-	}
-	return ret
+	return ctx.c_val(C.JS_ParseJSON(ctx.ref, c_str, usize(len), c_fname))
 }
 
 // JS Throw Error.
@@ -136,14 +130,9 @@ pub fn (ctx &Context) js_dump(err IError) Value {
 }
 
 // Create JS String.
-@[manualfree]
 pub fn (ctx &Context) js_string(data string) Value {
 	ptr := data.str
-	val := ctx.c_val(C.JS_NewString(ctx.ref, ptr))
-	unsafe {
-		free(ptr)
-	}
-	return val
+	return ctx.c_val(C.JS_NewString(ctx.ref, ptr))
 }
 
 // Create JS Boolean.

@@ -153,7 +153,6 @@ pub fn (v Value) to_f64() f64 {
 // obj := ctx.js_object()
 // obj.set('foo', 'foo')
 // ```
-@[manualfree]
 pub fn (v Value) set(key PropKey, any AnyValue) {
 	val := if any is Value {
 		(any as Value).dup_value()
@@ -163,9 +162,6 @@ pub fn (v Value) set(key PropKey, any AnyValue) {
 	if key is string {
 		ptr := key.str
 		C.JS_SetPropertyStr(v.ctx.ref, v.ref, ptr, val.ref)
-		unsafe {
-			free(ptr)
-		}
 	} else if key is Atom {
 		C.JS_SetProperty(v.ctx.ref, v.ref, key.ref, val.ref)
 	} else if key is PropertyEnum {
@@ -180,14 +176,10 @@ pub fn (v Value) set(key PropKey, any AnyValue) {
 // ```v
 // foo := obj.get('foo')
 // ```
-@[manualfree]
 pub fn (v Value) get(key PropKey) Value {
 	if key is string {
 		ptr := key.str
 		val := v.ctx.c_val(C.JS_GetPropertyStr(v.ctx.ref, v.ref, ptr))
-		unsafe {
-			free(ptr)
-		}
 		return val
 	}
 	if key is Atom {

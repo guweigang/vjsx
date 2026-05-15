@@ -46,18 +46,13 @@ pub fn (ctx &Context) c_atom(atom C.JSAtom) Atom {
 // ```v
 // atom := ctx.new_atom('my_atom')
 // ```
-@[manualfree]
 pub fn (ctx &Context) new_atom(val AtomValue) Atom {
 	if val is string {
 		ptr := val.str
-		atom := Atom{
+		return Atom{
 			ctx: ctx
 			ref: C.JS_NewAtom(ctx.ref, ptr)
 		}
-		unsafe {
-			free(ptr)
-		}
-		return atom
 	}
 	return Atom{
 		ctx: ctx
