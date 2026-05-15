@@ -181,7 +181,6 @@ fn (ctx &Context) run_host_cleanups() {
 }
 
 // Core evaluate JS
-@[manualfree]
 pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 	mut ref := ctx.js_undefined().ref
 	input := op.input
@@ -200,10 +199,6 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 		C.vjsx_js_eval_out(ctx.ref, input, len, fname, flag, &ref)
 	}
 	val := ctx.c_val(ref)
-	unsafe {
-		free(fname)
-		free(input)
-	}
 	if val.is_exception() {
 		return ctx.js_exception()
 	}
