@@ -35,6 +35,45 @@ The important rule is: **do not reimplement QuickJS queues in `vjsx` or the
 host**. Reuse QuickJS for JS jobs and timers; use `RuntimeSession` only to
 express host-facing wakeup and diagnostic state.
 
+## QuickJS FFI Ownership Contract
+
+The V/QuickJS boundary must treat ownership explicitly. Most pointers exposed
+by V strings and QuickJS values are borrowed, not heap blocks owned by `vjsx`.
+
+Rules for string pointers:
+
+- `some_v_string.str` is a borrowed pointer into V-managed storage. Do not call
+  `free(...)` on it.
+- If a C API needs a stable or mutable buffer beyond the immediate call, copy
+  the bytes on the C side and free that C-owned copy there.
+- Only free memory that was allocated by the matching allocator and whose
+  ownership was explicitly transferred to the caller.
+- QuickJS strings returned by `JS_ToCString(...)` must be released with
+  `JS_FreeCString(...)`, not with V `free(...)`.
+
+Rules for QuickJS values:
+
+- A returned `JSValue` is owned by the caller and must eventually be released
+  with `JS_FreeValue(...)`, normally through `Value.free()`.
+- A `JSValueConst` is borrowed. Do not free it unless it has first been
+  duplicated with `JS_DupValue(...)` or otherwise documented as caller-owned.
+- When a QuickJS API consumes a value, such as `JS_SetProperty*`, do not free
+  the consumed value again unless the API contract says it was not consumed.
+- Keep value ownership visible at wrapper boundaries. Prefer returning
+  `vjsx.Value` only when the wrapper clearly owns the underlying `JSValue`.
+
+Windows and MSVC are the strictest proving ground for this contract. The
+quickjs-ng `JSValue` representation is ABI-sensitive on 64-bit platforms, and
+MSVC heap checks catch borrowed-pointer frees that may appear to work on macOS.
+For new FFI calls that return or transport `JSValue`, prefer a tiny C wrapper
+with an out parameter when there is any ABI doubt, and cover it with a Windows
+smoke test.
+
+Do not paper over FFI crashes by permanently skipping host capabilities on one
+platform. Temporary platform guards are acceptable while isolating a native
+crash, but the final fix must either restore the capability or document a real
+unsupported platform boundary.
+
 ## Event Loop Contract
 
 `RuntimeSession.configure_event_loop(...)` defines the host/runtime boundary:

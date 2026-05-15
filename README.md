@@ -293,6 +293,10 @@ wrapper around `install_node_compat(...)`.
 
 For the embedding ownership, event-loop, timer, diagnostics, limits, and profile
 contracts, see [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
+That contract also records the QuickJS FFI ownership rules: borrowed V string
+pointers must not be freed manually, QuickJS-owned strings use
+`JS_FreeCString(...)`, and `JSValue` ownership must stay explicit across wrapper
+boundaries.
 
 For embedders, `ctx.install_host_api(...)` provides a more explicit way to
 expose host globals and modules to JS/TS extension code without hand-rolling
