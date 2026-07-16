@@ -71,12 +71,12 @@ pub fn (plugin ScriptPlugin) activate(args ...AnyValue) !Value {
 // Run the plugin activation hook with an explicit host context object/value as
 // the first argument.
 pub fn (plugin ScriptPlugin) activate_with_host(host_api HostValueBuilder, args ...AnyValue) !Value {
-	host_value := host_api(plugin.module.ctx)
+	host_arg := host_api(plugin.module.ctx)
 	defer {
-		host_value.free()
+		host_arg.free()
 	}
 	mut call_args := []AnyValue{cap: args.len + 1}
-	call_args << host_value
+	call_args << host_arg
 	call_args << args
 	return plugin.module.call_export_if_present(plugin.hooks.activate_export, ...call_args)
 }
@@ -89,12 +89,12 @@ pub fn (plugin ScriptPlugin) handle(args ...AnyValue) !Value {
 // Run the plugin handler hook with an explicit host context object/value as the
 // first argument.
 pub fn (plugin ScriptPlugin) handle_with_host(host_api HostValueBuilder, args ...AnyValue) !Value {
-	host_value := host_api(plugin.module.ctx)
+	host_arg := host_api(plugin.module.ctx)
 	defer {
-		host_value.free()
+		host_arg.free()
 	}
 	mut call_args := []AnyValue{cap: args.len + 1}
-	call_args << host_value
+	call_args << host_arg
 	call_args << args
 	return plugin.module.call_export_if_present(plugin.hooks.handle_export, ...call_args)
 }
@@ -107,12 +107,12 @@ pub fn (plugin ScriptPlugin) dispose(args ...AnyValue) !Value {
 // Run the plugin dispose hook with an explicit host context object/value as the
 // first argument.
 pub fn (plugin ScriptPlugin) dispose_with_host(host_api HostValueBuilder, args ...AnyValue) !Value {
-	host_value := host_api(plugin.module.ctx)
+	host_arg := host_api(plugin.module.ctx)
 	defer {
-		host_value.free()
+		host_arg.free()
 	}
 	mut call_args := []AnyValue{cap: args.len + 1}
-	call_args << host_value
+	call_args << host_arg
 	call_args << args
 	return plugin.module.call_export_if_present(plugin.hooks.dispose_export, ...call_args)
 }

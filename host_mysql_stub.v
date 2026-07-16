@@ -11,9 +11,9 @@ $if !vjsx_mysql ? {
 					name:    'TypeError'
 				))
 			}
-			host_value := args[0].get('host')
+			host_option := args[0].get('host')
 			defer {
-				host_value.free()
+				host_option.free()
 			}
 			port_value := args[0].get('port')
 			defer {
@@ -39,7 +39,7 @@ $if !vjsx_mysql ? {
 			defer {
 				database_value.free()
 			}
-			if !host_value.is_undefined() && !host_value.is_null() && !host_value.is_string() {
+			if !host_option.is_undefined() && !host_option.is_null() && !host_option.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.host must be a string'
 					name:    'TypeError'

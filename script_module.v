@@ -80,12 +80,12 @@ pub fn (mod ScriptModule) call_export(name string, args ...AnyValue) !Value {
 // Call a named function export with an explicit host context object/value as
 // the first argument.
 pub fn (mod ScriptModule) call_export_with_host(name string, host_api HostValueBuilder, args ...AnyValue) !Value {
-	host_value := host_api(mod.ctx)
+	host_arg := host_api(mod.ctx)
 	defer {
-		host_value.free()
+		host_arg.free()
 	}
 	mut call_args := []AnyValue{cap: args.len + 1}
-	call_args << host_value
+	call_args << host_arg
 	call_args << args
 	return mod.call_export(name, ...call_args)
 }
@@ -112,12 +112,12 @@ pub fn (mod ScriptModule) call_export_method(export_name string, method_name str
 // Call a method on an exported object with an explicit host context object/value
 // as the first argument.
 pub fn (mod ScriptModule) call_export_method_with_host(export_name string, method_name string, host_api HostValueBuilder, args ...AnyValue) !Value {
-	host_value := host_api(mod.ctx)
+	host_arg := host_api(mod.ctx)
 	defer {
-		host_value.free()
+		host_arg.free()
 	}
 	mut call_args := []AnyValue{cap: args.len + 1}
-	call_args << host_value
+	call_args << host_arg
 	call_args << args
 	return mod.call_export_method(export_name, method_name, ...call_args)
 }

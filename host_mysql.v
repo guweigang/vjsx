@@ -636,9 +636,9 @@ $if vjsx_mysql ? {
 		if !arg.is_object() {
 			return error('options object is required')
 		}
-		host_value := arg.get('host')
+		host_option := arg.get('host')
 		defer {
-			host_value.free()
+			host_option.free()
 		}
 		port_value := arg.get('port')
 		defer {
@@ -664,7 +664,7 @@ $if vjsx_mysql ? {
 		defer {
 			database_value.free()
 		}
-		if !host_value.is_undefined() && !host_value.is_null() && !host_value.is_string() {
+		if !host_option.is_undefined() && !host_option.is_null() && !host_option.is_string() {
 			return error('options.host must be a string')
 		}
 		if !port_value.is_undefined() && !port_value.is_null() && !port_value.is_number() {
@@ -700,7 +700,7 @@ $if vjsx_mysql ? {
 			''
 		}
 		return HostMySqlConnectConfig{
-			host:     if host_value.is_string() { host_value.to_string() } else { '127.0.0.1' }
+			host:     if host_option.is_string() { host_option.to_string() } else { '127.0.0.1' }
 			port:     if port_value.is_number() { u32(port_value.to_int()) } else { u32(3306) }
 			username: username
 			password: if password_value.is_string() { password_value.to_string() } else { '' }
