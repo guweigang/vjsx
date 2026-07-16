@@ -16,6 +16,7 @@ pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeCo
 	cli_browser_util_boot(ctx, boot)
 	cli_browser_crypto_boot(ctx, boot)
 	cli_browser_encoding_boot(ctx, boot)
+	cli_browser_intl_boot(ctx, boot)
 	cli_browser_fetch_boot(ctx, boot)
 	glob.free()
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'crypto.js'), vjsx.type_module) or {
@@ -27,6 +28,9 @@ pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeCo
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'encoding.js'), vjsx.type_module) or {
 		panic(err)
 	}
+	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'intl.js'), vjsx.type_module) or {
+		panic(err)
+	}
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'blob.js'), vjsx.type_module) or {
 		panic(err)
 	}
@@ -34,6 +38,9 @@ pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeCo
 		panic(err)
 	}
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'event.js'), vjsx.type_module) or {
+		panic(err)
+	}
+	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'abort.js'), vjsx.type_module) or {
 		panic(err)
 	}
 	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'fetch.js'), vjsx.type_module) or {

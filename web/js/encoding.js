@@ -1,6 +1,36 @@
 /* Credit: All VJS Author */
 
-const { text_encode, text_decode, text_encode_into } = globalThis.__bootstrap;
+const { text_encode, text_decode, text_encode_into, decode_text } = globalThis.__bootstrap;
+
+const replacement = "\uFFFD";
+
+const encodingLabels = new Map([
+  ["unicode-1-1-utf-8", "utf-8"],
+  ["unicode11utf8", "utf-8"],
+  ["unicode20utf8", "utf-8"],
+  ["utf-8", "utf-8"],
+  ["utf8", "utf-8"],
+  ["x-unicode20utf8", "utf-8"],
+  ["chinese", "gbk"],
+  ["csgb2312", "gbk"],
+  ["csiso58gb231280", "gbk"],
+  ["gb2312", "gbk"],
+  ["gb_2312", "gbk"],
+  ["gb_2312-80", "gbk"],
+  ["gbk", "gbk"],
+  ["iso-ir-58", "gbk"],
+  ["x-gbk", "gbk"],
+  ["gb18030", "gb18030"],
+]);
+
+function normalizeEncodingLabel(label) {
+  const normalized = String(label ?? "utf-8").trim().toLowerCase();
+  const encoding = encodingLabels.get(normalized);
+  if (encoding === undefined) {
+    throw new RangeError(`The encoding label provided ('${label}') is invalid.`);
+  }
+  return encoding;
+}
 
 function encodeUtf8(input) {
   const text = String(input ?? "");
@@ -92,9 +122,11 @@ class TextEncoder {
 class TextDecoder {
   #label;
   #opts;
+  #pending;
   constructor(label = "utf-8", opts = {}) {
-    this.#label = label;
+    this.#label = normalizeEncodingLabel(label);
     this.#opts = opts;
+    this.#pending = new Uint8Array();
   }
   get encoding() {
     return this.#label;
@@ -106,7 +138,39 @@ class TextDecoder {
     return this.#opts.ignoreBOM ?? false;
   }
   decode(input, opts = {}) {
-    return decodeUtf8(input);
+    if (this.#label === "utf-8") {
+      return decodeUtf8(input);
+    }
+    let bytes = bytesFromInput(input);
+    if (this.#pending.length > 0) {
+      const joined = new Uint8Array(this.#pending.length + bytes.length);
+      joined.set(this.#pending);
+      joined.set(bytes, this.#pending.length);
+      bytes = joined;
+      this.#pending = new Uint8Array();
+    }
+    if (opts.stream === true && bytes.length > 0) {
+      // Count consecutive high bytes (>= 0x80) from the end of the buffer.
+      // For GBK-family encodings each character is 2 bytes (both >= 0x80),
+      // so an odd count means the last byte is an incomplete lead byte.
+      let tailHigh = 0;
+      for (let i = bytes.length - 1; i >= 0 && bytes[i] >= 0x80; i--) tailHigh++;
+      if (tailHigh % 2 === 1) {
+        this.#pending = bytes.slice(bytes.length - 1);
+        bytes = bytes.slice(0, bytes.length - 1);
+      }
+    }
+    if (bytes.length === 0) {
+      return "";
+    }
+    try {
+      return decode_text(this.#label, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    } catch (err) {
+      if (this.fatal) {
+        throw err;
+      }
+      return replacement;
+    }
   }
 }
 

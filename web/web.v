@@ -12,6 +12,7 @@ pub:
 	btoa        bool = true
 	console     bool = true
 	navigator   bool = true
+	intl        bool = true
 	crypto      bool = true
 	encoding    bool = true
 	performance bool = true
@@ -35,6 +36,7 @@ pub fn browser_host_minimal() BrowserHostConfig {
 	return BrowserHostConfig{
 		dom:         false
 		navigator:   false
+		intl:        false
 		crypto:      false
 		encoding:    false
 		performance: false
@@ -60,6 +62,7 @@ fn normalize_browser_host_config(config BrowserHostConfig) BrowserHostConfig {
 		btoa:        config.btoa
 		console:     config.console
 		navigator:   config.navigator
+		intl:        config.intl
 		crypto:      config.crypto
 		encoding:    encoding
 		performance: config.performance
@@ -145,6 +148,9 @@ pub fn inject_browser_host(ctx &Context, config BrowserHostConfig) {
 	if normalized.navigator {
 		navigator_boot(ctx, boot)
 	}
+	if normalized.intl {
+		intl_boot(ctx, boot)
+	}
 	if normalized.crypto {
 		crypto_boot(ctx, boot)
 	}
@@ -181,6 +187,9 @@ pub fn inject_browser_host(ctx &Context, config BrowserHostConfig) {
 	}
 	if normalized.navigator {
 		eval_runtime_module_file(ctx, 'web/js/navigator.js')
+	}
+	if normalized.intl {
+		eval_runtime_module_file(ctx, 'web/js/intl.js')
 	}
 	if normalized.blob {
 		eval_runtime_module_file(ctx, 'web/js/blob.js')

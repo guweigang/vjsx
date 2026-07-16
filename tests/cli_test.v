@@ -77,7 +77,7 @@ fn test_cli_run_with_script_runtime_profile() {
 fn test_cli_run_with_browser_runtime_profile() {
 	output := os.execute('sh ./vjsx --runtime browser --module ./tests/browser_runtime_profile.mjs')
 	assert output.exit_code == 0
-	assert output.output.trim_space() == 'object\nobject\nfunction\nfunction\nfunction\nundefined\nobject'
+	assert output.output.trim_space() == 'object\nobject\nfunction\nfunction\nfunction\nobject\nfunction\nV大法好\n大\n07/15/2024, 14:30:45\nyear:2024|literal:/|month:07|literal:/|day:15|literal: |weekday:星期一\nundefined\nobject'
 }
 
 fn test_cli_browser_runtime_crypto_subtle_hmac() {

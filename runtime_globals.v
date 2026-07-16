@@ -4,11 +4,13 @@ module vjsx
 @[params]
 pub struct RuntimeGlobalsConfig {
 pub:
-	binary bool = true
-	event  bool = true
-	abort  bool = true
-	timer  bool = true
-	url    bool = true
+	binary   bool = true
+	event    bool = true
+	abort    bool = true
+	timer    bool = true
+	url      bool = true
+	encoding bool = true
+	intl     bool = true
 }
 
 // Full runtime globals preset.
@@ -19,9 +21,11 @@ pub fn runtime_globals_full() RuntimeGlobalsConfig {
 // Minimal runtime globals preset for smaller non-host browser/node shims.
 pub fn runtime_globals_minimal() RuntimeGlobalsConfig {
 	return RuntimeGlobalsConfig{
-		binary: true
-		timer:  false
-		url:    true
+		binary:   true
+		timer:    false
+		url:      true
+		encoding: false
+		intl:     false
 	}
 }
 
@@ -41,5 +45,11 @@ pub fn (ctx &Context) install_runtime_globals(config RuntimeGlobalsConfig) {
 	}
 	if config.url {
 		ctx.install_url_globals()
+	}
+	if config.encoding {
+		ctx.install_encoding_globals()
+	}
+	if config.intl {
+		ctx.install_intl_globals()
 	}
 }

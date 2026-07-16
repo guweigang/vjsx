@@ -5,6 +5,7 @@ import "./stream.js";
 import "./encoding.js";
 import "./url.js";
 import "./url_pattern.js";
+import "./intl.js";
 import "./crypto.js";
 import "./navigator.js";
 import "./blob.js";

@@ -44,3 +44,26 @@ pub fn (ctx &Context) install_url_globals() {
 	ctx.eval_runtime_file('web/js/url.js', type_module) or { panic(err) }
 	ctx.eval_runtime_file('web/js/url_pattern.js', type_module) or { panic(err) }
 }
+
+// Install text encoding globals (`TextEncoder`, `TextDecoder`).
+pub fn (ctx &Context) install_encoding_globals() {
+	glob, boot := fetch_get_bootstrap(ctx)
+	boot.set('text_encode', ctx.js_function_this(host_text_encode))
+	boot.set('text_decode', ctx.js_function_this(host_text_decode))
+	boot.set('decode_text', ctx.js_function_this(host_decode_text))
+	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
+	ctx.eval_runtime_file('web/js/encoding.js', type_module) or { panic(err) }
+	glob.delete('__bootstrap')
+	boot.free()
+	glob.free()
+}
+
+// Install a small `Intl.DateTimeFormat` subset.
+pub fn (ctx &Context) install_intl_globals() {
+	glob, boot := fetch_get_bootstrap(ctx)
+	boot.set('intl_date_time_parts', ctx.js_function_this(host_intl_date_time_parts))
+	ctx.eval_runtime_file('web/js/intl.js', type_module) or { panic(err) }
+	glob.delete('__bootstrap')
+	boot.free()
+	glob.free()
+}
