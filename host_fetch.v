@@ -114,72 +114,13 @@ fn fetch_util_boot(ctx &Context, boot Value) {
 	obj.free()
 }
 
-@[manualfree]
-fn fetch_text_encode(this Value, args []Value) Value {
-	uint_cls := this.ctx.js_global('Uint8Array')
-	defer {
-		uint_cls.free()
-	}
-	if args.len == 0 || args[0].is_undefined() {
-		return uint_cls.new()
-	}
-	arr_buf := this.ctx.js_array_buffer(args[0].str().bytes())
-	defer {
-		arr_buf.free()
-	}
-	return uint_cls.new(arr_buf)
-}
-
-@[manualfree]
-fn fetch_text_encode_into(this Value, args []Value) Value {
-	if args.len != 2 {
-		err := this.ctx.js_type_error(message: 'expected args 2 but got ${args.len}')
-		return this.ctx.js_throw(err)
-	}
-	buf := fetch_text_encode(this, args)
-	defer {
-		buf.free()
-	}
-	obj := this.ctx.js_object()
-	text_len := args[0].len()
-	buf_len := buf.len()
-	arr_len := args[1].len()
-	obj.set('read', text_len)
-	obj.set('written', buf_len)
-	if buf_len > arr_len {
-		read_val := arr_len / buf_len * obj.get('read').to_int()
-		obj.set('read', read_val)
-		obj.set('written', arr_len)
-	}
-	args[1].call('set', buf, 0)
-	return obj
-}
-
-@[manualfree]
-fn fetch_text_decode(this Value, args []Value) Value {
-	if args.len == 0 || args[0].is_undefined() {
-		return this.ctx.js_string('')
-	}
-	mut buf := args[0]
-	if buf.instanceof('ArrayBuffer') {
-		return this.ctx.js_string(buf.to_bytes().bytestr())
-	}
-	if fetch_is_typed_array_bool(this, args) {
-		buf = buf.get('buffer')
-		defer {
-			buf.free()
-		}
-		return this.ctx.js_string(buf.to_bytes().bytestr())
-	}
-	err := this.ctx.js_type_error(message: 'args[0] not TypedArray')
-	return this.ctx.js_throw(err)
-}
-
 fn fetch_encoding_boot(ctx &Context, boot Value) {
-	boot.set('text_encode', ctx.js_function_this(fetch_text_encode))
-	boot.set('text_decode', ctx.js_function_this(fetch_text_decode))
-	boot.set('text_encode_into', ctx.js_function_this(fetch_text_encode_into))
+	boot.set('text_encode', ctx.js_function_this(host_text_encode))
+	boot.set('text_decode', ctx.js_function_this(host_text_decode))
+	boot.set('decode_text', ctx.js_function_this(host_decode_text))
+	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
 }
+
 
 fn fetch_core(this Value, args []Value) Value {
 	mut error := this.ctx.js_undefined()
@@ -252,7 +193,9 @@ fn fetch_core(this Value, args []Value) Value {
 		obj_header.set(key, vals.join('; '))
 	}
 	obj := this.ctx.js_object()
-	obj.set('body', resp.body)
+	arr_buf := this.ctx.js_array_buffer(resp.body.bytes())
+	obj.set('body', arr_buf)
+	arr_buf.free()
 	obj.set('status', resp.status_code)
 	obj.set('status_message', resp.status_msg)
 	obj.set('header', obj_header)

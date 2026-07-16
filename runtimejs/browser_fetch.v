@@ -158,7 +158,9 @@ fn cli_browser_fetch_boot(ctx &vjsx.Context, boot vjsx.Value) {
 			obj_header.set(key, val.join('; '))
 		}
 		obj := this.ctx.js_object()
-		obj.set('body', resp.body)
+		arr_buf := this.ctx.js_array_buffer(resp.body.bytes())
+		obj.set('body', arr_buf)
+		arr_buf.free()
 		obj.set('status', resp.status_code)
 		obj.set('status_message', resp.status_msg)
 		obj.set('header', obj_header)
