@@ -16,6 +16,7 @@ export class Request extends Body {
       opts.body = input.body;
       opts.headers = input.headers;
       opts.keepalive = input.keepalive;
+      opts.signal = opts.signal ?? input.signal;
       _input = input.url;
     }
     super(opts.body);
@@ -42,6 +43,9 @@ export class Request extends Body {
   }
   get keepalive() {
     return this.#opts.keepalive ?? true;
+  }
+  get signal() {
+    return this.#opts.signal ?? null;
   }
   get url() {
     return this.#input ?? "";

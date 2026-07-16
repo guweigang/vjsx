@@ -1,6 +1,8 @@
 const abort_reason = (reason) => {
   if (reason === void 0) {
-    return new Error("This operation was aborted");
+    const err = new Error("This operation was aborted");
+    err.name = "AbortError";
+    return err;
   }
   return reason;
 };

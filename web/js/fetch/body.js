@@ -30,12 +30,12 @@ export class Body {
         this.#body.text = body;
       } else if (body instanceof URLSearchParams) {
         this.#body.text = body.toString();
-      } else if (body instanceof FormData) {
+      } else if (typeof FormData !== "undefined" && body instanceof FormData) {
         this.#body.form = body;
         this.#body.blob = body["_blob"];
-      } else if (body instanceof ReadableStream) {
+      } else if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) {
         this.#body.stream = body;
-      } else if (body instanceof Blob) {
+      } else if (typeof Blob !== "undefined" && body instanceof Blob) {
         this.#body.blob = body;
       } else if (isArrayBuffer(body) || isTypedArray(body)) {
         body = isArrayBuffer(body) ? body : body.buffer;
