@@ -26,16 +26,6 @@ fn is_vjsx_quickjs_checkout(path string) bool {
 	}.contains('QJS_VERSION_MAJOR')
 }
 
-fn default_quickjs_path() string {
-	for dirname in ['quickjs', 'quickjs-ng'] {
-		candidate := os.real_path(os.join_path(repo_root, '..', dirname))
-		if is_vjsx_quickjs_checkout(candidate) {
-			return candidate
-		}
-	}
-	return ''
-}
-
 fn ensure_quickjs_path() string {
 	script := os.join_path(repo_root, 'scripts', 'ensure-quickjs.sh')
 	work_root := os.getenv_opt('VJS_QUICKJS_WORK_ROOT') or { os.getwd() }
@@ -107,9 +97,6 @@ fn run_cli_runner(env map[string]string) int {
 
 fn main() {
 	mut quickjs_path := os.getenv('VJS_QUICKJS_PATH')
-	if quickjs_path == '' {
-		quickjs_path = default_quickjs_path()
-	}
 	if quickjs_path == '' {
 		quickjs_path = ensure_quickjs_path()
 	}

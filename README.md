@@ -53,6 +53,8 @@ Notes:
   the calling repository when no compatible local checkout is found.
 - Direct `v` invocations should use `scripts/ensure-quickjs.sh` to prepare and
   print the managed checkout path before compilation starts.
+- The managed quickjs-ng checkout defaults to `v0.15.1`; set `QUICKJS_REF` to
+  build against a different tag or branch.
 - Set `VJS_QUICKJS_WORK_ROOT` to choose where `.deps/quickjs` is created, or
   `QUICKJS_DIR` to choose the exact checkout path.
 - `VJS_QUICKJS_PATH` can still point to an explicit source root that contains
@@ -264,9 +266,8 @@ manual ownership cases, but then the caller is responsible for pairing them
 with `ctx.free()` and `rt.free()` correctly.
 
 The wrapper script will use `VJS_QUICKJS_PATH` when it is set. If it is not
-set, it will try compatible `../quickjs` and `../quickjs-ng` checkouts relative
-to the repository root, then download a managed checkout under
-the calling repository's `.deps/quickjs`.
+set, it will download or reuse a managed checkout under the calling
+repository's `.deps/quickjs`, matching the CI build path.
 
 > Currently support linux/mac/win (x64).
 

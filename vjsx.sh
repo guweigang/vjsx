@@ -2,7 +2,6 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-repo_parent=$(dirname "$repo_root")
 quickjs_path=${VJS_QUICKJS_PATH:-}
 
 is_vjsx_quickjs_checkout() {
@@ -11,12 +10,6 @@ is_vjsx_quickjs_checkout() {
 		grep -q 'QJS_VERSION_MAJOR' "$1/quickjs.h" 2>/dev/null
 }
 
-if [ -z "$quickjs_path" ] && is_vjsx_quickjs_checkout "$repo_root/../quickjs"; then
-	quickjs_path="$repo_root/../quickjs"
-fi
-if [ -z "$quickjs_path" ] && is_vjsx_quickjs_checkout "$repo_root/../quickjs-ng"; then
-	quickjs_path="$repo_root/../quickjs-ng"
-fi
 if [ -z "$quickjs_path" ]; then
 	quickjs_path=$(VJS_QUICKJS_WORK_ROOT="${VJS_QUICKJS_WORK_ROOT:-$PWD}" "$repo_root/scripts/ensure-quickjs.sh")
 fi
