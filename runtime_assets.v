@@ -6,6 +6,7 @@ import v.embed_file
 
 const runtime_asset_env_var = 'VJSX_ASSET_ROOT'
 const runtime_asset_dev_root = @VMODROOT
+const runtime_asset_module_scheme = 'vjsx://'
 const runtime_asset_abort_js = $embed_file('web/js/abort.js')
 const runtime_asset_blob_js = $embed_file('web/js/blob.js')
 const runtime_asset_buffer_js = $embed_file('web/js/buffer.js')
@@ -65,7 +66,113 @@ fn normalize_runtime_asset_path(rel_path string) !string {
 	if trimmed == '' {
 		return error('vjsx runtime asset path is required')
 	}
-	return trimmed
+	return canonical_runtime_asset_rel_path(trimmed)!
+}
+
+fn canonical_runtime_asset_rel_path(path string) !string {
+	normalized := normalize_slash_path(path)!
+	if normalized.starts_with('web/js/') || normalized.starts_with('thirdparty/typescript/lib/') {
+		return normalized
+	}
+	return error('unsupported vjsx runtime asset path: ${path}')
+}
+
+fn normalize_runtime_module_rel_path(path string) !string {
+	trimmed := path.trim_space().replace('\\', '/')
+	if trimmed == '' {
+		return error('vjsx runtime asset path is required')
+	}
+	mut normalized := if trimmed.starts_with(runtime_asset_module_scheme) {
+		trimmed
+	} else {
+		canonical_runtime_asset_rel_path(trimmed)!
+	}
+	if normalized.starts_with(runtime_asset_module_scheme) {
+		normalized = normalized[runtime_asset_module_scheme.len..]
+	}
+	return normalized
+}
+
+fn normalize_runtime_module_specifier(base_name string, module_name string) !string {
+	module_trimmed := module_name.trim_space().replace('\\', '/')
+	if module_trimmed == '' {
+		return error('vjsx runtime module specifier is required')
+	}
+	base_rel_path := runtime_asset_module_name_to_rel_path(base_name)
+	module_rel_path := runtime_asset_module_name_to_rel_path(module_trimmed)
+	if module_rel_path != '' {
+		return runtime_asset_module_name(module_rel_path)!
+	}
+	if !is_runtime_relative_import(module_trimmed) {
+		return module_trimmed
+	}
+	if base_rel_path == '' {
+		base_trimmed := base_name.trim_space().replace('\\', '/')
+		if base_trimmed == '' || base_trimmed.starts_with(runtime_asset_module_scheme) {
+			return normalize_slash_path(module_trimmed)!
+		}
+		base_dir := runtime_module_dirname(base_trimmed)
+		return normalize_slash_path(join_slash_path(base_dir, module_trimmed))!
+	}
+	base_dir := runtime_module_dirname(base_rel_path)
+	resolved_rel_path := normalize_slash_path(join_slash_path(base_dir, module_trimmed))!
+	return runtime_asset_module_name(resolved_rel_path)!
+}
+
+fn normalize_slash_path(path string) !string {
+	trimmed := path.trim_space().replace('\\', '/')
+	if trimmed == '' {
+		return error('path is required')
+	}
+	is_absolute := trimmed.starts_with('/')
+	mut parts := []string{}
+	for raw_part in trimmed.split('/') {
+		part := raw_part.trim_space()
+		if part == '' || part == '.' {
+			continue
+		}
+		if part == '..' {
+			if parts.len > 0 && parts[parts.len - 1] != '..' {
+				parts.delete(parts.len - 1)
+			} else if !is_absolute {
+				parts << part
+			}
+			continue
+		}
+		parts << part
+	}
+	normalized := parts.join('/')
+	if is_absolute {
+		return '/' + normalized
+	}
+	if normalized == '' {
+		return '.'
+	}
+	return normalized
+}
+
+fn join_slash_path(base_dir string, rel_path string) string {
+	if base_dir == '' || base_dir == '.' {
+		return rel_path
+	}
+	return '${base_dir}/${rel_path}'
+}
+
+fn runtime_module_dirname(rel_path string) string {
+	index := rel_path.last_index('/') or { return '.' }
+	if index <= 0 {
+		return '.'
+	}
+	return rel_path[..index]
+}
+
+fn is_runtime_relative_import(module_name string) bool {
+	return module_name.starts_with('./') || module_name.starts_with('../')
+}
+
+pub fn runtime_asset_module_name(rel_path string) !string {
+	normalized := normalize_runtime_module_rel_path(rel_path)!
+	return runtime_asset_module_scheme + normalized
 }
 
 fn runtime_embedded_asset_source(rel_path string) !string {
@@ -138,17 +245,60 @@ fn runtime_asset_module_name_to_rel_path(module_name string) string {
 	if name == '' {
 		return ''
 	}
-	if name.starts_with('vjsx://') {
-		name = name['vjsx://'.len..]
+	if name.starts_with(runtime_asset_module_scheme) {
+		name = name[runtime_asset_module_scheme.len..]
 	}
 	dev_prefix := os.join_path(runtime_asset_dev_root, 'web', 'js') + os.path_separator
 	if name.starts_with(dev_prefix) {
 		name = 'web/js/' + name[dev_prefix.len..]
 	}
-	if name.starts_with('web/js/') && has_embedded_runtime_asset(name) {
-		return name
+	if name.starts_with('web/js/') || name.starts_with('thirdparty/typescript/lib/') {
+		return normalize_runtime_module_rel_path(name) or { return '' }
 	}
 	return ''
+}
+
+fn context_from_c_ctx(c_ctx &C.JSContext) &Context {
+	opaque := C.JS_GetContextOpaque(c_ctx)
+	if isnil(opaque) {
+		return unsafe { nil }
+	}
+	return &Context(opaque)
+}
+
+fn vjsx_runtime_module_normalize(ctx &C.JSContext, module_base_name &char, module_name &char, opaque voidptr) &char {
+	_ := opaque
+	base_name := if isnil(module_base_name) { '' } else { v_str(module_base_name) }
+	name := if isnil(module_name) { '' } else { v_str(module_name) }
+	normalized := normalize_runtime_module_specifier(base_name, name) or { return C.NULL }
+	return C.vjsx_js_strdup(ctx, normalized.str)
+}
+
+struct RuntimeModuleSource {
+	source string
+	name   string
+}
+
+fn (ctx &Context) runtime_module_source(rel_path string) !RuntimeModuleSource {
+	virtual_name := runtime_asset_module_name(rel_path)!
+	override_path := ctx.resolve_runtime_asset_override_path(rel_path)
+	if override_path != '' {
+		return RuntimeModuleSource{
+			source: os.read_file(override_path)!
+			name:   virtual_name
+		}
+	}
+	source := runtime_embedded_asset_source(rel_path) or {
+		path := ctx.resolve_runtime_asset_path(rel_path)!
+		return RuntimeModuleSource{
+			source: os.read_file(path)!
+			name:   virtual_name
+		}
+	}
+	return RuntimeModuleSource{
+		source: source
+		name:   virtual_name
+	}
 }
 
 fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidptr) &C.JSModuleDef {
@@ -157,13 +307,14 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 	if rel_path == '' {
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}
-	source := runtime_embedded_asset_source(rel_path) or {
+	owner_ctx := context_from_c_ctx(ctx)
+	if isnil(owner_ctx) {
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}
-	source_path := os.join_path(runtime_asset_dev_root, rel_path)
+	module_source := owner_ctx.runtime_module_source(rel_path) or { return unsafe { nil } }
 	mut ref := C.JSValue{}
-	C.vjsx_js_eval_out(ctx, source.str, usize(source.len), source_path.str,
-		type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(ctx, module_source.source.str, usize(module_source.source.len),
+		module_source.name.str, type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return unsafe { nil }
 	}
@@ -205,16 +356,12 @@ fn (ctx &Context) eval_runtime_source_custom_meta(source string, fname string, f
 pub fn (ctx &Context) eval_runtime_file(rel_path string, args ...EvalArgs) !Value {
 	flag := if args.len == 1 { args[0] as int } else { type_global }
 	trimmed := normalize_runtime_asset_path(rel_path)!
-	override_path := ctx.resolve_runtime_asset_override_path(trimmed)
-	if override_path != '' {
-		return ctx.eval_file_custom_meta(override_path, flag, def_set_meta)
-	}
-	source := runtime_embedded_asset_source(trimmed) or {
+	module_source := ctx.runtime_module_source(trimmed) or {
 		path := ctx.resolve_runtime_asset_path(trimmed)!
 		return ctx.eval_file_custom_meta(path, flag, def_set_meta)
 	}
-	path := os.join_path(runtime_asset_dev_root, trimmed)
-	return ctx.eval_runtime_source_custom_meta(source, path, flag, def_set_meta)
+	return ctx.eval_runtime_source_custom_meta(module_source.source, module_source.name, flag,
+		def_set_meta)
 }
 
 pub fn embedded_runtime_asset_source(rel_path string) !string {

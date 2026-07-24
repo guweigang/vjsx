@@ -87,3 +87,50 @@ fn test_eval_runtime_file_uses_context_asset_root() {
 	}
 	assert result.to_string() == 'asset-ok'
 }
+
+fn test_runtime_asset_module_name_is_stable_virtual_uri() {
+	assert vjsx.runtime_asset_module_name('web/js/event.js') or { panic(err) } == 'vjsx://web/js/event.js'
+	assert vjsx.runtime_asset_module_name('web/js/fetch/../util.js') or { panic(err) } == 'vjsx://web/js/util.js'
+}
+
+fn test_eval_runtime_file_uses_virtual_module_name_for_relative_imports() {
+	asset_root := os.join_path(os.temp_dir(), 'vjsx_runtime_virtual_imports_test')
+	os.mkdir_all(os.join_path(asset_root, 'web', 'js')) or { panic(err) }
+	defer {
+		os.rmdir_all(asset_root) or {}
+	}
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'dep.js'),
+		'export const label = "virtual-dep"; globalThis.__runtime_dep_url = import.meta.url;') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'entry.js'),
+		'import { label } from "./dep.js"; globalThis.__runtime_virtual_import = label;') or {
+		panic(err)
+	}
+
+	rt := vjsx.new_runtime()
+	defer {
+		rt.free()
+	}
+	ctx := rt.new_context(vjsx.ContextConfig{
+		asset_root: asset_root
+	})
+	defer {
+		ctx.free()
+	}
+
+	value := ctx.eval_runtime_file('web/js/entry.js', vjsx.type_module) or { panic(err) }
+	value.free()
+
+	result := ctx.js_global('__runtime_virtual_import')
+	defer {
+		result.free()
+	}
+	assert result.to_string() == 'virtual-dep'
+
+	dep_url := ctx.js_global('__runtime_dep_url')
+	defer {
+		dep_url.free()
+	}
+	assert dep_url.to_string() == 'vjsx://web/js/dep.js'
+}

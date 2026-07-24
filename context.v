@@ -99,10 +99,13 @@ fn C.js_std_dump_error(&C.JSContext)
 fn C.js_free(&C.JSContext, voidptr)
 fn C.vjsx_js_eval_out(&C.JSContext, &char, usize, &char, int, &C.JSValue)
 fn C.JS_DupContext(&C.JSContext) &C.JSContext
+fn C.JS_SetContextOpaque(&C.JSContext, voidptr)
+fn C.JS_GetContextOpaque(&C.JSContext) voidptr
 fn C.vjsx_js_eval_function_out(&C.JSContext, C.JSValue, &C.JSValue)
 fn C.vjsx_js_std_await_out(&C.JSContext, C.JSValue, &C.JSValue)
 fn C.js_std_set_worker_new_context_func(FnNewContext)
 fn C.JS_SetModuleLoaderFunc(&C.JSRuntime, &JSModuleNormalizeFunc, &JSModuleLoaderFunc, voidptr)
+fn C.vjsx_js_strdup(&C.JSContext, &char) &char
 fn C.vjsx_js_module_loader(&C.JSContext, &char, voidptr) &C.JSModuleDef
 fn C.js_std_loop(&C.JSContext)
 fn C.JS_GetRuntime(&C.JSContext) &C.JSRuntime
@@ -151,10 +154,6 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	C.js_std_set_worker_new_context_func(new_context)
 	C.js_std_init_handlers(rt.ref)
 	ref := new_context(rt.ref)
-	C.JS_SetModuleLoaderFunc(rt.ref, C.NULL, &vjsx_runtime_module_loader, C.NULL)
-	if config.unhandled_rejection {
-		rt.promise_rejection_tracker()
-	}
 	ctx := &Context{
 		ref:                ref
 		rt:                 rt
@@ -163,6 +162,12 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 			installed_modules: map[string]bool{}
 		}
 		asset_root:         config.asset_root
+	}
+	C.JS_SetContextOpaque(ref, ctx)
+	C.JS_SetModuleLoaderFunc(rt.ref, &vjsx_runtime_module_normalize, &vjsx_runtime_module_loader,
+		C.NULL)
+	if config.unhandled_rejection {
+		rt.promise_rejection_tracker()
 	}
 	return ctx
 }

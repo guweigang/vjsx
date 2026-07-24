@@ -84,4 +84,15 @@ static inline JSModuleDef *vjsx_js_module_loader(JSContext *ctx, const char *mod
 	return js_module_loader(ctx, module_name, opaque, JS_UNDEFINED);
 }
 
+static inline char *vjsx_js_strdup(JSContext *ctx, const char *str) {
+	size_t len = strlen(str);
+	char *copy = js_malloc(ctx, len + 1);
+	if (copy == NULL) {
+		JS_ThrowOutOfMemory(ctx);
+		return NULL;
+	}
+	memcpy(copy, str, len + 1);
+	return copy;
+}
+
 #endif
