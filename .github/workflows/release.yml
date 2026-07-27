@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  VCPKG_BINARY_CACHE_DIR: ${{ github.workspace }}\.cache\vcpkg-binary-cache
+
 jobs:
   build:
     name: Build ${{ matrix.artifact }}
@@ -70,6 +73,55 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $installRoot
           & (Join-Path $installRoot "v.exe") version
 
+      - name: Cache Windows vcpkg packages
+        if: matrix.shell == 'powershell'
+        uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-vcpkg-openssl-x64-v1-${{ hashFiles('.github/workflows/release.yml') }}
+          restore-keys: |
+            windows-vcpkg-openssl-x64-v1-
+
+      - name: Install Windows OpenSSL SDK
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_BINARY_CACHE_DIR" | Out-Null
+          $env:VCPKG_DEFAULT_BINARY_CACHE = "$env:VCPKG_BINARY_CACHE_DIR"
+          Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_DEFAULT_BINARY_CACHE=$env:VCPKG_BINARY_CACHE_DIR"
+          $vcpkgRoot = Join-Path $env:RUNNER_TEMP "vcpkg"
+          git clone --depth 1 https://github.com/microsoft/vcpkg $vcpkgRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $triplet = "x64-windows"
+          & (Join-Path $vcpkgRoot "vcpkg.exe") install openssl:$triplet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sdkRoot = Join-Path $vcpkgRoot "installed\$triplet"
+          $opensslLibDir = Join-Path $sdkRoot "lib"
+          $cryptoImportLib = Get-ChildItem -Path $opensslLibDir -Include libcrypto.lib, crypto.lib -File -Recurse | Select-Object -First 1
+          $sslImportLib = Get-ChildItem -Path $opensslLibDir -Include libssl.lib, ssl.lib -File -Recurse | Select-Object -First 1
+          if ($null -eq $cryptoImportLib) { throw "OpenSSL crypto import library not found under $sdkRoot" }
+          if ($null -eq $sslImportLib) { throw "OpenSSL ssl import library not found under $sdkRoot" }
+          foreach ($alias in @("crypto.lib", "libcrypto.lib")) {
+            $aliasPath = Join-Path $opensslLibDir $alias
+            if ($cryptoImportLib.FullName -ne $aliasPath) {
+              Copy-Item -Force $cryptoImportLib.FullName $aliasPath
+            }
+          }
+          foreach ($alias in @("ssl.lib", "libssl.lib")) {
+            $aliasPath = Join-Path $opensslLibDir $alias
+            if ($sslImportLib.FullName -ne $aliasPath) {
+              Copy-Item -Force $sslImportLib.FullName $aliasPath
+            }
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "OPENSSL_ROOT_DIR=$sdkRoot"
+          Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_INSTALLED_DIR=$sdkRoot"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIBRARY_PATH=$opensslLibDir;$env:LIBRARY_PATH"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")
+
       - name: Build Unix binary
         if: matrix.shell == 'bash'
         shell: bash
@@ -81,6 +133,19 @@ jobs:
         shell: powershell
         run: |
           .\scripts\build-vjsx.ps1 -Out "$PWD\dist\${{ matrix.binary }}"
+
+      - name: Stage Windows runtime DLLs
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vcpkgBin = Join-Path $env:VCPKG_INSTALLED_DIR "bin"
+          foreach ($pattern in @("libcrypto-*.dll", "libssl-*.dll")) {
+            Get-ChildItem -Path $vcpkgBin -Filter $pattern -File | ForEach-Object {
+              Copy-Item -Force $_.FullName "dist\"
+              Write-Host "staged $($_.Name)"
+            }
+          }
 
       - name: Smoke Unix binary
         if: matrix.shell == 'bash'
@@ -111,6 +176,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "release\${{ matrix.artifact }}" | Out-Null
           Copy-Item "dist\${{ matrix.binary }}" "release\${{ matrix.artifact }}\"
+          Copy-Item "dist\*.dll" "release\${{ matrix.artifact }}\"
           Copy-Item "README.md" "release\${{ matrix.artifact }}\"
           Compress-Archive -Path "release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}" -Force
 
