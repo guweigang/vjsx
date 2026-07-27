@@ -104,11 +104,13 @@ function Resolve-QuickjsLib {
   if (Test-Path $buildRoot) {
     Remove-Item -Recurse -Force $buildRoot
   }
-  cmake -S $SourcePath -B $buildRoot -G Ninja -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+  & cmake -S $SourcePath -B $buildRoot -G Ninja -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF 2>&1 |
+    ForEach-Object { Write-Host $_ }
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
-  cmake --build $buildRoot --target qjs_exe
+  & cmake --build $buildRoot --target qjs_exe 2>&1 |
+    ForEach-Object { Write-Host $_ }
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
