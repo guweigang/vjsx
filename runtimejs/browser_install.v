@@ -1,6 +1,5 @@
 module runtimejs
 
-import os
 import vjsx
 
 pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeConfig) {
@@ -19,31 +18,13 @@ pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeCo
 	cli_browser_intl_boot(ctx, boot)
 	cli_browser_fetch_boot(ctx, boot)
 	glob.free()
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'crypto.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'stream.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'encoding.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'intl.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'blob.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'form_data.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'event.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'abort.js'), vjsx.type_module) or {
-		panic(err)
-	}
-	ctx.eval_file(os.join_path(config.repo_root, 'web', 'js', 'fetch.js'), vjsx.type_module) or {
-		panic(err)
-	}
+	ctx.eval_runtime_file('web/js/crypto.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/stream.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/encoding.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/intl.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/blob.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/form_data.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/event.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/abort.js', vjsx.type_module) or { panic(err) }
+	ctx.eval_runtime_file('web/js/fetch.js', vjsx.type_module) or { panic(err) }
 }

@@ -1,0 +1,128 @@
+name: Release Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: vjsx-linux-x64
+            binary: vjsx
+            archive: vjsx-linux-x64.tar.gz
+            shell: bash
+          - os: macos-13
+            artifact: vjsx-darwin-x64
+            binary: vjsx
+            archive: vjsx-darwin-x64.tar.gz
+            shell: bash
+          - os: macos-14
+            artifact: vjsx-darwin-arm64
+            binary: vjsx
+            archive: vjsx-darwin-arm64.tar.gz
+            shell: bash
+          - os: windows-latest
+            artifact: vjsx-windows-x64
+            binary: vjsx.exe
+            archive: vjsx-windows-x64.zip
+            shell: powershell
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Setup V
+        if: matrix.shell == 'bash'
+        uses: vlang/setup-v@v1.4
+        with:
+          check-latest: true
+
+      - name: Build V with MSVC
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installRoot = Join-Path $env:RUNNER_TEMP "vlang"
+          git clone --depth 1 https://github.com/vlang/v.git $installRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location $installRoot
+          cmd /c makev.bat -msvc
+          $vBuildExitCode = $LASTEXITCODE
+          Pop-Location
+          if ($vBuildExitCode -ne 0) { exit $vBuildExitCode }
+          Add-Content -Path $env:GITHUB_PATH -Value $installRoot
+          & (Join-Path $installRoot "v.exe") version
+
+      - name: Build Unix binary
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          VJS_OUT="$PWD/dist/${{ matrix.binary }}" ./scripts/build-vjsx.sh
+
+      - name: Build Windows binary
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          .\scripts\build-vjsx.ps1 -Out "$PWD\dist\${{ matrix.binary }}"
+
+      - name: Smoke Unix binary
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          ./dist/${{ matrix.binary }} check-runtime --runtime node
+          ./dist/${{ matrix.binary }} ./tests/test.js
+
+      - name: Smoke Windows binary
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          .\dist\${{ matrix.binary }} check-runtime --runtime node
+          .\dist\${{ matrix.binary }} .\tests\test.js
+
+      - name: Package Unix archive
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          mkdir -p "release/${{ matrix.artifact }}"
+          cp "dist/${{ matrix.binary }}" "release/${{ matrix.artifact }}/"
+          cp README.md "release/${{ matrix.artifact }}/"
+          tar -C release -czf "${{ matrix.archive }}" "${{ matrix.artifact }}"
+
+      - name: Package Windows archive
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "release\${{ matrix.artifact }}" | Out-Null
+          Copy-Item "dist\${{ matrix.binary }}" "release\${{ matrix.artifact }}\"
+          Copy-Item "README.md" "release\${{ matrix.artifact }}\"
+          Compress-Archive -Path "release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}" -Force
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive }}

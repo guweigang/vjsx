@@ -15,6 +15,7 @@ main
 
 # Ignore binary output folders
 bin/
+dist/
 /cli_runner_bin/cli_runner_bin
 /cli_runner_bin/*.dSYM/
 /vjsx_cli

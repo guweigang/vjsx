@@ -191,6 +191,73 @@ TypeScript entry files are also supported:
 ./vjsx --module ./tests/ts_module_runtime.mts
 ```
 
+Runtime compatibility checks are available for hosts that need to verify the
+portable runtime before installing or loading packages:
+
+```bash
+./vjsx check-runtime --runtime node
+./vjsx check --module ./tests/ts_module_runtime.mts
+```
+
+Packages can be installed without a local Node/npm dependency:
+
+```bash
+./vjsx install is-number@7.0.0
+./vjsx install
+./vjsx install --dev typescript
+```
+
+When package specs are provided, `vjsx install` updates `package.json` in the
+same way users expect from a package installer: regular installs are written to
+`dependencies`, and `--dev` installs are written to `devDependencies`. When no
+package spec is provided, the installer reads `dependencies` from
+`package.json`; pass `--dev` to include `devDependencies`.
+
+`vjsx install` writes npm-compatible `package-lock.json` v3 data and reuses an
+existing lockfile when present. It also supports basic `workspaces` entries by
+linking local packages into `node_modules`, and reports `peerDependencies` as
+warnings without blocking installation.
+
+The installer targets package compatibility, not full npm CLI compatibility.
+It does not run lifecycle scripts such as `postinstall`, and it does not require
+Node/npm to be installed locally.
+
+To build a standalone `vjsx` binary:
+
+```bash
+./scripts/build-vjsx.sh
+```
+
+The build writes `dist/vjsx` by default. Set `VJS_OUT=/path/to/vjsx` to choose
+another output path.
+
+On Windows, use the PowerShell build script:
+
+```powershell
+.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe
+```
+
+The Windows build defaults to MSVC (`-cc msvc`), matching the preferred VTable
+sidecar release strategy. In that mode the script builds quickjs-ng with
+CMake/Ninja, links the generated `qjs.lib` through `-d link_quickjs`, and sets
+`VJS_QUICKJS_LIB_PATH` for the V build. Override with `-Compiler`, `VJS_V_CC`,
+or an explicit `-cc` in `VJS_V_FLAGS` only when you intentionally want another
+C toolchain.
+
+Release binaries are built by the `Release Binaries` GitHub workflow. It
+produces platform-specific archives:
+
+- `vjsx-darwin-arm64.tar.gz`
+- `vjsx-darwin-x64.tar.gz`
+- `vjsx-linux-x64.tar.gz`
+- `vjsx-windows-x64.zip`
+
+The workflow can be run manually from GitHub Actions. Pushing a tag like
+`v0.1.0` also creates a GitHub Release and uploads those archives. Downstream
+projects such as VTable should download the archive matching their target OS
+and CPU, then place `vjsx` or `vjsx.exe` in their own packaged runtime
+directory.
+
 TypeScript module graphs are also supported, including:
 
 - relative `.ts` / `.mts` imports
@@ -206,11 +273,20 @@ Options:
 This is runtime transpilation backed by the bundled `typescript.js`, and the
 same loader is now also available from the `vjsx` API through
 `ctx.install_typescript_runtime()` and `ctx.run_runtime_entry(...)`.
-The JS/TS runtime asset loading rules are documented in
-[`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
 It is a good fit for standalone `.ts` scripts, `.mts` modules, and small local
 module graphs. Project-wide features like full `tsc` diagnostics, `references`,
 and broader Node compatibility are still out of scope for now.
+
+Runtime support files are embedded into release binaries. Internally, embedded
+Web/Node compatibility modules and TypeScript support files are loaded through
+stable virtual module names using the `vjsx://` scheme, such as
+`vjsx://web/js/fetch.js` or
+`vjsx://thirdparty/typescript/lib/vjs_ts_bootstrap.js`. Hosts should treat
+those modules as `vjsx` implementation details and use the public runtime APIs
+instead of depending on repository-relative asset paths. `VJSX_ASSET_ROOT` and
+`ContextConfig.asset_root` remain development override hooks; production
+binaries fall back to embedded assets. The full JS/TS runtime asset loading
+contract is documented in [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
 
 When embedding `vjsx` in a long-lived process, always pair each created
 `Runtime`/`Context` with an explicit `free()`. Repeated TypeScript bootstrap
@@ -271,7 +347,7 @@ repository's `.deps/quickjs`, matching the CI build path.
 
 > Currently support linux/mac/win (x64).
 
-> in windows, requires `-cc gcc`.
+> On Windows, release builds prefer MSVC (`-cc msvc`).
 
 ## Host Profiles
 

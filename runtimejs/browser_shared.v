@@ -13,9 +13,8 @@ fn default_error(line string) {
 @[params]
 pub struct CliBrowserRuntimeConfig {
 pub:
-	repo_root string
-	log_fn    vjsx.HostLogFn = default_log
-	error_fn  vjsx.HostLogFn = default_error
+	log_fn   vjsx.HostLogFn = default_log
+	error_fn vjsx.HostLogFn = default_error
 }
 
 fn cli_browser_bootstrap(ctx &vjsx.Context) (vjsx.Value, vjsx.Value) {
