@@ -195,9 +195,18 @@ Runtime compatibility checks are available for hosts that need to verify the
 portable runtime before installing or loading packages:
 
 ```bash
+./vjsx --help
+./vjsx --version
 ./vjsx check-runtime --runtime node
+./vjsx capabilities
+./vjsx capabilities --runtime browser
 ./vjsx check --module ./tests/ts_module_runtime.mts
 ```
+
+`vjsx capabilities` prints the host features exposed by the built runtime
+profiles, including globals, browser-style APIs, and Node-style modules. Use
+`--runtime node`, `--runtime script`, or `--runtime browser` to inspect one
+profile.
 
 Packages can be installed without a local Node/npm dependency:
 
@@ -205,6 +214,8 @@ Packages can be installed without a local Node/npm dependency:
 ./vjsx install is-number@7.0.0
 ./vjsx install
 ./vjsx install --dev typescript
+./vjsx remove is-number
+./vjsx uninstall typescript
 ```
 
 When package specs are provided, `vjsx install` updates `package.json` in the
@@ -212,6 +223,11 @@ same way users expect from a package installer: regular installs are written to
 `dependencies`, and `--dev` installs are written to `devDependencies`. When no
 package spec is provided, the installer reads `dependencies` from
 `package.json`; pass `--dev` to include `devDependencies`.
+
+`vjsx remove` and `vjsx uninstall` remove packages from `package.json`,
+`package-lock.json`, and the top-level `node_modules` entry. Transitive
+dependencies are left in place for now so removing one package does not break
+another package that may still share the same dependency.
 
 `vjsx install` writes npm-compatible `package-lock.json` v3 data and reuses an
 existing lockfile when present. It also supports basic `workspaces` entries by

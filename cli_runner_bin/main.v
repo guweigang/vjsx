@@ -4,6 +4,8 @@ import os
 import vjsx
 import runtimejs
 
+const cli_version = '0.0.1'
+
 struct CliOptions {
 	command          string
 	script_file      string
@@ -22,10 +24,45 @@ fn fail(message string) {
 }
 
 fn usage() {
-	println('Usage: vjsx [run] [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]')
-	println('       vjsx check [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]')
-	println('       vjsx check-runtime [--runtime|-r <node|script|browser>]')
-	println('       vjsx install [--registry <url>] [--dev] [package[@version]...]')
+	println(help_text())
+}
+
+fn version_text() string {
+	return 'vjsx ${cli_version}\n'
+}
+
+fn help_text() string {
+	return 'vjsx ${cli_version}
+
+Usage:
+  vjsx [run] [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
+  vjsx check [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
+  vjsx check-runtime [--runtime|-r <node|script|browser>]
+  vjsx capabilities [--runtime|-r <node|script|browser>]
+  vjsx install [--registry <url>] [--dev] [package[@version]...]
+  vjsx remove <package...>
+  vjsx uninstall <package...>
+  vjsx version
+  vjsx help
+
+Options:
+  -h, --help       Show this help text
+  -v, --version    Show the vjsx version
+  -m, --module     Run input as an ES module
+  -r, --runtime    Select host runtime profile: node, script, browser
+
+Runtime profiles:
+  node      Node-like host with process, Buffer, timers, fs/path/http/https/os,
+            child_process, fetch, sqlite, and mysql when compiled in.
+  script    Lighter script host with process, Buffer, URL, path, and
+            node:timers/promises; no filesystem/network modules by default.
+  browser   Browser-style module host with window/self, fetch, URL, timers,
+            streams, Blob, FormData, Encoding, Intl, and Web Crypto.
+
+Package commands:
+  install   Install package.json dependencies and write npm-compatible package-lock.json.
+  remove    Remove top-level dependencies from package.json, package-lock.json, and node_modules.
+'
 }
 
 fn read_env_script_args(args_file string) []string {
@@ -69,18 +106,30 @@ fn parse_args(args []string) CliOptions {
 		if opts := parse_env_options() {
 			return opts
 		}
-		usage()
-		fail('missing command or script path')
+		return CliOptions{
+			command: 'help'
+		}
 	}
 
 	mut rest := args.clone()
 	mut command := 'run'
-	if rest[0] in ['run', 'check', 'check-runtime', 'install'] {
+	if rest[0] in ['--help', '-h', 'help'] {
+		return CliOptions{
+			command: 'help'
+		}
+	}
+	if rest[0] in ['--version', '-v', 'version'] {
+		return CliOptions{
+			command: 'version'
+		}
+	}
+	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
+		'remove', 'uninstall'] {
 		command = rest[0]
 		rest = rest[1..].clone()
 	}
 
-	if command == 'install' {
+	if command == 'install' || command == 'remove' || command == 'uninstall' {
 		mut specs := []string{}
 		mut registry := os.getenv_opt('VJSX_NPM_REGISTRY') or { 'https://registry.npmjs.org' }
 		mut install_dev := false
@@ -89,6 +138,9 @@ fn parse_args(args []string) CliOptions {
 			arg := rest[i]
 			match arg {
 				'--registry' {
+					if command != 'install' {
+						fail('${arg} is only valid for install')
+					}
 					if i + 1 >= rest.len {
 						fail('missing registry URL after ${arg}')
 					}
@@ -96,6 +148,9 @@ fn parse_args(args []string) CliOptions {
 					i++
 				}
 				'--dev' {
+					if command != 'install' {
+						fail('${arg} is only valid for install')
+					}
 					install_dev = true
 				}
 				'--help', '-h' {
@@ -104,7 +159,7 @@ fn parse_args(args []string) CliOptions {
 				}
 				else {
 					if arg.starts_with('-') {
-						fail('unknown install flag: ${arg}')
+						fail('unknown ${command} flag: ${arg}')
 					}
 					specs << arg
 				}
@@ -117,6 +172,41 @@ fn parse_args(args []string) CliOptions {
 			install_registry: registry
 			install_dev:      install_dev
 			runtime_profile:  'node'
+		}
+	}
+
+	if command == 'capabilities' || command == 'host-capabilities' {
+		mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { '' }
+		mut i := 0
+		for i < rest.len {
+			arg := rest[i]
+			match arg {
+				'--runtime', '-r' {
+					if i + 1 >= rest.len {
+						fail('missing runtime profile after ${arg}')
+					}
+					runtime_profile = rest[i + 1]
+					i++
+				}
+				'--help', '-h' {
+					usage()
+					exit(0)
+				}
+				else {
+					if arg.starts_with('-') {
+						fail('unknown ${command} flag: ${arg}')
+					}
+					fail('unexpected ${command} argument: ${arg}')
+				}
+			}
+			i++
+		}
+		if runtime_profile != '' && runtime_profile !in ['node', 'script', 'browser'] {
+			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
+		}
+		return CliOptions{
+			command:         command
+			runtime_profile: runtime_profile
 		}
 	}
 
@@ -244,6 +334,86 @@ fn check_runtime(runtime_profile string) !string {
 	return 'ok\n'
 }
 
+fn capability_status(value bool) string {
+	if value {
+		return 'yes'
+	}
+	return 'no'
+}
+
+fn append_capability(mut lines []string, name string, available bool) {
+	lines << '  ${capability_status(available)} ${name}'
+}
+
+fn runtime_capabilities(runtime_profile string) !string {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	wd := os.getwd()
+	install_runtime(ctx, runtime_profile, wd, os.dir(wd), wd, ['vjsx', 'capabilities'])
+	snapshot := vjsx.runtime_profile_snapshot(ctx)
+	mut lines := []string{}
+	lines << 'runtime: ${runtime_profile}'
+	lines << 'globals:'
+	append_capability(mut lines, 'globalThis', runtime_profile_has_expr(ctx,
+		'typeof globalThis === "object"'))
+	append_capability(mut lines, 'AbortController', snapshot.has_abort_controller)
+	append_capability(mut lines, 'AbortSignal', snapshot.has_abort_signal)
+	append_capability(mut lines, 'EventTarget', snapshot.has_event_target)
+	append_capability(mut lines, 'URL', snapshot.has_url)
+	append_capability(mut lines, 'Buffer', snapshot.has_buffer)
+	append_capability(mut lines, 'process', snapshot.has_process)
+	append_capability(mut lines, 'setTimeout', snapshot.has_set_timeout)
+	append_capability(mut lines, 'clearTimeout', snapshot.has_clear_timeout)
+	append_capability(mut lines, 'fetch', snapshot.has_fetch)
+	append_capability(mut lines, 'window', runtime_profile_has_expr(ctx,
+		'typeof window === "object"'))
+	append_capability(mut lines, 'self', runtime_profile_has_expr(ctx, 'typeof self === "object"'))
+	append_capability(mut lines, 'Blob',
+		runtime_profile_has_expr(ctx, 'typeof Blob === "function"'))
+	append_capability(mut lines, 'FormData', runtime_profile_has_expr(ctx,
+		'typeof FormData === "function"'))
+	append_capability(mut lines, 'ReadableStream', runtime_profile_has_expr(ctx,
+		'typeof ReadableStream === "function"'))
+	append_capability(mut lines, 'TextEncoder', runtime_profile_has_expr(ctx,
+		'typeof TextEncoder === "function"'))
+	append_capability(mut lines, 'Intl', runtime_profile_has_expr(ctx, 'typeof Intl === "object"'))
+	append_capability(mut lines, 'crypto.subtle', runtime_profile_has_expr(ctx,
+		'typeof crypto === "object" && typeof crypto.subtle === "object"'))
+	lines << 'modules:'
+	append_capability(mut lines, 'node:timers/promises', snapshot.has_node_timers_promises)
+	append_capability(mut lines, 'fs', snapshot.has_fs_module)
+	append_capability(mut lines, 'path', snapshot.has_path_module)
+	append_capability(mut lines, 'http', snapshot.has_http_module)
+	append_capability(mut lines, 'https', snapshot.has_https_module)
+	append_capability(mut lines, 'os', snapshot.has_os_module)
+	append_capability(mut lines, 'child_process', snapshot.has_child_process_module)
+	append_capability(mut lines, 'sqlite', snapshot.has_sqlite_module)
+	append_capability(mut lines, 'mysql', snapshot.has_mysql_module)
+	return lines.join('\n') + '\n'
+}
+
+fn runtime_profile_has_expr(ctx &vjsx.Context, expr string) bool {
+	value := ctx.eval(expr, vjsx.type_global) or { return false }
+	defer {
+		value.free()
+	}
+	return value.to_bool()
+}
+
+fn capabilities_text(runtime_profile string) !string {
+	if runtime_profile != '' {
+		return runtime_capabilities(runtime_profile)
+	}
+	mut output := 'Supported host runtime profiles:\n\n'
+	for profile in ['node', 'script', 'browser'] {
+		output += runtime_capabilities(profile)! + '\n'
+	}
+	return output
+}
+
 fn run_script(opts CliOptions) !string {
 	script_path := os.real_path(opts.script_file)
 	if !os.exists(script_path) {
@@ -282,12 +452,37 @@ fn run_script(opts CliOptions) !string {
 }
 
 fn main() {
+	if cli_cwd := os.getenv_opt('VJS_CLI_CWD') {
+		if cli_cwd != '' {
+			os.chdir(cli_cwd) or { fail(err.msg()) }
+		}
+	}
 	opts := parse_args(os.args[1..])
 	output := match opts.command {
-		'check-runtime' { check_runtime(opts.runtime_profile) or { fail(err.msg()) } }
-		'check' { run_script(opts) or { fail(err.msg()) } }
-		'install' { install_packages(opts) or { fail(err.msg()) } }
-		else { run_script(opts) or { fail(err.msg()) } }
+		'help' {
+			help_text()
+		}
+		'version' {
+			version_text()
+		}
+		'check-runtime' {
+			check_runtime(opts.runtime_profile) or { fail(err.msg()) }
+		}
+		'capabilities', 'host-capabilities' {
+			capabilities_text(opts.runtime_profile) or { fail(err.msg()) }
+		}
+		'check' {
+			run_script(opts) or { fail(err.msg()) }
+		}
+		'install' {
+			install_packages(opts) or { fail(err.msg()) }
+		}
+		'remove', 'uninstall' {
+			remove_packages(opts) or { fail(err.msg()) }
+		}
+		else {
+			run_script(opts) or { fail(err.msg()) }
+		}
 	}
 	if output != '' {
 		print(output)

@@ -44,6 +44,28 @@ fn expected_node_endianness() string {
 	}
 }
 
+fn test_cli_help_and_version_commands() {
+	version_output := os.execute('sh ./vjsx --version')
+	assert version_output.exit_code == 0
+	assert version_output.output.trim_space().starts_with('vjsx ')
+	version_command_output := os.execute('sh ./vjsx version')
+	assert version_command_output.exit_code == 0
+	assert version_command_output.output == version_output.output
+	help_output := os.execute('sh ./vjsx --help')
+	assert help_output.exit_code == 0
+	assert help_output.output.contains('vjsx capabilities [--runtime|-r <node|script|browser>]')
+	assert help_output.output.contains('Runtime profiles:')
+}
+
+fn test_cli_capabilities_command() {
+	output := os.execute('sh ./vjsx capabilities --runtime node')
+	assert output.exit_code == 0
+	assert output.output.contains('runtime: node')
+	assert output.output.contains('yes globalThis')
+	assert output.output.contains('yes fs')
+	assert output.output.contains('yes path')
+}
+
 fn test_cli_run_file() {
 	output := os.execute('sh ./vjsx ./tests/test.js')
 	assert output.exit_code == 0
@@ -87,19 +109,22 @@ fn test_cli_browser_runtime_crypto_subtle_hmac() {
 }
 
 fn test_cli_browser_runtime_crypto_hmac_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/hmac_sign_verify.mjs')
+	output :=
+		os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/hmac_sign_verify.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == '32\ntrue'
 }
 
 fn test_cli_browser_runtime_crypto_aes_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/aes_cbc_encrypt_decrypt.mjs')
+	output :=
+		os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/aes_cbc_encrypt_decrypt.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == '16\nhello'
 }
 
 fn test_cli_browser_runtime_crypto_pbkdf2_example() {
-	output := os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/pbkdf2_derive_aes.mjs')
+	output :=
+		os.execute('sh ./vjsx --runtime browser --module ./examples/webcrypto/pbkdf2_derive_aes.mjs')
 	assert output.exit_code == 0
 	assert output.output.trim_space() == 'ae4d0c95af6b46d32d0adff928f06dd0\nAES-CBC:128'
 }
@@ -168,7 +193,8 @@ fn test_cli_run_typescript_module_graph() {
 }
 
 fn test_cli_run_typescript_tsconfig_paths() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_runtime', '.tsconfig_runtime_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_runtime',
+		'.tsconfig_runtime_output.txt')
 	os.rm(output_file) or {}
 	output := os.execute('sh ./vjsx --module ./tests/tsconfig_runtime/src/main.mts')
 	assert output.exit_code == 0
@@ -196,7 +222,8 @@ fn test_cli_run_typescript_node_package() {
 }
 
 fn test_cli_run_typescript_node_package_exports() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'ts_pkg_exports_runtime', '.ts_pkg_exports_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'ts_pkg_exports_runtime',
+		'.ts_pkg_exports_output.txt')
 	os.rm(output_file) or {}
 	output := os.execute('sh ./vjsx --module ./tests/ts_pkg_exports_runtime/main.mts')
 	assert output.exit_code == 0
@@ -205,7 +232,8 @@ fn test_cli_run_typescript_node_package_exports() {
 }
 
 fn test_cli_run_javascript_node_package_exports() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'js_pkg_exports_runtime', '.js_pkg_exports_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'js_pkg_exports_runtime',
+		'.js_pkg_exports_output.txt')
 	os.rm(output_file) or {}
 	output := os.execute('sh ./vjsx --module ./tests/js_pkg_exports_runtime/main.mjs')
 	assert output.exit_code == 0
@@ -342,7 +370,8 @@ fn test_cli_host_process_runtime_features() {
 	copy_path := os.join_path(@VMODROOT, 'tests', '.host_process_copy.txt')
 	os.rm(source_path) or {}
 	os.rm(copy_path) or {}
-	output := os.execute('VJS_PROCESS_MARKER=marker-value sh ./vjsx --module ./tests/host_process_runtime.mjs')
+	output :=
+		os.execute('VJS_PROCESS_MARKER=marker-value sh ./vjsx --module ./tests/host_process_runtime.mjs')
 	assert output.exit_code == 0
 	assert output.output.contains('true')
 	assert output.output.contains('11')

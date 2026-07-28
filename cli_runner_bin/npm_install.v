@@ -87,6 +87,49 @@ fn install_packages(opts CliOptions) !string {
 	return output
 }
 
+fn remove_packages(opts CliOptions) !string {
+	check_runtime('node')!
+	if opts.install_specs.len == 0 {
+		return error('missing package name to remove')
+	}
+	root := os.getwd()
+	mut removed := []string{}
+	mut missing := []string{}
+	mut package_names := []string{}
+	for spec in opts.install_specs {
+		parsed := parse_package_spec(spec)!
+		if parsed.name in package_names {
+			continue
+		}
+		package_names << parsed.name
+	}
+	manifest_result := remove_package_json_dependencies(root, package_names)!
+	mut lockfile := load_or_init_lockfile(root, true)!
+	for name in package_names {
+		if name in lockfile.root_dependencies {
+			lockfile.root_dependencies.delete(name)
+		}
+		lock_key := lock_package_key(name)
+		if lock_key in lockfile.packages {
+			lockfile.packages.delete(lock_key)
+		}
+		target := package_install_path(root, name)
+		if remove_installed_package_path(target)! {
+			removed << name
+		} else if name in manifest_result {
+			removed << name
+		} else {
+			missing << name
+		}
+	}
+	write_package_lock(root, lockfile)!
+	mut output := 'removed ${removed.len} package(s)\n'
+	for name in missing {
+		output += 'warning: ${name} was not installed or declared\n'
+	}
+	return output
+}
+
 fn normalize_registry(registry string) string {
 	mut trimmed := registry.trim_space()
 	if trimmed == '' {
@@ -620,6 +663,58 @@ fn write_package_json_dependencies(root string, additions map[string]string, dev
 	manifest[field] = json2.Any(string_map_to_any(deps))
 	os.write_file(path,
 		json2.encode(ordered_package_json_manifest(manifest), prettify: true) + '\n')!
+}
+
+fn remove_package_json_dependencies(root string, names []string) ![]string {
+	path := os.join_path(root, 'package.json')
+	if !os.exists(path) {
+		return []string{}
+	}
+	mut manifest := json2.decode[json2.Any](os.read_file(path)!)!.as_map()
+	mut removed := []string{}
+	for field in ['dependencies', 'devDependencies'] {
+		mut deps := any_string_map_from_manifest(manifest, field)
+		mut changed := false
+		for name in names {
+			if name in deps {
+				deps.delete(name)
+				if name !in removed {
+					removed << name
+				}
+				changed = true
+			}
+		}
+		if changed {
+			if deps.len == 0 {
+				manifest.delete(field)
+			} else {
+				manifest[field] = json2.Any(string_map_to_any(deps))
+			}
+		}
+	}
+	if removed.len > 0 {
+		os.write_file(path, json2.encode(ordered_package_json_manifest(manifest), prettify: true) +
+			'\n')!
+	}
+	return removed
+}
+
+fn remove_installed_package_path(path string) !bool {
+	if !os.exists(path) && !os.is_link(path) {
+		return false
+	}
+	if os.is_dir(path) && !os.is_link(path) {
+		os.rmdir_all(path)!
+		return true
+	}
+	$if windows {
+		if os.is_link(path) && os.is_dir(path) {
+			os.rmdir(path)!
+			return true
+		}
+	}
+	os.rm(path)!
+	return true
 }
 
 fn any_string_map_from_manifest(manifest map[string]json2.Any, field string) map[string]string {
