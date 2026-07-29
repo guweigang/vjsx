@@ -13,8 +13,37 @@ env:
   VCPKG_BINARY_CACHE_DIR: ${{ github.workspace }}\.cache\vcpkg-binary-cache
 
 jobs:
+  metadata:
+    name: Read release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vmod.outputs.version }}
+      tag: ${{ steps.vmod.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from v.mod
+        id: vmod
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -nE "s/^[[:space:]]*version:[[:space:]]*'([^']+)'.*/\1/p" v.mod | head -n 1)"
+          if [ -z "$version" ]; then
+            echo "failed to read version from v.mod" >&2
+            exit 1
+          fi
+          tag="v${version}"
+          if [[ "${GITHUB_REF}" == refs/tags/* && "${GITHUB_REF_NAME}" != "$tag" ]]; then
+            echo "tag ${GITHUB_REF_NAME} does not match v.mod version ${tag}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.artifact }}
+    needs: metadata
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -187,8 +216,36 @@ jobs:
           path: ${{ matrix.archive }}
           if-no-files-found: error
 
-      - name: Upload release asset
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  publish:
+    name: Publish ${{ needs.metadata.outputs.tag }}
+    needs:
+      - metadata
+      - build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: ${{ matrix.archive }}
+          path: release-artifacts
+
+      - name: Publish GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.metadata.outputs.tag }}"
+          version="${{ needs.metadata.outputs.version }}"
+          mapfile -t assets < <(find release-artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) | sort)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "no release assets found" >&2
+            exit 1
+          fi
+          notes="$(printf 'vjsx %s\n\nBuilt from GitHub Actions run: %s/%s/actions/runs/%s\n' \
+            "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
+          fi
