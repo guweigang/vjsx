@@ -30,7 +30,7 @@ jobs:
             binary: vjsx
             archive: vjsx-darwin-x64.tar.gz
             shell: bash
-          - os: macos-14
+          - os: macos-15
             artifact: vjsx-darwin-arm64
             binary: vjsx
             archive: vjsx-darwin-arm64.tar.gz

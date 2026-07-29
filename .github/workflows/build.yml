@@ -19,7 +19,7 @@ jobs:
             lib_name: qjs_macos_x64.a
             archive_path: libs/qjs_macos_x64.a
             cmake_generator: Unix Makefiles
-          - os: macos-14
+          - os: macos-15
             lib_name: qjs_macos_arm64.a
             archive_path: libs/qjs_macos_arm64.a
             cmake_generator: Unix Makefiles
