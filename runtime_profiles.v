@@ -8,9 +8,10 @@ pub:
 	fs_roots     []string
 	process_args []string
 	asset_root   string
-	fetch        bool      = true
-	log_fn       HostLogFn = default_host_log
-	error_fn     HostLogFn = default_host_error
+	fetch        bool               = true
+	fetch_config FetchGlobalsConfig = FetchGlobalsConfig{}
+	log_fn       HostLogFn          = default_host_log
+	error_fn     HostLogFn          = default_host_error
 }
 
 // NodeRuntimeConfig describes a fuller Node-like runtime profile.
@@ -20,9 +21,10 @@ pub:
 	fs_roots     []string
 	process_args []string
 	asset_root   string
-	fetch        bool      = true
-	log_fn       HostLogFn = default_host_log
-	error_fn     HostLogFn = default_host_error
+	fetch        bool               = true
+	fetch_config FetchGlobalsConfig = FetchGlobalsConfig{}
+	log_fn       HostLogFn          = default_host_log
+	error_fn     HostLogFn          = default_host_error
 }
 
 // Install a lightweight script runtime profile.
@@ -37,6 +39,7 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 		fs_roots:      config.fs_roots
 		process_args:  config.process_args
 		asset_root:    config.asset_root
+		fetch_config:  config.fetch_config
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	})
@@ -50,6 +53,7 @@ pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
 		fs_roots:     config.fs_roots
 		process_args: config.process_args
 		asset_root:   config.asset_root
+		fetch_config: config.fetch_config
 		log_fn:       config.log_fn
 		error_fn:     config.error_fn
 	})

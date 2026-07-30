@@ -1,6 +1,17 @@
 module vjsx
 
 import net.http
+import time
+
+@[params]
+pub struct FetchGlobalsConfig {
+pub:
+	read_timeout  i64 = 30 * time.second
+	write_timeout i64 = 30 * time.second
+	max_retries   int = 5
+}
+
+const fetch_globals_config_key = '__vjs_fetch_globals_config'
 
 fn fetch_get_bootstrap(ctx &Context) (Value, Value) {
 	glob := ctx.js_global()
@@ -121,6 +132,43 @@ fn fetch_encoding_boot(ctx &Context, boot Value) {
 	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
 }
 
+fn fetch_config_from_boot(boot Value) FetchGlobalsConfig {
+	value := boot.get(fetch_globals_config_key)
+	defer {
+		value.free()
+	}
+	if !value.is_object() {
+		return FetchGlobalsConfig{}
+	}
+	read_timeout_value := value.get('readTimeout')
+	defer {
+		read_timeout_value.free()
+	}
+	write_timeout_value := value.get('writeTimeout')
+	defer {
+		write_timeout_value.free()
+	}
+	max_retries_value := value.get('maxRetries')
+	defer {
+		max_retries_value.free()
+	}
+	read_timeout := if read_timeout_value.is_undefined() {
+		i64(0)
+	} else {
+		i64(read_timeout_value.to_int())
+	}
+	write_timeout := if write_timeout_value.is_undefined() {
+		i64(0)
+	} else {
+		i64(write_timeout_value.to_int())
+	}
+	max_retries := if max_retries_value.is_undefined() { -1 } else { max_retries_value.to_int() }
+	return FetchGlobalsConfig{
+		read_timeout:  if read_timeout > 0 { read_timeout } else { 30 * time.second }
+		write_timeout: if write_timeout > 0 { write_timeout } else { 30 * time.second }
+		max_retries:   if max_retries >= 0 { max_retries } else { 5 }
+	}
+}
 
 fn fetch_core(this Value, args []Value) Value {
 	mut error := this.ctx.js_undefined()
@@ -169,13 +217,21 @@ fn fetch_core(this Value, args []Value) Value {
 	}
 	request_method := http.Method.from(method.str().to_lower()) or { http.Method.get }
 	body := raw_body.str()
+	boot := this.ctx.js_global('__bootstrap')
+	defer {
+		boot.free()
+	}
+	fetch_config := fetch_config_from_boot(boot)
 	mut resp := http.Response{}
 	if boundary.is_undefined() {
 		resp = http.fetch(
-			url:    url
-			method: request_method
-			header: hd
-			data:   body
+			url:           url
+			method:        request_method
+			header:        hd
+			data:          body
+			read_timeout:  fetch_config.read_timeout
+			write_timeout: fetch_config.write_timeout
+			max_retries:   fetch_config.max_retries
 		) or {
 			error = this.ctx.js_error(message: err.msg())
 			return promise.reject(error)
@@ -207,8 +263,14 @@ fn fetch_boot(ctx &Context, boot Value) {
 	boot.set('core_fetch', ctx.js_function_this(fetch_core))
 }
 
-pub fn (ctx &Context) install_fetch_globals() {
+pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
 	glob, boot := fetch_get_bootstrap(ctx)
+	config_object := ctx.js_object()
+	config_object.set('readTimeout', int(config.read_timeout))
+	config_object.set('writeTimeout', int(config.write_timeout))
+	config_object.set('maxRetries', config.max_retries)
+	boot.set(fetch_globals_config_key, config_object)
+	config_object.free()
 	fetch_util_boot(ctx, boot)
 	fetch_encoding_boot(ctx, boot)
 	fetch_boot(ctx, boot)

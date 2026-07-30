@@ -20,8 +20,9 @@ pub:
 	fs_roots      []string
 	process_args  []string
 	asset_root    string
-	log_fn        HostLogFn = default_host_log
-	error_fn      HostLogFn = default_host_error
+	fetch_config  FetchGlobalsConfig = FetchGlobalsConfig{}
+	log_fn        HostLogFn          = default_host_log
+	error_fn      HostLogFn          = default_host_error
 }
 
 // Full Node-like compatibility preset.
@@ -62,7 +63,7 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 		ctx.install_node_timers_promises_module()
 	}
 	if config.fetch {
-		ctx.install_fetch_globals()
+		ctx.install_fetch_globals(config.fetch_config)
 	}
 	if config.fs {
 		ctx.install_fs_module(config.fs_roots)
@@ -110,6 +111,7 @@ fn (config HostConfig) node_compat_config() NodeCompatConfig {
 		fs_roots:      config.fs_roots
 		process_args:  config.process_args
 		asset_root:    config.asset_root
+		fetch_config:  config.fetch_config
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	}
