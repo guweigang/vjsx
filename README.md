@@ -214,6 +214,11 @@ Packages can be installed without a local Node/npm dependency:
 ./vjsx install is-number@7.0.0
 ./vjsx install
 ./vjsx install --dev typescript
+./vjsx ls
+./vjsx ls --json
+./vjsx ls --depth 0
+./vjsx ls --omit=dev
+./vjsx ls --omit=dev,optional
 ./vjsx remove is-number
 ./vjsx uninstall typescript
 ```
@@ -228,6 +233,14 @@ package spec is provided, the installer reads `dependencies` from
 `package-lock.json`, and the top-level `node_modules` entry. Transitive
 dependencies are left in place for now so removing one package does not break
 another package that may still share the same dependency.
+
+`vjsx ls` and `vjsx list` print an npm-style dependency tree from the current
+`package-lock.json` and `node_modules`. Pass `--json` for npm-style structured
+output, `--depth 0` to show only top-level dependencies, `--omit=dev`,
+`--omit=optional`, or `--omit=peer` to hide selected dependency classes, or pass
+package names to inspect selected roots. JSON output includes
+`dependencyType`, with values `dev`, `optional`, `peer`, or `prod` when the
+dependency is not in one of the other root dependency sections.
 
 `vjsx install` writes npm-compatible `package-lock.json` v3 data and reuses an
 existing lockfile when present. It also supports basic `workspaces` entries by

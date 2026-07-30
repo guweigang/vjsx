@@ -15,6 +15,9 @@ struct CliOptions {
 	install_specs    []string
 	install_registry string
 	install_dev      bool
+	list_depth       int = -1
+	list_omit        []string
+	list_json        bool
 }
 
 @[noreturn]
@@ -40,6 +43,8 @@ Usage:
   vjsx check-runtime [--runtime|-r <node|script|browser>]
   vjsx capabilities [--runtime|-r <node|script|browser>]
   vjsx install [--registry <url>] [--dev] [package[@version]...]
+  vjsx ls [--json] [--depth <n>] [--omit=<dev|optional|peer>] [package...]
+  vjsx list [--json] [--depth <n>] [--omit=<dev|optional|peer>] [package...]
   vjsx remove <package...>
   vjsx uninstall <package...>
   vjsx version
@@ -61,6 +66,7 @@ Runtime profiles:
 
 Package commands:
   install   Install package.json dependencies and write npm-compatible package-lock.json.
+  ls        Print the installed dependency tree from package-lock.json and node_modules.
   remove    Remove top-level dependencies from package.json, package-lock.json, and node_modules.
 '
 }
@@ -124,18 +130,36 @@ fn parse_args(args []string) CliOptions {
 		}
 	}
 	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
-		'remove', 'uninstall'] {
+		'ls', 'list', 'remove', 'uninstall'] {
 		command = rest[0]
 		rest = rest[1..].clone()
 	}
 
-	if command == 'install' || command == 'remove' || command == 'uninstall' {
+	if command == 'install' || command == 'remove' || command == 'uninstall' || command == 'ls'
+		|| command == 'list' {
 		mut specs := []string{}
 		mut registry := os.getenv_opt('VJSX_NPM_REGISTRY') or { 'https://registry.npmjs.org' }
 		mut install_dev := false
+		mut list_depth := -1
+		mut list_omit := []string{}
+		mut list_json := false
 		mut i := 0
 		for i < rest.len {
 			arg := rest[i]
+			if (command == 'ls' || command == 'list') && arg.starts_with('--depth=') {
+				depth_value := arg['--depth='.len..]
+				list_depth = depth_value.int()
+				if list_depth < 0 {
+					fail('depth must be 0 or greater')
+				}
+				i++
+				continue
+			}
+			if (command == 'ls' || command == 'list') && arg.starts_with('--omit=') {
+				append_list_omit(arg['--omit='.len..], mut list_omit)
+				i++
+				continue
+			}
 			match arg {
 				'--registry' {
 					if command != 'install' {
@@ -152,6 +176,47 @@ fn parse_args(args []string) CliOptions {
 						fail('${arg} is only valid for install')
 					}
 					install_dev = true
+				}
+				'--depth', '-d' {
+					if command != 'ls' && command != 'list' {
+						fail('${arg} is only valid for ls')
+					}
+					if i + 1 >= rest.len {
+						fail('missing depth after ${arg}')
+					}
+					list_depth = rest[i + 1].int()
+					if list_depth < 0 {
+						fail('depth must be 0 or greater')
+					}
+					i++
+				}
+				'--all' {
+					if command != 'ls' && command != 'list' {
+						fail('${arg} is only valid for ls')
+					}
+					list_depth = -1
+				}
+				'--omit' {
+					if command != 'ls' && command != 'list' {
+						fail('${arg} is only valid for ls')
+					}
+					if i + 1 >= rest.len {
+						fail('missing dependency type after ${arg}')
+					}
+					append_list_omit(rest[i + 1], mut list_omit)
+					i++
+				}
+				'--production', '--prod' {
+					if command != 'ls' && command != 'list' {
+						fail('${arg} is only valid for ls')
+					}
+					append_list_omit('dev', mut list_omit)
+				}
+				'--json' {
+					if command != 'ls' && command != 'list' {
+						fail('${arg} is only valid for ls')
+					}
+					list_json = true
 				}
 				'--help', '-h' {
 					usage()
@@ -171,6 +236,9 @@ fn parse_args(args []string) CliOptions {
 			install_specs:    specs
 			install_registry: registry
 			install_dev:      install_dev
+			list_depth:       list_depth
+			list_omit:        list_omit
+			list_json:        list_json
 			runtime_profile:  'node'
 		}
 	}
@@ -269,6 +337,21 @@ fn parse_args(args []string) CliOptions {
 		script_args:     script_args
 		as_module:       as_module
 		runtime_profile: runtime_profile
+	}
+}
+
+fn append_list_omit(value string, mut list_omit []string) {
+	for item in value.split(',') {
+		kind := item.trim_space()
+		if kind == '' {
+			continue
+		}
+		if kind !in ['dev', 'optional', 'peer'] {
+			fail('unsupported omit value: ${kind}')
+		}
+		if kind !in list_omit {
+			list_omit << kind
+		}
 	}
 }
 
@@ -476,6 +559,9 @@ fn main() {
 		}
 		'install' {
 			install_packages(opts) or { fail(err.msg()) }
+		}
+		'ls', 'list' {
+			list_packages(opts) or { fail(err.msg()) }
 		}
 		'remove', 'uninstall' {
 			remove_packages(opts) or { fail(err.msg()) }

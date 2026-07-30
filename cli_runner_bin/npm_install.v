@@ -28,10 +28,13 @@ struct LockPackage {
 
 struct Lockfile {
 mut:
-	name              string
-	version           string
-	root_dependencies map[string]string
-	packages          map[string]LockPackage
+	name                       string
+	version                    string
+	root_dependencies          map[string]string
+	root_dev_dependencies      map[string]string
+	root_optional_dependencies map[string]string
+	root_peer_dependencies     map[string]string
+	packages                   map[string]LockPackage
 }
 
 struct Installer {
@@ -71,6 +74,17 @@ fn install_packages(opts CliOptions) !string {
 			'latest'
 		}
 		installer.lock.root_dependencies[parsed.name] = dependency_version
+		if installer.dev {
+			installer.lock.root_dev_dependencies[parsed.name] = dependency_version
+		} else if parsed.name in installer.lock.root_dev_dependencies {
+			installer.lock.root_dev_dependencies.delete(parsed.name)
+		}
+		if parsed.name in installer.lock.root_optional_dependencies {
+			installer.lock.root_optional_dependencies.delete(parsed.name)
+		}
+		if parsed.name in installer.lock.root_peer_dependencies {
+			installer.lock.root_peer_dependencies.delete(parsed.name)
+		}
 		if opts.install_specs.len > 0 {
 			explicit_dependencies[parsed.name] = dependency_version
 		}
@@ -109,6 +123,15 @@ fn remove_packages(opts CliOptions) !string {
 		if name in lockfile.root_dependencies {
 			lockfile.root_dependencies.delete(name)
 		}
+		if name in lockfile.root_dev_dependencies {
+			lockfile.root_dev_dependencies.delete(name)
+		}
+		if name in lockfile.root_optional_dependencies {
+			lockfile.root_optional_dependencies.delete(name)
+		}
+		if name in lockfile.root_peer_dependencies {
+			lockfile.root_peer_dependencies.delete(name)
+		}
 		lock_key := lock_package_key(name)
 		if lock_key in lockfile.packages {
 			lockfile.packages.delete(lock_key)
@@ -128,6 +151,221 @@ fn remove_packages(opts CliOptions) !string {
 		output += 'warning: ${name} was not installed or declared\n'
 	}
 	return output
+}
+
+fn list_packages(opts CliOptions) !string {
+	root := os.getwd()
+	lockfile := load_or_init_lockfile(root, true)!
+	root_name := if lockfile.name != '' { lockfile.name } else { os.base(root) }
+	root_version := if lockfile.version != '' { '@${lockfile.version}' } else { '' }
+	mut lines := ['${root_name}${root_version} ${root}']
+	mut names := []string{}
+	if opts.install_specs.len > 0 {
+		for spec in opts.install_specs {
+			parsed := parse_package_spec(spec)!
+			if parsed.name !in names {
+				names << parsed.name
+			}
+		}
+	} else {
+		names = sorted_string_map_keys(lockfile.root_dependencies)
+	}
+	if opts.list_omit.len > 0 {
+		names = names.filter(!dependency_type_omitted(root_dependency_type(lockfile, it),
+			opts.list_omit))
+	}
+	if opts.list_json {
+		return list_packages_json(root, lockfile, names, opts)
+	}
+	effective_depth := if opts.install_specs.len > 0 { 0 } else { opts.list_depth }
+	for index, name in names {
+		requested := lockfile.root_dependencies[name] or { '' }
+		mut visiting := []string{}
+		append_dependency_tree(mut lines, root, lockfile, name, requested, '',
+			index == names.len - 1, effective_depth, mut visiting)
+	}
+	return lines.join('\n') + '\n'
+}
+
+fn list_packages_json(root string, lockfile Lockfile, names []string, opts CliOptions) string {
+	root_name := if lockfile.name != '' { lockfile.name } else { os.base(root) }
+	parent_label := if lockfile.version != '' {
+		'${root_name}@${lockfile.version}'
+	} else {
+		root_name
+	}
+	mut root_json := map[string]json2.Any{}
+	if lockfile.version != '' {
+		root_json['version'] = json2.Any(lockfile.version)
+	}
+	root_json['name'] = json2.Any(root_name)
+	mut dependencies := map[string]json2.Any{}
+	mut problems := []string{}
+	effective_depth := if opts.install_specs.len > 0 { 0 } else { opts.list_depth }
+	for name in names {
+		requested := lockfile.root_dependencies[name] or { '' }
+		mut visiting := []string{}
+		dependency_type := root_dependency_type(lockfile, name)
+		dependencies[name] = json2.Any(package_json_node(root, lockfile, name, requested,
+			effective_depth, parent_label, dependency_type, mut visiting, mut problems))
+	}
+	if dependencies.len > 0 {
+		root_json['dependencies'] = json2.Any(dependencies)
+	}
+	if problems.len > 0 {
+		root_json['problems'] = json2.Any(string_array_to_any(problems))
+		mut error_json := map[string]json2.Any{}
+		error_json['code'] = json2.Any('ELSPROBLEMS')
+		error_json['summary'] = json2.Any(problems.join('\n'))
+		error_json['detail'] = json2.Any('')
+		root_json['error'] = json2.Any(error_json)
+	}
+	return json2.encode(root_json, prettify: true) + '\n'
+}
+
+fn root_dependency_type(lockfile Lockfile, name string) string {
+	if name in lockfile.root_dev_dependencies {
+		return 'dev'
+	}
+	if name in lockfile.root_optional_dependencies {
+		return 'optional'
+	}
+	if name in lockfile.root_peer_dependencies {
+		return 'peer'
+	}
+	return 'prod'
+}
+
+fn dependency_type_omitted(dependency_type string, omit []string) bool {
+	return dependency_type in omit
+}
+
+fn package_json_node(root string, lockfile Lockfile, name string, requested string, depth_remaining int, parent_label string, dependency_type string, mut visiting []string, mut problems []string) map[string]json2.Any {
+	lock_key := lock_package_key(name)
+	mut version := requested
+	mut deps := map[string]string{}
+	mut found := false
+	if lock_pkg := lockfile.packages[lock_key] {
+		found = true
+		version = lock_pkg.version
+		deps = lock_pkg.dependencies.clone()
+	} else {
+		installed_version := installed_package_version(root, name)
+		if installed_version != '' {
+			found = true
+			version = installed_version
+		}
+	}
+	mut node := map[string]json2.Any{}
+	if !found {
+		problem := 'missing: ${name}@${requested}, required by ${parent_label}'
+		node['required'] = json2.Any(requested)
+		node['missing'] = json2.Any(true)
+		node['dependencyType'] = json2.Any(dependency_type)
+		node['problems'] = json2.Any(string_array_to_any([problem]))
+		problems << problem
+		return node
+	}
+	node['version'] = json2.Any(version)
+	node['overridden'] = json2.Any(false)
+	node['dependencyType'] = json2.Any(dependency_type)
+	visit_key := '${name}@${version}'
+	if visit_key in visiting || depth_remaining == 0 || deps.len == 0 {
+		return node
+	}
+	visiting << visit_key
+	child_names := sorted_string_map_keys(deps)
+	next_depth := if depth_remaining > 0 { depth_remaining - 1 } else { depth_remaining }
+	child_parent := '${name}@${version}'
+	mut child_deps := map[string]json2.Any{}
+	for child_name in child_names {
+		child_deps[child_name] = json2.Any(package_json_node(root, lockfile, child_name,
+			deps[child_name], next_depth, child_parent, dependency_type, mut visiting, mut problems))
+	}
+	visiting.delete(visiting.len - 1)
+	if child_deps.len > 0 {
+		node['dependencies'] = json2.Any(child_deps)
+	}
+	return node
+}
+
+fn string_array_to_any(values []string) []json2.Any {
+	mut out := []json2.Any{}
+	for value in values {
+		out << json2.Any(value)
+	}
+	return out
+}
+
+fn append_dependency_tree(mut lines []string, root string, lockfile Lockfile, name string, requested string, prefix string, is_last bool, depth_remaining int, mut visiting []string) {
+	lock_key := lock_package_key(name)
+	mut version := requested
+	mut suffix := ''
+	mut deps := map[string]string{}
+	mut found := false
+	if lock_pkg := lockfile.packages[lock_key] {
+		found = true
+		version = lock_pkg.version
+		deps = lock_pkg.dependencies.clone()
+		if lock_pkg.link && lock_pkg.resolved != '' {
+			suffix = ' -> ${lock_pkg.resolved}'
+		}
+	} else {
+		installed_version := installed_package_version(root, name)
+		if installed_version != '' {
+			found = true
+			version = installed_version
+		}
+	}
+	mut label := name
+	if version != '' {
+		label += '@${version}'
+	}
+	if !found {
+		label = 'UNMET DEPENDENCY ${label}'
+	}
+	visit_key := '${name}@${version}'
+	cyclic := visit_key in visiting
+	if cyclic {
+		label += ' cycle'
+	}
+	has_children := found && !cyclic && depth_remaining != 0 && deps.len > 0
+	branch := npm_tree_branch(is_last, has_children)
+	lines << '${prefix}${branch}${label}${suffix}'
+	if !has_children {
+		return
+	}
+	visiting << visit_key
+	child_prefix := prefix + if is_last { '  ' } else { '│ ' }
+	child_names := sorted_string_map_keys(deps)
+	next_depth := if depth_remaining > 0 { depth_remaining - 1 } else { depth_remaining }
+	for index, child_name in child_names {
+		append_dependency_tree(mut lines, root, lockfile, child_name, deps[child_name],
+			child_prefix, index == child_names.len - 1, next_depth, mut visiting)
+	}
+	visiting.delete(visiting.len - 1)
+}
+
+fn npm_tree_branch(is_last bool, has_children bool) string {
+	if has_children {
+		return if is_last { '└─┬ ' } else { '├─┬ ' }
+	}
+	return if is_last { '└── ' } else { '├── ' }
+}
+
+fn installed_package_version(root string, name string) string {
+	path := os.join_path(package_install_path(root, name), 'package.json')
+	if !os.exists(path) {
+		return ''
+	}
+	pkg := json2.decode[json2.Any](os.read_file(path) or { return '' }) or { return '' }
+	return any_string_field_optional(pkg.as_map(), 'version')
+}
+
+fn sorted_string_map_keys(values map[string]string) []string {
+	mut keys := values.keys()
+	keys.sort()
+	return keys
 }
 
 fn normalize_registry(registry string) string {
@@ -584,22 +822,33 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 	mut name := ''
 	mut version := ''
 	mut root_dependencies := map[string]string{}
+	mut root_dev_dependencies := map[string]string{}
+	mut root_optional_dependencies := map[string]string{}
+	mut root_peer_dependencies := map[string]string{}
 	if os.exists(manifest_path) {
 		manifest := json2.decode[json2.Any](os.read_file(manifest_path)!)!
 		manifest_map := manifest.as_map()
 		name = any_string_field_optional(manifest_map, 'name')
 		version = any_string_field_optional(manifest_map, 'version')
 		append_dependency_map(manifest, 'dependencies', mut root_dependencies)
+		append_dependency_map(manifest, 'optionalDependencies', mut root_optional_dependencies)
+		append_dependency_map(manifest, 'peerDependencies', mut root_peer_dependencies)
+		merge_dependency_map(mut root_dependencies, root_optional_dependencies)
+		merge_dependency_map(mut root_dependencies, root_peer_dependencies)
 		if include_dev {
-			append_dependency_map(manifest, 'devDependencies', mut root_dependencies)
+			append_dependency_map(manifest, 'devDependencies', mut root_dev_dependencies)
+			merge_dependency_map(mut root_dependencies, root_dev_dependencies)
 		}
 	}
 	lock_path := os.join_path(root, 'package-lock.json')
 	mut lockfile := Lockfile{
-		name:              name
-		version:           version
-		root_dependencies: root_dependencies
-		packages:          map[string]LockPackage{}
+		name:                       name
+		version:                    version
+		root_dependencies:          root_dependencies
+		root_dev_dependencies:      root_dev_dependencies
+		root_optional_dependencies: root_optional_dependencies
+		root_peer_dependencies:     root_peer_dependencies
+		packages:                   map[string]LockPackage{}
 	}
 	if !os.exists(lock_path) {
 		return lockfile
@@ -621,8 +870,30 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 	for path, pkg_any in packages_any as map[string]json2.Any {
 		pkg_map := pkg_any.as_map()
 		if path == '' {
-			lockfile.root_dependencies =
-				any_string_map(any_object_optional(pkg_any, 'dependencies'))
+			lock_dependencies := any_string_map(any_object_optional(pkg_any, 'dependencies'))
+			lock_dev_dependencies := any_string_map(any_object_optional(pkg_any, 'devDependencies'))
+			lock_optional_dependencies := any_string_map(any_object_optional(pkg_any,
+				'optionalDependencies'))
+			lock_peer_dependencies := any_string_map(any_object_optional(pkg_any,
+				'peerDependencies'))
+			if lockfile.root_dependencies.len == 0 {
+				lockfile.root_dependencies = lock_dependencies.clone()
+			}
+			if lockfile.root_optional_dependencies.len == 0 {
+				lockfile.root_optional_dependencies = lock_optional_dependencies.clone()
+			}
+			if lockfile.root_peer_dependencies.len == 0 {
+				lockfile.root_peer_dependencies = lock_peer_dependencies.clone()
+			}
+			merge_dependency_map(mut lockfile.root_dependencies,
+				lockfile.root_optional_dependencies)
+			merge_dependency_map(mut lockfile.root_dependencies, lockfile.root_peer_dependencies)
+			if include_dev {
+				if lockfile.root_dev_dependencies.len == 0 {
+					lockfile.root_dev_dependencies = lock_dev_dependencies.clone()
+				}
+				merge_dependency_map(mut lockfile.root_dependencies, lockfile.root_dev_dependencies)
+			}
 			continue
 		}
 		lockfile.packages[path] = LockPackage{
@@ -646,6 +917,12 @@ fn append_dependency_map(manifest json2.Any, field string, mut deps map[string]s
 		if version_any is string {
 			deps[name] = version_any
 		}
+	}
+}
+
+fn merge_dependency_map(mut target map[string]string, source map[string]string) {
+	for name, version in source {
+		target[name] = version
 	}
 }
 
@@ -794,7 +1071,19 @@ fn package_lock_to_json(lockfile Lockfile) map[string]json2.Any {
 	if lockfile.version != '' {
 		root_pkg['version'] = json2.Any(lockfile.version)
 	}
-	root_pkg['dependencies'] = json2.Any(string_map_to_any(lockfile.root_dependencies))
+	prod_dependencies := prod_dependency_map(lockfile)
+	if prod_dependencies.len > 0 {
+		root_pkg['dependencies'] = json2.Any(string_map_to_any(prod_dependencies))
+	}
+	if lockfile.root_dev_dependencies.len > 0 {
+		root_pkg['devDependencies'] = json2.Any(string_map_to_any(lockfile.root_dev_dependencies))
+	}
+	if lockfile.root_optional_dependencies.len > 0 {
+		root_pkg['optionalDependencies'] = json2.Any(string_map_to_any(lockfile.root_optional_dependencies))
+	}
+	if lockfile.root_peer_dependencies.len > 0 {
+		root_pkg['peerDependencies'] = json2.Any(string_map_to_any(lockfile.root_peer_dependencies))
+	}
 	packages[''] = json2.Any(root_pkg)
 	mut keys := lockfile.packages.keys()
 	keys.sort()
@@ -820,6 +1109,17 @@ fn package_lock_to_json(lockfile Lockfile) map[string]json2.Any {
 	}
 	root['packages'] = json2.Any(packages)
 	return root
+}
+
+fn prod_dependency_map(lockfile Lockfile) map[string]string {
+	mut deps := map[string]string{}
+	for name, version in lockfile.root_dependencies {
+		if name !in lockfile.root_dev_dependencies && name !in lockfile.root_optional_dependencies
+			&& name !in lockfile.root_peer_dependencies {
+			deps[name] = version
+		}
+	}
+	return deps
 }
 
 fn verify_integrity(data []u8, integrity string) ! {

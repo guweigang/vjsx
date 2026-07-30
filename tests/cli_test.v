@@ -66,6 +66,89 @@ fn test_cli_capabilities_command() {
 	assert output.output.contains('yes path')
 }
 
+fn test_cli_ls_command_prints_dependency_tree() {
+	base_dir := os.join_path(os.temp_dir(), 'vjsx_cli_ls_test_${os.getpid()}')
+	runner := os.join_path(os.temp_dir(), 'vjsx_cli_ls_test_${os.getpid()}_bin')
+	build_output :=
+		os.execute('cd ${@VMODROOT} && VJS_QUICKJS_PATH=$(./scripts/ensure-quickjs.sh) v -d build_quickjs -o ${runner} ./cli_runner_bin')
+	assert build_output.exit_code == 0
+	os.rmdir_all(base_dir) or {}
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'a')) or { panic(err) }
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'b')) or { panic(err) }
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'c')) or { panic(err) }
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'devonly')) or { panic(err) }
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'optionalonly')) or { panic(err) }
+	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'peeronly')) or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'package.json'),
+		'{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(base_dir, 'package-lock.json'),
+		'{"name":"ls-smoke","version":"1.2.3","lockfileVersion":3,"requires":true,"packages":{"":{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"2.0.0","c":"3.0.0"}},"node_modules/b":{"version":"2.0.0"},"node_modules/c":{"version":"3.0.0"},"node_modules/devonly":{"version":"4.0.0"},"node_modules/optionalonly":{"version":"5.0.0"},"node_modules/peeronly":{"version":"6.0.0"}}}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(base_dir, 'node_modules', 'a', 'package.json'),
+		'{"name":"a","version":"1.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'b', 'package.json'),
+		'{"name":"b","version":"2.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'c', 'package.json'),
+		'{"name":"c","version":"3.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'devonly', 'package.json'),
+		'{"name":"devonly","version":"4.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'optionalonly', 'package.json'),
+		'{"name":"optionalonly","version":"5.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'peeronly', 'package.json'),
+		'{"name":"peeronly","version":"6.0.0"}') or { panic(err) }
+	all_output := os.execute('cd ${base_dir} && ${runner} ls')
+	assert all_output.exit_code == 0
+	assert all_output.output.contains('ls-smoke@1.2.3 ')
+	assert all_output.output.contains('├─┬ a@1.0.0')
+	assert all_output.output.contains('│ ├── b@2.0.0')
+	assert all_output.output.contains('│ └── c@3.0.0')
+	assert all_output.output.contains('├── devonly@4.0.0')
+	assert all_output.output.contains('optionalonly@5.0.0')
+	assert all_output.output.contains('peeronly@6.0.0')
+	assert all_output.output.contains('UNMET DEPENDENCY missing@^9.0.0')
+	depth_output := os.execute('cd ${base_dir} && ${runner} ls --depth 0')
+	assert depth_output.exit_code == 0
+	assert !depth_output.output.contains('b@2.0.0')
+	assert !depth_output.output.contains('c@3.0.0')
+	prod_output := os.execute('cd ${base_dir} && ${runner} ls --omit=dev --depth 0')
+	assert prod_output.exit_code == 0
+	assert prod_output.output.contains('a@1.0.0')
+	assert !prod_output.output.contains('devonly@4.0.0')
+	omit_optional_output := os.execute('cd ${base_dir} && ${runner} ls --omit=optional --depth 0')
+	assert omit_optional_output.exit_code == 0
+	assert !omit_optional_output.output.contains('optionalonly@5.0.0')
+	omit_peer_output := os.execute('cd ${base_dir} && ${runner} ls --omit peer --depth 0')
+	assert omit_peer_output.exit_code == 0
+	assert !omit_peer_output.output.contains('peeronly@6.0.0')
+	filter_output := os.execute('cd ${base_dir} && ${runner} list a')
+	assert filter_output.exit_code == 0
+	assert filter_output.output.contains('└── a@1.0.0')
+	assert !filter_output.output.contains('missing@^9.0.0')
+	json_output := os.execute('cd ${base_dir} && ${runner} ls --json --depth 1')
+	assert json_output.exit_code == 0
+	assert json_output.output.contains('"name": "ls-smoke"')
+	assert json_output.output.contains('"version": "1.2.3"')
+	assert json_output.output.contains('"a": {')
+	assert json_output.output.contains('"b": {')
+	assert json_output.output.contains('"devonly": {')
+	assert json_output.output.contains('"optionalonly": {')
+	assert json_output.output.contains('"peeronly": {')
+	assert json_output.output.contains('"dependencyType": "prod"')
+	assert json_output.output.contains('"dependencyType": "dev"')
+	assert json_output.output.contains('"dependencyType": "optional"')
+	assert json_output.output.contains('"dependencyType": "peer"')
+	assert !json_output.output.contains('"production"')
+	assert json_output.output.contains('"missing": true')
+	assert json_output.output.contains('"code": "ELSPROBLEMS"')
+	prod_json_output := os.execute('cd ${base_dir} && ${runner} ls --depth=0 --json --omit=dev')
+	assert prod_json_output.exit_code == 0
+	assert prod_json_output.output.contains('"a": {')
+	assert !prod_json_output.output.contains('"devonly": {')
+}
+
 fn test_cli_run_file() {
 	output := os.execute('sh ./vjsx ./tests/test.js')
 	assert output.exit_code == 0
