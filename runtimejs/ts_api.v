@@ -66,6 +66,21 @@ fn typescript_needs_emit(ctx &vjsx.Context, script_path string) !bool {
 	return output.to_bool()
 }
 
+pub fn normalize_interactive_javascript(ctx &vjsx.Context, source string, script_name string) !string {
+	normalize_fn := ctx.js_global('__vjs_normalize_interactive_javascript')
+	defer {
+		normalize_fn.free()
+	}
+	if normalize_fn.is_undefined() {
+		return error('interactive JavaScript normalizer is not installed')
+	}
+	output := ctx.call(normalize_fn, source, script_name)!
+	defer {
+		output.free()
+	}
+	return output.to_string()
+}
+
 fn is_commonjs_module(ctx &vjsx.Context, script_path string) !bool {
 	source := os.read_file(script_path)!
 	check_fn := ctx.js_global('__vjs_is_commonjs')

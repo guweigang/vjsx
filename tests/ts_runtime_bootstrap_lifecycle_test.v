@@ -61,3 +61,36 @@ fn test_typescript_runtime_uses_embedded_assets_without_vendor_asset_root() {
 	}
 	assert result.to_string() == 'ok:42'
 }
+
+fn test_interactive_javascript_normalizer_inserts_statement_boundary() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	runtimejs.install_typescript_runtime(ctx) or { panic(err) }
+	source := 'foo\n(bar)'
+	normalized := runtimejs.normalize_interactive_javascript(ctx, source, '<notebook-cell>.ts') or {
+		panic(err)
+	}
+	assert normalized == 'foo;\n(bar)'
+}
+
+fn test_interactive_javascript_normalizer_preserves_existing_boundaries() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	runtimejs.install_typescript_runtime(ctx) or { panic(err) }
+	source := 'const rows = [\n  {\n    city: "上海市",\n  },\n]\nrows.length'
+	normalized := runtimejs.normalize_interactive_javascript(ctx, source, '<notebook-cell>.ts') or {
+		panic(err)
+	}
+	assert normalized == source
+
+	with_semicolon := '({ value: 1 });\nconsole.log("done")'
+	normalized_semicolon := runtimejs.normalize_interactive_javascript(ctx, with_semicolon,
+		'<notebook-cell>.ts') or { panic(err) }
+	assert normalized_semicolon == with_semicolon
+}
