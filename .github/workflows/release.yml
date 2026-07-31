@@ -222,8 +222,6 @@ jobs:
       - metadata
       - build
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -231,21 +229,16 @@ jobs:
           path: release-artifacts
 
       - name: Publish GitHub release
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ needs.metadata.outputs.tag }}"
-          version="${{ needs.metadata.outputs.version }}"
-          mapfile -t assets < <(find release-artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) | sort)
-          if [ "${#assets[@]}" -eq 0 ]; then
-            echo "no release assets found" >&2
-            exit 1
-          fi
-          notes="$(printf 'vjsx %s\n\nBuilt from GitHub Actions run: %s/%s/actions/runs/%s\n' \
-            "$version" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
-            gh release upload "$tag" "${assets[@]}" --clobber
-          else
-            gh release create "$tag" "${assets[@]}" --target "$GITHUB_SHA" --title "$tag" --notes "$notes"
-          fi
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag }}
+          name: ${{ needs.metadata.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            vjsx ${{ needs.metadata.outputs.version }}
+
+            Built from GitHub Actions run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          files: |
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.zip
+          fail_on_unmatched_files: true
