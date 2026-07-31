@@ -1,17 +1,245 @@
 module vjsx
 
 import net.http
+import os
 import time
 
 @[params]
 pub struct FetchGlobalsConfig {
 pub:
-	read_timeout  i64 = 30 * time.second
-	write_timeout i64 = 30 * time.second
-	max_retries   int = 5
+	read_timeout        i64  = 30 * time.second
+	write_timeout       i64  = 30 * time.second
+	max_retries         int  = 5
+	curl_proxy_fallback bool = true
 }
 
 const fetch_globals_config_key = '__vjs_fetch_globals_config'
+
+struct FetchCoreRequest {
+	url                 string
+	method              http.Method
+	header              http.Header
+	body                string
+	boundary            string
+	read_timeout        i64
+	write_timeout       i64
+	max_retries         int
+	curl_proxy_fallback bool
+}
+
+struct FetchCoreResult {
+	response http.Response
+	message  string
+}
+
+fn fetch_core_deadline(config FetchGlobalsConfig) i64 {
+	mut deadline := config.read_timeout
+	if config.write_timeout > deadline {
+		deadline = config.write_timeout
+	}
+	if deadline <= 0 {
+		deadline = 30 * time.second
+	}
+	return deadline + 250 * time.millisecond
+}
+
+fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
+	if request.curl_proxy_fallback && fetch_proxy_env() != '' {
+		return fetch_core_run_curl(request)
+	}
+	mut resp := http.Response{}
+	if request.boundary == '' {
+		resp = http.fetch(
+			url:           request.url
+			method:        request.method
+			header:        request.header
+			data:          request.body
+			read_timeout:  request.read_timeout
+			write_timeout: request.write_timeout
+			max_retries:   request.max_retries
+		) or {
+			if request.curl_proxy_fallback {
+				return fetch_core_run_curl(request)
+			}
+			return FetchCoreResult{
+				message: err.msg()
+			}
+		}
+	} else {
+		form, files := http.parse_multipart_form(request.body, '----formdata-' + request.boundary)
+		resp = http.post_multipart_form(request.url,
+			form:   form
+			header: request.header
+			files:  files
+		) or { return FetchCoreResult{
+			message: err.msg()
+		} }
+	}
+	return FetchCoreResult{
+		response: resp
+	}
+}
+
+fn fetch_proxy_env() string {
+	for key in ['https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY', 'all_proxy', 'ALL_PROXY'] {
+		value := os.getenv(key).trim_space()
+		if value != '' {
+			return value
+		}
+	}
+	return ''
+}
+
+fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
+	curl_path := os.find_abs_path_of_executable('curl') or {
+		return FetchCoreResult{
+			message: 'curl is not available'
+		}
+	}
+	stamp := '${os.getpid()}-${time.now().unix_micro()}'
+	headers_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.headers')
+	body_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.body')
+	defer {
+		os.rm(headers_path) or {}
+		os.rm(body_path) or {}
+	}
+	mut args := [
+		'-sS',
+		'-L',
+		'--max-redirs',
+		'16',
+		'--max-time',
+		'${fetch_core_deadline_seconds(request)}',
+		'-D',
+		headers_path,
+		'-o',
+		body_path,
+		'-X',
+		request.method.str(),
+	]
+	for key in request.header.keys() {
+		values := request.header.custom_values(key)
+		if values.len > 0 {
+			args << '-H'
+			args << '${key}: ${values.join('; ')}'
+		}
+	}
+	if request.method !in [.get, .head] && request.body != '' {
+		args << '--data-binary'
+		args << request.body
+	}
+	args << request.url
+	mut proc := os.new_process(curl_path)
+	proc.set_args(args)
+	proc.set_redirect_stdio()
+	proc.run()
+	stdout := proc.stdout_slurp()
+	stderr := proc.stderr_slurp()
+	proc.wait()
+	exit_code := proc.code
+	proc.close()
+	if exit_code != 0 {
+		mut message := stderr.trim_space()
+		if message == '' {
+			message = stdout.trim_space()
+		}
+		if message == '' {
+			message = 'curl failed with exit code ${exit_code}'
+		}
+		return FetchCoreResult{
+			message: message
+		}
+	}
+	headers_text := os.read_file(headers_path) or {
+		return FetchCoreResult{
+			message: err.msg()
+		}
+	}
+	body_text := os.read_file(body_path) or { return FetchCoreResult{
+		message: err.msg()
+	} }
+	resp := fetch_parse_curl_response(headers_text, body_text) or {
+		return FetchCoreResult{
+			message: err.msg()
+		}
+	}
+	return FetchCoreResult{
+		response: resp
+	}
+}
+
+fn fetch_core_deadline_seconds(request FetchCoreRequest) int {
+	mut deadline := request.read_timeout
+	if request.write_timeout > deadline {
+		deadline = request.write_timeout
+	}
+	if deadline <= 0 {
+		deadline = 30 * time.second
+	}
+	seconds := int((deadline + time.second - 1) / time.second)
+	if seconds <= 0 {
+		return 30
+	}
+	return seconds
+}
+
+fn fetch_parse_curl_response(headers_text string, body_text string) !http.Response {
+	normalized := headers_text.replace('\r\n', '\n')
+	blocks := normalized.split('\n\n').filter(it.trim_space() != '')
+	if blocks.len == 0 {
+		return error('curl did not return response headers')
+	}
+	last := blocks[blocks.len - 1]
+	mut lines := last.split('\n').filter(it.trim_space() != '')
+	if lines.len == 0 {
+		return error('curl returned an empty response header block')
+	}
+	status_line := lines[0].trim_space()
+	parts := status_line.split_nth(' ', 3)
+	if parts.len < 2 {
+		return error('invalid curl status line: ${status_line}')
+	}
+	status_msg := if parts.len >= 3 { parts[2] } else { '' }
+	mut header := http.new_header()
+	for line in lines[1..] {
+		raw := line.trim_space()
+		if raw == '' || !raw.contains(':') {
+			continue
+		}
+		key := raw.all_before(':').trim_space()
+		value := raw.all_after(':').trim_space()
+		header.add_custom(key, value) or {}
+	}
+	return http.Response{
+		http_version: parts[0].all_after('/')
+		status_code:  parts[1].int()
+		status_msg:   status_msg
+		header:       header
+		body:         body_text
+	}
+}
+
+fn fetch_core_run_with_deadline(request FetchCoreRequest, deadline i64) !http.Response {
+	ch := chan FetchCoreResult{cap: 1}
+	spawn fn [ch, request] () {
+		ch <- fetch_core_run(request)
+	}()
+	mut output := FetchCoreResult{}
+	select {
+		result := <-ch {
+			output = result
+		}
+		deadline * time.nanosecond {
+			output = FetchCoreResult{
+				message: 'fetch timed out after ${deadline / time.second} seconds'
+			}
+		}
+	}
+	if output.message != '' {
+		return error(output.message)
+	}
+	return output.response
+}
 
 fn fetch_get_bootstrap(ctx &Context) (Value, Value) {
 	glob := ctx.js_global()
@@ -152,6 +380,10 @@ fn fetch_config_from_boot(boot Value) FetchGlobalsConfig {
 	defer {
 		max_retries_value.free()
 	}
+	curl_proxy_fallback_value := value.get('curlProxyFallback')
+	defer {
+		curl_proxy_fallback_value.free()
+	}
 	read_timeout := if read_timeout_value.is_undefined() {
 		i64(0)
 	} else {
@@ -164,9 +396,14 @@ fn fetch_config_from_boot(boot Value) FetchGlobalsConfig {
 	}
 	max_retries := if max_retries_value.is_undefined() { -1 } else { max_retries_value.to_int() }
 	return FetchGlobalsConfig{
-		read_timeout:  if read_timeout > 0 { read_timeout } else { 30 * time.second }
-		write_timeout: if write_timeout > 0 { write_timeout } else { 30 * time.second }
-		max_retries:   if max_retries >= 0 { max_retries } else { 5 }
+		read_timeout:        if read_timeout > 0 { read_timeout } else { 30 * time.second }
+		write_timeout:       if write_timeout > 0 { write_timeout } else { 30 * time.second }
+		max_retries:         if max_retries >= 0 { max_retries } else { 5 }
+		curl_proxy_fallback: if curl_proxy_fallback_value.is_undefined() {
+			true
+		} else {
+			curl_proxy_fallback_value.to_bool()
+		}
 	}
 }
 
@@ -222,26 +459,19 @@ fn fetch_core(this Value, args []Value) Value {
 		boot.free()
 	}
 	fetch_config := fetch_config_from_boot(boot)
-	mut resp := http.Response{}
-	if boundary.is_undefined() {
-		resp = http.fetch(
-			url:           url
-			method:        request_method
-			header:        hd
-			data:          body
-			read_timeout:  fetch_config.read_timeout
-			write_timeout: fetch_config.write_timeout
-			max_retries:   fetch_config.max_retries
-		) or {
-			error = this.ctx.js_error(message: err.msg())
-			return promise.reject(error)
-		}
-	} else {
-		form, files := http.parse_multipart_form(body, '----formdata-' + boundary.str())
-		resp = http.post_multipart_form(url, form: form, header: hd, files: files) or {
-			error = this.ctx.js_error(message: err.msg())
-			return promise.reject(error)
-		}
+	resp := fetch_core_run_with_deadline(FetchCoreRequest{
+		url:                 url
+		method:              request_method
+		header:              hd
+		body:                body
+		boundary:            if boundary.is_undefined() { '' } else { boundary.str() }
+		read_timeout:        fetch_config.read_timeout
+		write_timeout:       fetch_config.write_timeout
+		max_retries:         fetch_config.max_retries
+		curl_proxy_fallback: fetch_config.curl_proxy_fallback
+	}, fetch_core_deadline(fetch_config)) or {
+		error = this.ctx.js_error(message: err.msg())
+		return promise.reject(error)
 	}
 	obj_header := this.ctx.js_object()
 	for key in resp.header.keys() {
@@ -269,6 +499,7 @@ pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
 	config_object.set('readTimeout', int(config.read_timeout))
 	config_object.set('writeTimeout', int(config.write_timeout))
 	config_object.set('maxRetries', config.max_retries)
+	config_object.set('curlProxyFallback', config.curl_proxy_fallback)
 	boot.set(fetch_globals_config_key, config_object)
 	config_object.free()
 	fetch_util_boot(ctx, boot)
