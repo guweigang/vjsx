@@ -72,6 +72,10 @@ static inline void vjsx_js_eval_function_out(JSContext *ctx, JSValue func_obj, J
 	*out = JS_EvalFunction(ctx, func_obj);
 }
 
+static inline int vjsx_js_resolve_module(JSContext *ctx, JSValueConst module_obj) {
+	return JS_ResolveModule(ctx, module_obj);
+}
+
 static inline void vjsx_js_std_await_out(JSContext *ctx, JSValue val, JSValue *out) {
 	*out = js_std_await(ctx, val);
 }

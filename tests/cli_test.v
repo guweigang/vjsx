@@ -54,7 +54,72 @@ fn test_cli_help_and_version_commands() {
 	help_output := os.execute('sh ./vjsx --help')
 	assert help_output.exit_code == 0
 	assert help_output.output.contains('vjsx capabilities [--runtime|-r <node|script|browser>]')
+	assert help_output.output.contains('vjsx repair [--registry <url>] [package...]')
 	assert help_output.output.contains('Runtime profiles:')
+}
+
+fn test_cli_repair_and_remove_package_graph() {
+	runner := os.join_path(os.temp_dir(), 'vjsx_cli_packages_test_${os.getpid()}_bin')
+	build_output :=
+		os.execute('cd ${@VMODROOT} && VJS_QUICKJS_PATH=$(./scripts/ensure-quickjs.sh) v -d build_quickjs -o ${runner} ./cli_runner_bin')
+	assert build_output.exit_code == 0
+
+	repair_root := os.join_path(os.temp_dir(), 'vjsx_cli_repair_test_${os.getpid()}')
+	os.rmdir_all(repair_root) or {}
+	defer {
+		os.rmdir_all(repair_root) or {}
+		os.rm(runner) or {}
+	}
+	workspace_root := os.join_path(repair_root, 'packages', 'local-package')
+	os.mkdir_all(workspace_root) or { panic(err) }
+	os.write_file(os.join_path(repair_root, 'package.json'),
+		'{"name":"repair-root","version":"1.0.0","workspaces":["packages/*"],"dependencies":{"local-package":"workspace:*"}}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(repair_root, 'package-lock.json'),
+		'{"name":"repair-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"repair-root","version":"1.0.0","dependencies":{"local-package":"workspace:*"}},"node_modules/local-package":{"version":"1.0.0","link":true}}}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(workspace_root, 'package.json'),
+		'{"name":"local-package","version":"1.0.0","type":"module","exports":"./index.js"}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(workspace_root, 'index.js'), 'export const value = 42;') or {
+		panic(err)
+	}
+	repair_output := os.execute('cd ${repair_root} && ${runner} repair')
+	assert repair_output.exit_code == 0
+	assert repair_output.output.contains('repaired 1 package(s)')
+	assert os.is_link(os.join_path(repair_root, 'node_modules', 'local-package'))
+
+	remove_root := os.join_path(os.temp_dir(), 'vjsx_cli_remove_graph_test_${os.getpid()}')
+	os.rmdir_all(remove_root) or {}
+	defer {
+		os.rmdir_all(remove_root) or {}
+	}
+	for name in ['a', 'b', 'c'] {
+		package_root := os.join_path(remove_root, 'node_modules', name)
+		os.mkdir_all(package_root) or { panic(err) }
+		os.write_file(os.join_path(package_root, 'package.json'),
+			'{"name":"${name}","version":"1.0.0"}') or { panic(err) }
+	}
+	os.write_file(os.join_path(remove_root, 'package.json'),
+		'{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}}') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(remove_root, 'package-lock.json'),
+		'{"name":"remove-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"1.0.0"}},"node_modules/b":{"version":"1.0.0"},"node_modules/c":{"version":"1.0.0"}}}') or {
+		panic(err)
+	}
+	remove_output := os.execute('cd ${remove_root} && ${runner} remove a')
+	assert remove_output.exit_code == 0
+	assert !os.exists(os.join_path(remove_root, 'node_modules', 'a'))
+	assert !os.exists(os.join_path(remove_root, 'node_modules', 'b'))
+	assert os.exists(os.join_path(remove_root, 'node_modules', 'c'))
+	lock_text := os.read_file(os.join_path(remove_root, 'package-lock.json')) or { panic(err) }
+	assert !lock_text.contains('node_modules/a')
+	assert !lock_text.contains('node_modules/b')
+	assert lock_text.contains('node_modules/c')
 }
 
 fn test_cli_capabilities_command() {

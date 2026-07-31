@@ -214,6 +214,8 @@ Packages can be installed without a local Node/npm dependency:
 ./vjsx install is-number@7.0.0
 ./vjsx install
 ./vjsx install --dev typescript
+./vjsx repair
+./vjsx repair defuddle
 ./vjsx ls
 ./vjsx ls --json
 ./vjsx ls --depth 0
@@ -230,9 +232,14 @@ package spec is provided, the installer reads `dependencies` from
 `package.json`; pass `--dev` to include `devDependencies`.
 
 `vjsx remove` and `vjsx uninstall` remove packages from `package.json`,
-`package-lock.json`, and the top-level `node_modules` entry. Transitive
-dependencies are left in place for now so removing one package does not break
-another package that may still share the same dependency.
+`package-lock.json`, and `node_modules`. After removing a top-level dependency,
+vjsx recomputes package reachability and removes transitive packages that are no
+longer required while preserving dependencies shared by the remaining roots.
+
+`vjsx repair` restores packages at the exact versions recorded in
+`package-lock.json`. With no package names it repairs all root dependencies;
+with package names it repairs those packages and their locked dependencies. It
+does not upgrade versions or change dependency declarations.
 
 `vjsx ls` and `vjsx list` print an npm-style dependency tree from the current
 `package-lock.json` and `node_modules`. Pass `--json` for npm-style structured
@@ -246,6 +253,18 @@ dependency is not in one of the other root dependency sections.
 existing lockfile when present. It also supports basic `workspaces` entries by
 linking local packages into `node_modules`, and reports `peerDependencies` as
 warnings without blocking installation.
+
+Before changing the project's `node_modules`, `vjsx install` and `vjsx repair`
+stage requested packages in a temporary package tree and compile each directly
+requested package's default entry plus its statically reachable module graph
+against the vjsx Node-style host. Package code is not evaluated during this
+check. A reachable unsupported host module or native addon rejects the
+operation; unused `.node` files, `binding.gyp`, unselected exports, lifecycle
+scripts, and compatibility that cannot be determined statically do not block
+installation. Packages without an importable default entry and packages with
+install lifecycle scripts produce warnings. Running `vjsx check` on the real
+application entry remains the final compatibility check for subpath and dynamic
+imports selected by the application.
 
 The installer targets package compatibility, not full npm CLI compatibility.
 It does not run lifecycle scripts such as `postinstall`, and it does not require

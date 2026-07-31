@@ -43,6 +43,7 @@ Usage:
   vjsx check-runtime [--runtime|-r <node|script|browser>]
   vjsx capabilities [--runtime|-r <node|script|browser>]
   vjsx install [--registry <url>] [--dev] [package[@version]...]
+  vjsx repair [--registry <url>] [package...]
   vjsx ls [--json] [--depth <n>] [--omit=<dev|optional|peer>] [package...]
   vjsx list [--json] [--depth <n>] [--omit=<dev|optional|peer>] [package...]
   vjsx remove <package...>
@@ -66,6 +67,7 @@ Runtime profiles:
 
 Package commands:
   install   Install package.json dependencies and write npm-compatible package-lock.json.
+  repair    Restore locked packages without changing dependency versions.
   ls        Print the installed dependency tree from package-lock.json and node_modules.
   remove    Remove top-level dependencies from package.json, package-lock.json, and node_modules.
 '
@@ -130,13 +132,13 @@ fn parse_args(args []string) CliOptions {
 		}
 	}
 	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
-		'ls', 'list', 'remove', 'uninstall'] {
+		'repair', 'ls', 'list', 'remove', 'uninstall'] {
 		command = rest[0]
 		rest = rest[1..].clone()
 	}
 
-	if command == 'install' || command == 'remove' || command == 'uninstall' || command == 'ls'
-		|| command == 'list' {
+	if command == 'install' || command == 'repair' || command == 'remove' || command == 'uninstall'
+		|| command == 'ls' || command == 'list' {
 		mut specs := []string{}
 		mut registry := os.getenv_opt('VJSX_NPM_REGISTRY') or { 'https://registry.npmjs.org' }
 		mut install_dev := false
@@ -162,8 +164,8 @@ fn parse_args(args []string) CliOptions {
 			}
 			match arg {
 				'--registry' {
-					if command != 'install' {
-						fail('${arg} is only valid for install')
+					if command != 'install' && command != 'repair' {
+						fail('${arg} is only valid for install or repair')
 					}
 					if i + 1 >= rest.len {
 						fail('missing registry URL after ${arg}')
@@ -565,6 +567,9 @@ fn main() {
 		}
 		'remove', 'uninstall' {
 			remove_packages(opts) or { fail(err.msg()) }
+		}
+		'repair' {
+			repair_packages(opts) or { fail(err.msg()) }
 		}
 		else {
 			run_script(opts) or { fail(err.msg()) }

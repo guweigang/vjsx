@@ -220,3 +220,19 @@ pub fn run_runtime_entry(ctx &vjsx.Context, script_path string, as_module bool, 
 	}
 	return ctx.run_file(script_path, flag)
 }
+
+// Check the package's default runtime entry and its statically reachable module
+// graph without evaluating package code. An empty entry means that the package
+// has no importable default entry, which is not by itself an install failure.
+pub fn check_runtime_package_entry(ctx &vjsx.Context, package_root string, temp_root string) !string {
+	install_typescript_runtime(ctx)!
+	entry := resolve_package_root_entry(ctx, package_root, '') or { return '' }
+	emitted_entry := build_runtime_module_entry(ctx, entry, true, temp_root)!
+	defer {
+		if temp_root != '' {
+			os.rmdir_all(temp_root) or {}
+		}
+	}
+	ctx.compile_module_file(emitted_entry)!
+	return entry
+}

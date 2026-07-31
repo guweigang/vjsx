@@ -1,5 +1,7 @@
 module vjsx
 
+import os
+
 @[typedef]
 struct C.JSContext {}
 
@@ -102,6 +104,7 @@ fn C.JS_DupContext(&C.JSContext) &C.JSContext
 fn C.JS_SetContextOpaque(&C.JSContext, voidptr)
 fn C.JS_GetContextOpaque(&C.JSContext) voidptr
 fn C.vjsx_js_eval_function_out(&C.JSContext, C.JSValue, &C.JSValue)
+fn C.vjsx_js_resolve_module(&C.JSContext, JSValueConst) int
 fn C.vjsx_js_std_await_out(&C.JSContext, C.JSValue, &C.JSValue)
 fn C.js_std_set_worker_new_context_func(FnNewContext)
 fn C.JS_SetModuleLoaderFunc(&C.JSRuntime, &JSModuleNormalizeFunc, &JSModuleLoaderFunc, voidptr)
@@ -259,6 +262,29 @@ pub fn (ctx &Context) run(args ...EvalArgs) !Value {
 // ```
 pub fn (ctx &Context) eval_module(input string, fname string) !Value {
 	return ctx.js_eval(input, fname, type_module)
+}
+
+// Compile and resolve an ES module graph without evaluating module bodies.
+pub fn (ctx &Context) compile_module(input string, fname string) ! {
+	mut ref := ctx.js_undefined().ref
+	C.vjsx_js_eval_out(ctx.ref, input.str, usize(input.len), fname.str,
+		type_module | type_compile_only, &ref)
+	value := ctx.c_val(ref)
+	defer {
+		value.free()
+	}
+	if value.is_exception() {
+		return ctx.js_exception()
+	}
+	def_set_meta(ctx, ref)
+	if C.vjsx_js_resolve_module(ctx.ref, ref) < 0 {
+		return ctx.js_exception()
+	}
+}
+
+// Compile and resolve an ES module file without evaluating module bodies.
+pub fn (ctx &Context) compile_module_file(fname string) ! {
+	ctx.compile_module(os.read_file(fname)!, fname)!
 }
 
 // Evaluate JS module and flush pending jobs.

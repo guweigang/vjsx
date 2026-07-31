@@ -6,6 +6,8 @@ import encoding.base64
 import json2
 import net.http
 import os
+import runtimejs
+import vjsx
 
 struct PackageSpec {
 	name    string
@@ -38,23 +40,34 @@ mut:
 }
 
 struct Installer {
-	registry string
-	root     string
-	dev      bool
+	registry     string
+	root         string
+	install_root string
+	dev          bool
 mut:
-	installed  map[string]bool
-	workspaces map[string]WorkspacePackage
-	lock       Lockfile
-	warnings   []string
+	installed     map[string]bool
+	package_names map[string]bool
+	workspaces    map[string]WorkspacePackage
+	lock          Lockfile
+	warnings      []string
 }
 
 fn install_packages(opts CliOptions) !string {
 	check_runtime('node')!
+	root := os.getwd()
+	staging_root := package_staging_root(root, 'install')
+	os.rmdir_all(staging_root) or {}
+	os.mkdir_all(os.join_path(staging_root, 'node_modules'))!
+	defer {
+		os.rmdir_all(staging_root) or {}
+	}
 	mut installer := Installer{
-		registry:  normalize_registry(opts.install_registry)
-		root:      os.getwd()
-		dev:       opts.install_dev
-		installed: map[string]bool{}
+		registry:      normalize_registry(opts.install_registry)
+		root:          root
+		install_root:  staging_root
+		dev:           opts.install_dev
+		installed:     map[string]bool{}
+		package_names: map[string]bool{}
 	}
 	installer.workspaces = load_workspaces(installer.root)!
 	installer.lock = load_or_init_lockfile(installer.root, installer.dev)!
@@ -66,8 +79,12 @@ fn install_packages(opts CliOptions) !string {
 		return 'nothing to install\n'
 	}
 	mut explicit_dependencies := map[string]string{}
+	mut requested_names := []string{}
 	for spec in specs {
 		parsed := parse_package_spec(spec)!
+		if parsed.name !in requested_names {
+			requested_names << parsed.name
+		}
 		dependency_version := if parsed.version != '' {
 			parsed.version
 		} else {
@@ -90,11 +107,67 @@ fn install_packages(opts CliOptions) !string {
 		}
 		installer.install_spec(parsed)!
 	}
+	installer.check_staged_package_entries(requested_names)!
+	installer.commit_staged_packages()!
 	if explicit_dependencies.len > 0 {
 		write_package_json_dependencies(installer.root, explicit_dependencies, installer.dev)!
 	}
 	write_package_lock(installer.root, installer.lock)!
 	mut output := 'installed ${specs.len} package request(s)\n'
+	for warning in installer.warnings {
+		output += 'warning: ${warning}\n'
+	}
+	return output
+}
+
+fn repair_packages(opts CliOptions) !string {
+	check_runtime('node')!
+	root := os.getwd()
+	lock_path := os.join_path(root, 'package-lock.json')
+	if !os.exists(lock_path) {
+		return error('repair requires package-lock.json')
+	}
+	staging_root := package_staging_root(root, 'repair')
+	os.rmdir_all(staging_root) or {}
+	os.mkdir_all(os.join_path(staging_root, 'node_modules'))!
+	defer {
+		os.rmdir_all(staging_root) or {}
+	}
+	mut installer := Installer{
+		registry:      normalize_registry(opts.install_registry)
+		root:          root
+		install_root:  staging_root
+		installed:     map[string]bool{}
+		package_names: map[string]bool{}
+	}
+	installer.workspaces = load_workspaces(root)!
+	installer.lock = load_or_init_lockfile(root, true)!
+	mut requested_names := []string{}
+	if opts.install_specs.len == 0 {
+		requested_names = sorted_string_map_keys(installer.lock.root_dependencies)
+	} else {
+		for raw_name in opts.install_specs {
+			parsed := parse_package_spec(raw_name)!
+			if parsed.name !in requested_names {
+				requested_names << parsed.name
+			}
+		}
+	}
+	if requested_names.len == 0 {
+		return 'nothing to repair\n'
+	}
+	for name in requested_names {
+		lock_pkg := installer.lock.packages[lock_package_key(name)] or {
+			return error('package is not present in package-lock.json: ${name}')
+		}
+		installer.install_spec(PackageSpec{
+			name:    name
+			version: lock_pkg.version
+		})!
+	}
+	installer.check_staged_package_entries(requested_names)!
+	installer.commit_staged_packages()!
+	mut output := 'repaired ${installer.package_names.len} package(s)\n'
 	for warning in installer.warnings {
 		output += 'warning: ${warning}\n'
 	}
@@ -107,7 +180,6 @@ fn remove_packages(opts CliOptions) !string {
 		return error('missing package name to remove')
 	}
 	root := os.getwd()
-	mut removed := []string{}
 	mut missing := []string{}
 	mut package_names := []string{}
 	for spec in opts.install_specs {
@@ -117,8 +189,8 @@ fn remove_packages(opts CliOptions) !string {
 		}
 		package_names << parsed.name
 	}
-	manifest_result := remove_package_json_dependencies(root, package_names)!
 	mut lockfile := load_or_init_lockfile(root, true)!
+	manifest_result := remove_package_json_dependencies(root, package_names)!
 	for name in package_names {
 		if name in lockfile.root_dependencies {
 			lockfile.root_dependencies.delete(name)
@@ -132,14 +204,34 @@ fn remove_packages(opts CliOptions) !string {
 		if name in lockfile.root_peer_dependencies {
 			lockfile.root_peer_dependencies.delete(name)
 		}
-		lock_key := lock_package_key(name)
-		if lock_key in lockfile.packages {
-			lockfile.packages.delete(lock_key)
+	}
+	reachable := reachable_lock_package_keys(lockfile)
+	mut orphan_names := map[string]bool{}
+	mut lock_keys := lockfile.packages.keys()
+	for key in lock_keys {
+		if key !in reachable {
+			name := lock_package_name(key)
+			if name != '' {
+				orphan_names[name] = true
+			}
+			lockfile.packages.delete(key)
 		}
-		target := package_install_path(root, name)
-		if remove_installed_package_path(target)! {
+	}
+	mut removed := manifest_result.clone()
+	for name, _ in orphan_names {
+		if lockfile_has_package_name(lockfile, name) {
+			continue
+		}
+		if remove_installed_package_path(package_install_path(root, name))! && name !in removed {
 			removed << name
-		} else if name in manifest_result {
+		}
+	}
+	for name in package_names {
+		if name in removed {
+			continue
+		}
+		if !lockfile_has_package_name(lockfile, name)
+			&& remove_installed_package_path(package_install_path(root, name))! {
 			removed << name
 		} else {
 			missing << name
@@ -151,6 +243,54 @@ fn remove_packages(opts CliOptions) !string {
 		output += 'warning: ${name} was not installed or declared\n'
 	}
 	return output
+}
+
+fn lock_package_name(key string) string {
+	marker := 'node_modules/'
+	index := key.last_index(marker) or { return '' }
+	remaining := key[index + marker.len..]
+	if remaining.starts_with('@') {
+		parts := remaining.split('/')
+		if parts.len >= 2 {
+			return '${parts[0]}/${parts[1]}'
+		}
+	}
+	return remaining.split('/')[0]
+}
+
+fn lockfile_has_package_name(lockfile Lockfile, name string) bool {
+	for key, _ in lockfile.packages {
+		if lock_package_name(key) == name {
+			return true
+		}
+	}
+	return false
+}
+
+fn reachable_lock_package_keys(lockfile Lockfile) map[string]bool {
+	mut reachable := map[string]bool{}
+	mut pending := lockfile.root_dependencies.keys()
+	mut seen_names := map[string]bool{}
+	for pending.len > 0 {
+		name := pending[0]
+		pending.delete(0)
+		if seen_names[name] {
+			continue
+		}
+		seen_names[name] = true
+		for key, pkg in lockfile.packages {
+			if lock_package_name(key) != name {
+				continue
+			}
+			reachable[key] = true
+			for dependency_name, _ in pkg.dependencies {
+				if !seen_names[dependency_name] {
+					pending << dependency_name
+				}
+			}
+		}
+	}
+	return reachable
 }
 
 fn list_packages(opts CliOptions) !string {
@@ -456,6 +596,7 @@ fn (mut installer Installer) install_spec(spec PackageSpec) ! {
 	metadata := installer.fetch_metadata(spec.name)!
 	version := resolve_package_version(metadata, spec.version)!
 	key := '${spec.name}@${version}'
+	installer.package_names[spec.name] = true
 	if installer.installed[key] {
 		return
 	}
@@ -492,6 +633,7 @@ fn (mut installer Installer) install_spec(spec PackageSpec) ! {
 }
 
 fn (mut installer Installer) install_workspace(spec PackageSpec, workspace WorkspacePackage) ! {
+	installer.package_names[spec.name] = true
 	if spec.version.starts_with('workspace:')
 		&& !workspace_version_satisfies(workspace.version, spec.version) {
 		return error('workspace version mismatch: ${spec.name}@${workspace.version} does not satisfy ${spec.version}')
@@ -523,6 +665,7 @@ fn (mut installer Installer) install_workspace(spec PackageSpec, workspace Works
 
 fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg LockPackage) ! {
 	key := '${spec.name}@${lock_pkg.version}'
+	installer.package_names[spec.name] = true
 	if installer.installed[key] {
 		return
 	}
@@ -574,7 +717,7 @@ fn (mut installer Installer) lock_package(name string, pkg LockPackage) {
 }
 
 fn (installer Installer) package_install_path(name string) string {
-	return package_install_path(installer.root, name)
+	return package_install_path(installer.install_root, name)
 }
 
 fn (mut installer Installer) warn_peer_dependencies(name string, version_info json2.Any) {
@@ -717,6 +860,75 @@ fn package_install_path(root string, name string) string {
 		return os.join_path(root, 'node_modules', parts[0], parts[1])
 	}
 	return os.join_path(root, 'node_modules', name)
+}
+
+fn package_staging_root(root string, operation string) string {
+	return os.join_path(root, 'node_modules', '.vjsx-${operation}-${os.getpid()}')
+}
+
+fn package_check_temp_root(staging_root string, name string) string {
+	clean_name := name.replace('@', '').replace('/', '_').replace('\\', '_')
+	return os.join_path(staging_root, '.vjsx-check', clean_name)
+}
+
+fn package_lifecycle_scripts(package_root string) []string {
+	manifest_path := os.join_path(package_root, 'package.json')
+	if !os.exists(manifest_path) {
+		return []string{}
+	}
+	manifest := json2.decode[json2.Any](os.read_file(manifest_path) or { return []string{} }) or {
+		return []string{}
+	}
+	scripts := any_object_optional(manifest, 'scripts')
+	mut found := []string{}
+	for name in ['preinstall', 'install', 'postinstall', 'prepare'] {
+		if name in scripts {
+			found << name
+		}
+	}
+	return found
+}
+
+fn (mut installer Installer) check_staged_package_entries(requested_names []string) ! {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	install_runtime(ctx, 'node', installer.install_root, os.dir(installer.install_root),
+		installer.root, ['vjsx', 'install'])
+	for name in requested_names {
+		package_root := installer.package_install_path(name)
+		if !os.exists(package_root) {
+			return error('staged package is missing: ${name}')
+		}
+		entry := runtimejs.check_runtime_package_entry(ctx, package_root,
+			package_check_temp_root(installer.install_root, name)) or {
+			return error('package ${name} is not compatible with the vjsx node host: ${err.msg()}')
+		}
+		if entry == '' {
+			installer.warnings << '${name} has no importable default entry; compatibility was not verified'
+		}
+		scripts := package_lifecycle_scripts(package_root)
+		if scripts.len > 0 {
+			installer.warnings << '${name} declares lifecycle scripts (${scripts.join(', ')}); vjsx does not run them'
+		}
+	}
+}
+
+fn (installer Installer) commit_staged_packages() ! {
+	mut names := installer.package_names.keys()
+	names.sort()
+	for name in names {
+		source := installer.package_install_path(name)
+		if !os.exists(source) && !os.is_link(source) {
+			return error('staged package is missing: ${name}')
+		}
+		target := package_install_path(installer.root, name)
+		os.mkdir_all(os.dir(target))!
+		remove_installed_package_path(target)!
+		os.mv(source, target)!
+	}
 }
 
 fn lock_package_key(name string) string {
@@ -949,7 +1161,7 @@ fn remove_package_json_dependencies(root string, names []string) ![]string {
 	}
 	mut manifest := json2.decode[json2.Any](os.read_file(path)!)!.as_map()
 	mut removed := []string{}
-	for field in ['dependencies', 'devDependencies'] {
+	for field in ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] {
 		mut deps := any_string_map_from_manifest(manifest, field)
 		mut changed := false
 		for name in names {
