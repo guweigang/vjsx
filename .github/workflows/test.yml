@@ -14,9 +14,9 @@ jobs:
         include:
           - os: ubuntu-latest
             archive_path: libs/qjs_linux_x64.a
-          - os: macos-15-intel
+          - os: macos-26-intel
             archive_path: libs/qjs_macos_x64.a
-          - os: macos-15
+          - os: macos-26
             archive_path: libs/qjs_macos_arm64.a
           - os: windows-latest
             archive_path: libs/qjs_win_x64.a

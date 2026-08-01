@@ -54,12 +54,12 @@ jobs:
             binary: vjsx
             archive: vjsx-linux-x64.tar.gz
             shell: bash
-          - os: macos-15-intel
+          - os: macos-26-intel
             artifact: vjsx-darwin-x64
             binary: vjsx
             archive: vjsx-darwin-x64.tar.gz
             shell: bash
-          - os: macos-15
+          - os: macos-26
             artifact: vjsx-darwin-arm64
             binary: vjsx
             archive: vjsx-darwin-arm64.tar.gz
