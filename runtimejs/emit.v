@@ -78,12 +78,12 @@ fn render_commonjs_module(source string, rewrites []ModuleRewrite, export_names 
 	return lines.join('\n')
 }
 
-fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string, config_json string, mut seen map[string]bool) ! {
+fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string, mirror_base string, config_json string, mut seen map[string]bool) ! {
 	if source_path in seen {
 		return
 	}
 	seen[source_path] = true
-	target_path := mirrored_runtime_path(root, source_path)
+	target_path := mirrored_runtime_path_from(root, source_path, mirror_base)
 	os.mkdir_all(os.dir(target_path))!
 	mut rewrites := []ModuleRewrite{}
 	for specifier in list_module_imports(ctx, source_path)! {
@@ -100,7 +100,7 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 			continue
 		}
 		if resolved.ends_with('.json') {
-			target_json_path := mirrored_runtime_path(root, resolved) + '.mjs'
+			target_json_path := mirrored_runtime_path_from(root, resolved, mirror_base) + '.mjs'
 			os.mkdir_all(os.dir(target_json_path))!
 			json_text := os.read_file(resolved)!
 			os.write_file(target_json_path, prepend_dom_runtime_import('export default ${json_text};',
@@ -115,10 +115,11 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 		if !vjsx.is_typescript_file(resolved) && !vjsx.is_javascript_file(resolved) {
 			continue
 		}
-		emit_runtime_module_graph(ctx, resolved, root, config_json, mut seen)!
+		emit_runtime_module_graph(ctx, resolved, root, mirror_base, config_json, mut seen)!
 		rewrites << ModuleRewrite{
 			from:     specifier
-			to:       file_relative_specifier(target_path, mirrored_runtime_path(root, resolved))
+			to:       file_relative_specifier(target_path, mirrored_runtime_path_from(root,
+				resolved, mirror_base))
 			resolved: resolved
 		}
 	}
@@ -159,7 +160,7 @@ pub fn build_runtime_module_entry(ctx &vjsx.Context, script_path string, as_modu
 			os.mkdir_all(root)!
 			ensure_runtime_support_files(root)!
 			mut seen := map[string]bool{}
-			emit_runtime_module_graph(ctx, script_path, root, config_json, mut seen)!
+			emit_runtime_module_graph(ctx, script_path, root, '', config_json, mut seen)!
 			return mirrored_runtime_path(root, script_path)
 		}
 		if typescript_needs_emit(ctx, script_path)! {
@@ -175,8 +176,39 @@ pub fn build_runtime_module_entry(ctx &vjsx.Context, script_path string, as_modu
 	os.mkdir_all(root)!
 	ensure_runtime_support_files(root)!
 	mut seen := map[string]bool{}
-	emit_runtime_module_graph(ctx, script_path, root, config_json, mut seen)!
+	emit_runtime_module_graph(ctx, script_path, root, '', config_json, mut seen)!
 	return mirrored_runtime_path(root, script_path)
+}
+
+fn build_runtime_module_entry_with_mirror_base(ctx &vjsx.Context, script_path string, as_module bool, temp_root string, mirror_base string) !string {
+	config_json := load_typescript_config(ctx, script_path) or { '' }
+	if !as_module {
+		if vjsx.is_javascript_file(script_path) && (is_commonjs_module(ctx, script_path) or {
+			false
+		}) {
+			root := if temp_root == '' { script_path + '.vjsbuild' } else { temp_root }
+			os.rmdir_all(root) or {}
+			os.mkdir_all(root)!
+			ensure_runtime_support_files(root)!
+			mut seen := map[string]bool{}
+			emit_runtime_module_graph(ctx, script_path, root, mirror_base, config_json, mut seen)!
+			return mirrored_runtime_path_from(root, script_path, mirror_base)
+		}
+		if typescript_needs_emit(ctx, script_path)! {
+			return transpile_typescript(ctx, script_path, false, config_json)!
+		}
+		return os.read_file(script_path)!
+	}
+	mut root := temp_root
+	if root == '' {
+		root = script_path + '.vjsbuild'
+	}
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root)!
+	ensure_runtime_support_files(root)!
+	mut seen := map[string]bool{}
+	emit_runtime_module_graph(ctx, script_path, root, mirror_base, config_json, mut seen)!
+	return mirrored_runtime_path_from(root, script_path, mirror_base)
 }
 
 pub fn run_runtime_entry(ctx &vjsx.Context, script_path string, as_module bool, temp_root string) !vjsx.Value {
@@ -221,13 +253,26 @@ pub fn run_runtime_entry(ctx &vjsx.Context, script_path string, as_module bool, 
 	return ctx.run_file(script_path, flag)
 }
 
+fn package_runtime_mirror_base(package_root string) string {
+	abs_path := os.abs_path(package_root)
+	parts := abs_path.split(os.path_separator)
+	for offset in 0 .. parts.len {
+		index := parts.len - 1 - offset
+		if parts[index] == 'node_modules' && index > 0 {
+			return parts[..index].join(os.path_separator)
+		}
+	}
+	return package_root
+}
+
 // Check the package's default runtime entry and its statically reachable module
 // graph without evaluating package code. An empty entry means that the package
 // has no importable default entry, which is not by itself an install failure.
 pub fn check_runtime_package_entry(ctx &vjsx.Context, package_root string, temp_root string) !string {
 	install_typescript_runtime(ctx)!
 	entry := resolve_package_root_entry(ctx, package_root, '') or { return '' }
-	emitted_entry := build_runtime_module_entry(ctx, entry, true, temp_root)!
+	emitted_entry := build_runtime_module_entry_with_mirror_base(ctx, entry, true, temp_root,
+		package_runtime_mirror_base(package_root))!
 	defer {
 		if temp_root != '' {
 			os.rmdir_all(temp_root) or {}

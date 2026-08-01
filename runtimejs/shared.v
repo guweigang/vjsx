@@ -58,6 +58,21 @@ fn runtime_relative_path(from string, to string) string {
 }
 
 fn mirrored_runtime_path(root string, source_path string) string {
+	return mirrored_runtime_path_from(root, source_path, '')
+}
+
+fn mirrored_runtime_path_from(root string, source_path string, mirror_base string) string {
+	if mirror_base.trim_space() != '' {
+		source_abs := os.abs_path(source_path).replace('\\', '/').trim_right('/')
+		base_abs := os.abs_path(mirror_base).replace('\\', '/').trim_right('/')
+		if source_abs == base_abs {
+			return root
+		}
+		prefix := base_abs + '/'
+		if source_abs.starts_with(prefix) {
+			return os.join_path(root, source_abs[prefix.len..])
+		}
+	}
 	normalized := source_path.replace('\\', '/')
 	mut trimmed := normalized.trim_left('/')
 	if trimmed.len >= 2 && trimmed[1] == 58 {
