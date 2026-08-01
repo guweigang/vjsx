@@ -2,6 +2,11 @@ name: Release Binaries
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish GitHub release
+        type: boolean
+        default: true
   push:
     tags:
       - "v*"
@@ -221,6 +226,7 @@ jobs:
     needs:
       - metadata
       - build
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_release
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
