@@ -59,6 +59,11 @@ jobs:
             binary: vjsx
             archive: vjsx-linux-x64.tar.gz
             shell: bash
+          - os: ubuntu-24.04-arm
+            artifact: vjsx-linux-arm64
+            binary: vjsx
+            archive: vjsx-linux-arm64.tar.gz
+            shell: bash
           - os: macos-26-intel
             artifact: vjsx-darwin-x64
             binary: vjsx

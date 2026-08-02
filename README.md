@@ -297,6 +297,7 @@ produces platform-specific archives:
 
 - `vjsx-darwin-arm64.tar.gz`
 - `vjsx-darwin-x64.tar.gz`
+- `vjsx-linux-arm64.tar.gz`
 - `vjsx-linux-x64.tar.gz`
 - `vjsx-windows-x64.zip`
 
