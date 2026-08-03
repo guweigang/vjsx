@@ -98,20 +98,51 @@ pub fn (v Value) json_stringify() string {
 // Convert Value to `V` JSError
 @[manualfree]
 pub fn (v Value) to_error() &JSError {
-	if !v.is_error() {
-		return &JSError{}
+	// JavaScript permits throwing any value. In particular, errors originating
+	// in another bundle or custom error-like classes are not guaranteed to pass
+	// JS_IsError, even though they still expose useful diagnostic properties.
+	fallback := v.to_string()
+	name := v.error_field_string('name')
+	message := v.error_field_string('message')
+	stack := v.error_field_string('stack')
+	location := v.error_field_string('location')
+	expected := v.error_field_string('expected')
+	found := v.error_field_string('found')
+	display_message := if message != '' {
+		if name != '' && !message.starts_with('${name}:') { '${name}: ${message}' } else { message }
+	} else if fallback != '' {
+		fallback
+	} else if name != '' {
+		name
+	} else {
+		'JavaScript exception'
 	}
-	message := v.to_string()
-	name := v.get('name')
-	stack := v.get('stack')
 	err := &JSError{
-		name: if name.is_undefined() { '' } else { name.to_string() }
-		message: message
-		stack: if stack.is_undefined() { '' } else { stack.to_string() }
+		name:     name
+		message:  display_message
+		stack:    stack
+		location: location
+		expected: expected
+		found:    found
 	}
-	stack.free()
-	name.free()
 	return err
+}
+
+fn (v Value) error_field_string(key string) string {
+	field := v.get(key)
+	defer {
+		field.free()
+	}
+	if field.is_exception() {
+		// A hostile getter must not replace the exception being converted.
+		getter_exception := v.ctx.js_exception_value()
+		getter_exception.free()
+		return ''
+	}
+	if field.is_undefined() || field.is_null() {
+		return ''
+	}
+	return field.to_string()
 }
 
 // Convert Value to `V` bool

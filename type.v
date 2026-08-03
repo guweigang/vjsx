@@ -112,6 +112,15 @@ pub fn (ctx &Context) js_error(err JSError) Value {
 	if err.stack != '' {
 		val.set('stack', ctx.js_string(err.stack))
 	}
+	if err.location != '' {
+		val.set('location', ctx.js_string(err.location))
+	}
+	if err.expected != '' {
+		val.set('expected', ctx.js_string(err.expected))
+	}
+	if err.found != '' {
+		val.set('found', ctx.js_string(err.found))
+	}
 	return val
 }
 

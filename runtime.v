@@ -19,9 +19,12 @@ pub const version = '0.0.2'
 pub struct JSError {
 	Error
 pub mut:
-	name    string = 'Error'
-	stack   string
-	message string
+	name     string = 'Error'
+	stack    string
+	message  string
+	location string
+	expected string
+	found    string
 }
 
 // lookup/print JSError message.

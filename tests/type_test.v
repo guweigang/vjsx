@@ -61,3 +61,71 @@ fn test_type() {
 	})
 	assert cb.is_function() == true
 }
+
+fn test_call_this_captures_thrown_plain_object() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	thrower := ctx.eval('(function () { throw { name: "SyntaxError", message: "invalid SQL" }; })') or {
+		panic(err)
+	}
+	defer {
+		thrower.free()
+	}
+
+	ctx.call_this(ctx.js_null(), thrower) or {
+		assert err.msg() == 'SyntaxError: invalid SQL\n'
+		return
+	}
+	assert false, 'call_this should return the thrown object as an error'
+}
+
+fn test_call_this_captures_thrown_custom_error_like_class() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	thrower := ctx.eval('(function () { class ParserSyntaxError { constructor(message) { this.name = "SyntaxError"; this.message = message; } } throw new ParserSyntaxError("invalid SQL"); })') or {
+		panic(err)
+	}
+	defer {
+		thrower.free()
+	}
+
+	ctx.call_this(ctx.js_null(), thrower) or {
+		assert err.msg() == 'SyntaxError: invalid SQL\n'
+		return
+	}
+	assert false, 'call_this should return the custom error-like object as an error'
+}
+
+fn test_call_this_extracts_diagnostics_and_uses_to_string_fallback() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	thrower := ctx.eval('(function () { throw { name: "ParseError", stack: "parse stack", location: "query.sql:1", expected: "identifier", found: "FROM", toString() { return "parser failed"; } }; })') or {
+		panic(err)
+	}
+	defer {
+		thrower.free()
+	}
+
+	ctx.call_this(ctx.js_null(), thrower) or {
+		assert err is vjsx.JSError
+		if err is vjsx.JSError {
+			assert err.name == 'ParseError'
+			assert err.stack == 'parse stack'
+			assert err.location == 'query.sql:1'
+			assert err.expected == 'identifier'
+			assert err.found == 'FROM'
+		}
+		assert err.msg() == 'parser failed\nparse stack'
+		return
+	}
+	assert false, 'call_this should use the thrown value toString fallback'
+}
