@@ -22,7 +22,8 @@ pub:
 	rt                 Runtime
 	host_cleanup_state &HostCleanupState
 mut:
-	asset_root string
+	asset_root      string
+	runtime_profile string
 }
 
 pub fn (ctx &Context) ref_ptr() voidptr {
@@ -165,6 +166,7 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 			installed_modules: map[string]bool{}
 		}
 		asset_root:         config.asset_root
+		runtime_profile:    'bare'
 	}
 	C.JS_SetContextOpaque(ref, ctx)
 	C.JS_SetModuleLoaderFunc(rt.ref, &vjsx_runtime_module_normalize, &vjsx_runtime_module_loader,
@@ -375,6 +377,7 @@ pub fn (ctx &Context) dup_context() &Context {
 		rt:                 ctx.rt
 		host_cleanup_state: ctx.host_cleanup_state
 		asset_root:         ctx.asset_root
+		runtime_profile:    ctx.runtime_profile
 	}
 }
 

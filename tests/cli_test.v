@@ -55,6 +55,12 @@ fn test_cli_help_and_version_commands() {
 	assert help_output.exit_code == 0
 	assert help_output.output.contains('vjsx capabilities [--runtime|-r <node|script|browser>]')
 	assert help_output.output.contains('vjsx repair [--registry <url>] [package...]')
+	assert help_output.output.contains('Compile command:')
+	assert help_output.output.contains('--entry-only          Required in this release.')
+	assert help_output.output.contains('-o, --output <file>')
+	assert help_output.output.contains('Loading preserves module.exports')
+	assert help_output.output.contains('ctx.load_bytecode(bytecode)')
+	assert help_output.output.contains('Load only trusted bytecode.')
 	assert help_output.output.contains('Runtime profiles:')
 }
 

@@ -72,6 +72,40 @@ static inline void vjsx_js_eval_function_out(JSContext *ctx, JSValue func_obj, J
 	*out = JS_EvalFunction(ctx, func_obj);
 }
 
+static inline uint8_t *vjsx_js_write_bytecode(JSContext *ctx, size_t *out_len,
+                                              JSValueConst obj, int strip_source,
+                                              int strip_debug) {
+	int flags = JS_WRITE_OBJ_BYTECODE;
+#if defined(JS_WRITE_OBJ_STRIP_SOURCE)
+	if (strip_source) {
+		flags |= JS_WRITE_OBJ_STRIP_SOURCE;
+	}
+#else
+	(void)strip_source;
+#endif
+#if defined(JS_WRITE_OBJ_STRIP_DEBUG)
+	if (strip_debug) {
+		flags |= JS_WRITE_OBJ_STRIP_DEBUG;
+	}
+#else
+	(void)strip_debug;
+#endif
+	return JS_WriteObject(ctx, out_len, obj, flags);
+}
+
+static inline void vjsx_js_read_bytecode_out(JSContext *ctx, const uint8_t *buf,
+                                             size_t buf_len, JSValue *out) {
+	*out = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
+}
+
+static inline const char *vjsx_quickjs_version(void) {
+#if defined(VJSX_QUICKJS_NG)
+	return JS_GetVersion();
+#else
+	return CONFIG_VERSION;
+#endif
+}
+
 static inline int vjsx_js_resolve_module(JSContext *ctx, JSValueConst module_obj) {
 	return JS_ResolveModule(ctx, module_obj);
 }

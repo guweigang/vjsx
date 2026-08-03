@@ -60,6 +60,12 @@ pub fn (mod ScriptModule) get_export(name string) !Value {
 	return value.dup_value()
 }
 
+// Return a duplicate of a named CommonJS or ES module export.
+// This is a concise alias for get_export(), useful for embedded runtimes.
+pub fn (mod ScriptModule) get(name string) !Value {
+	return mod.get_export(name)
+}
+
 // Return a duplicate of the default export.
 pub fn (mod ScriptModule) default_export() !Value {
 	return mod.get_export('default')

@@ -4,7 +4,7 @@ import os
 import vjsx
 import runtimejs
 
-const cli_version = '0.0.1'
+const cli_version = vjsx.version
 
 struct CliOptions {
 	command          string
@@ -18,6 +18,8 @@ struct CliOptions {
 	list_depth       int = -1
 	list_omit        []string
 	list_json        bool
+	output_file      string
+	entry_only       bool
 }
 
 @[noreturn]
@@ -40,6 +42,7 @@ fn help_text() string {
 Usage:
   vjsx [run] [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
   vjsx check [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
+  vjsx compile --entry-only [--runtime|-r <node|script|browser>] <input.js> -o <output.qbc>
   vjsx check-runtime [--runtime|-r <node|script|browser>]
   vjsx capabilities [--runtime|-r <node|script|browser>]
   vjsx install [--registry <url>] [--dev] [package[@version]...]
@@ -52,10 +55,30 @@ Usage:
   vjsx help
 
 Options:
-  -h, --help       Show this help text
-  -v, --version    Show the vjsx version
-  -m, --module     Run input as an ES module
-  -r, --runtime    Select host runtime profile: node, script, browser
+  -h, --help            Show this help text
+  -v, --version         Show the vjsx version
+  -m, --module          Run or check input as an ES module
+  -r, --runtime <name>  Select host runtime profile: node, script, browser
+
+Runtime commands:
+  run           Execute a JavaScript or TypeScript file (default command).
+  check         Load and execute a file, returning a non-zero status on failure.
+  check-runtime Verify that the selected runtime profile is complete.
+  capabilities Print globals, modules, and host features exposed by a profile.
+
+Compile command:
+  compile       Compile a self-contained UMD/CommonJS file to QuickJS bytecode.
+
+Compile options:
+  --entry-only          Required in this release. Compile one self-contained file;
+                        imports and require() dependencies are not bundled.
+  -o, --output <file>   Write the versioned bytecode artifact to this .qbc file.
+  -r, --runtime <name>  Record the required runtime profile in the artifact.
+
+Bytecode artifacts:
+  Loading preserves module.exports, so embedded hosts can access exports such as
+  Parser through ctx.load_bytecode(bytecode). Artifacts are tied to the vjsx and
+  QuickJS ABI and to the selected runtime profile. Load only trusted bytecode.
 
 Runtime profiles:
   node      Node-like host with process, Buffer, timers, fs/path/http/https/os,
@@ -70,6 +93,13 @@ Package commands:
   repair    Restore locked packages without changing dependency versions.
   ls        Print the installed dependency tree from package-lock.json and node_modules.
   remove    Remove top-level dependencies from package.json, package-lock.json, and node_modules.
+
+Examples:
+  vjsx app.js arg1 arg2
+  vjsx --module --runtime node app.mjs
+  vjsx check --module app.mjs
+  vjsx compile --entry-only --runtime node parser.umd.js -o parser.qbc
+  vjsx capabilities --runtime browser
 '
 }
 
@@ -132,9 +162,72 @@ fn parse_args(args []string) CliOptions {
 		}
 	}
 	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
-		'repair', 'ls', 'list', 'remove', 'uninstall'] {
+		'repair', 'ls', 'list', 'remove', 'uninstall', 'compile'] {
 		command = rest[0]
 		rest = rest[1..].clone()
+	}
+
+	if command == 'compile' {
+		mut input_file := ''
+		mut output_file := ''
+		mut entry_only := false
+		mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
+		mut i := 0
+		for i < rest.len {
+			arg := rest[i]
+			match arg {
+				'--entry-only' {
+					entry_only = true
+				}
+				'--runtime', '-r' {
+					if i + 1 >= rest.len {
+						fail('missing runtime profile after ${arg}')
+					}
+					runtime_profile = rest[i + 1]
+					i++
+				}
+				'--output', '-o' {
+					if i + 1 >= rest.len {
+						fail('missing output path after ${arg}')
+					}
+					output_file = rest[i + 1]
+					i++
+				}
+				'--help', '-h' {
+					usage()
+					exit(0)
+				}
+				else {
+					if arg.starts_with('-') {
+						fail('unknown compile flag: ${arg}')
+					}
+					if input_file != '' {
+						fail('unexpected compile argument: ${arg}')
+					}
+					input_file = arg
+				}
+			}
+			i++
+		}
+		if !entry_only {
+			fail('vjsx compile currently requires --entry-only; module graph bundling is not implemented')
+		}
+		if runtime_profile !in ['node', 'script', 'browser'] {
+			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
+		}
+		if input_file == '' {
+			fail('missing compile input path')
+		}
+		if output_file == '' {
+			fail('missing compile output path; use -o <output.qbc>')
+		}
+		return CliOptions{
+			command:         command
+			script_file:     input_file
+			output_file:     output_file
+			entry_only:      entry_only
+			runtime_profile: runtime_profile
+		}
 	}
 
 	if command == 'install' || command == 'repair' || command == 'remove' || command == 'uninstall'
@@ -536,6 +629,29 @@ fn run_script(opts CliOptions) !string {
 	return ''
 }
 
+fn compile_script(opts CliOptions) !string {
+	input_path := os.real_path(opts.script_file)
+	if !os.exists(input_path) {
+		return error('script not found: ${input_path}')
+	}
+	source := os.read_file(input_path)!
+	bytecode := vjsx.compile_module(source,
+		filename:        input_path
+		runtime_profile: opts.runtime_profile
+	)!
+	output_path := if os.is_abs_path(opts.output_file) {
+		opts.output_file
+	} else {
+		os.join_path(os.getwd(), opts.output_file)
+	}
+	output_dir := os.dir(output_path)
+	if output_dir != '' && output_dir != '.' {
+		os.mkdir_all(output_dir)!
+	}
+	os.write_file_array(output_path, bytecode)!
+	return ''
+}
+
 fn main() {
 	if cli_cwd := os.getenv_opt('VJS_CLI_CWD') {
 		if cli_cwd != '' {
@@ -558,6 +674,9 @@ fn main() {
 		}
 		'check' {
 			run_script(opts) or { fail(err.msg()) }
+		}
+		'compile' {
+			compile_script(opts) or { fail(err.msg()) }
 		}
 		'install' {
 			install_packages(opts) or { fail(err.msg()) }

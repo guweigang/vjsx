@@ -3,6 +3,7 @@ module runtimejs
 import vjsx
 
 pub fn install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRuntimeConfig) {
+	ctx.set_runtime_profile('browser')
 	ctx.install_console(config.log_fn, config.error_fn)
 	ctx.install_binary_globals()
 	ctx.install_timer_globals()

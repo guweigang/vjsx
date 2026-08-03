@@ -52,6 +52,7 @@ pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatC
 
 // Install a Node-like compatibility host into the current context.
 pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
+	ctx.set_runtime_profile('node')
 	if config.asset_root != '' {
 		ctx.set_asset_root(config.asset_root)
 	}

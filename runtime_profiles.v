@@ -43,6 +43,7 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	})
+	ctx.set_runtime_profile('script')
 }
 
 // Install a fuller Node-like runtime profile.
@@ -57,4 +58,18 @@ pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
 		log_fn:       config.log_fn
 		error_fn:     config.error_fn
 	})
+	ctx.set_runtime_profile('node')
+}
+
+// Record the host runtime profile associated with this context. Runtime
+// installers call this so bytecode artifacts can be rejected before QuickJS
+// sees bytecode compiled for a different host contract.
+pub fn (ctx &Context) set_runtime_profile(profile string) {
+	mut target := unsafe { ctx }
+	target.runtime_profile = profile.trim_space()
+}
+
+// Return the host runtime profile associated with this context.
+pub fn (ctx &Context) runtime_profile() string {
+	return ctx.runtime_profile
 }

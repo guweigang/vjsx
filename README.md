@@ -208,6 +208,40 @@ profiles, including globals, browser-style APIs, and Node-style modules. Use
 `--runtime node`, `--runtime script`, or `--runtime browser` to inspect one
 profile.
 
+Self-contained UMD/CommonJS files can be compiled to QuickJS bytecode during a
+build:
+
+```bash
+./vjsx compile --entry-only --runtime node ./vendor/parser.umd.js -o parser.qbc
+```
+
+The artifact contains a compiled CommonJS factory and preserves
+`module.exports`. It can be embedded and loaded without the original source or
+a module resolver:
+
+```v
+bytecode := os.read_bytes('parser.qbc')!
+mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{},
+	vjsx.NodeRuntimeConfig{})
+ctx := session.context()
+mut parser_module := ctx.load_bytecode(bytecode)!
+parser_class := parser_module.get('Parser')!
+```
+
+Retain the returned `ScriptModule` (and any constructed JS objects) to reuse
+the initialized module in a long-lived context. Bytecode artifacts are checked
+for vjsx format/runtime, QuickJS ABI, checksum, and runtime profile before
+deserialization. QuickJS bytecode is not safe for hostile input, so only load
+artifacts produced by a trusted build. `--entry-only` does not bundle imports;
+it is intended for self-contained files.
+
+To measure parser startup and steady-state calls separately:
+
+```bash
+VJS_QUICKJS_PATH=$(./scripts/ensure-quickjs.sh) \
+  v -d build_quickjs run ./examples/bytecode_parser_benchmark.v parser.qbc
+```
+
 Packages can be installed without a local Node/npm dependency:
 
 ```bash
