@@ -45,3 +45,6 @@ tests/.wechat_*
 
 # Generated JS/TS runtime build directories
 *.vjsbuild/
+
+# Shared CLI test runners and compiler cache
+/.cache/cli-tests/
