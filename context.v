@@ -192,6 +192,7 @@ fn (ctx &Context) run_host_cleanups() {
 
 // Core evaluate JS
 pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
+	ctx.rt.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
 	input := op.input
 	len := op.len
@@ -210,7 +211,7 @@ pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
 	}
 	val := ctx.c_val(ref)
 	if val.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	return val
 }
@@ -268,6 +269,7 @@ pub fn (ctx &Context) eval_module(input string, fname string) !Value {
 
 // Compile and resolve an ES module graph without evaluating module bodies.
 pub fn (ctx &Context) compile_module(input string, fname string) ! {
+	ctx.rt.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
 	C.vjsx_js_eval_out(ctx.ref, input.str, usize(input.len), fname.str,
 		type_module | type_compile_only, &ref)
@@ -276,11 +278,11 @@ pub fn (ctx &Context) compile_module(input string, fname string) ! {
 		value.free()
 	}
 	if value.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	def_set_meta(ctx, ref)
 	if C.vjsx_js_resolve_module(ctx.ref, ref) < 0 {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 }
 
@@ -355,11 +357,12 @@ pub fn (ctx &Context) eval_function(val Value) Value {
 
 // Callback this from Context
 pub fn (ctx &Context) call_this(this Value, val Value, args ...AnyValue) !Value {
+	ctx.rt.ensure_executable()!
 	c_args := args.map(ctx.any_to_val(it).ref)
 	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
 	ret := ctx.c_val(C.JS_Call(ctx.ref, val.ref, this.ref, c_args.len, c_val))
 	if ret.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	return ret
 }
@@ -430,9 +433,7 @@ pub fn (ctx &Context) end() {
 
 // Get runtime from context
 pub fn (ctx &Context) runtime() Runtime {
-	return Runtime{
-		ref: C.JS_GetRuntime(ctx.ref)
-	}
+	return ctx.rt
 }
 
 // Free the context.

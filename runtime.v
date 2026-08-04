@@ -5,10 +5,14 @@ import v.vmod
 @[typedef]
 struct C.JSRuntime {}
 
+@[typedef]
+struct C.VJSXInterruptState {}
+
 // Runtime structure based on `JSRuntime` in qjs
 // and implemented into `ref`.
 pub struct Runtime {
-	ref &C.JSRuntime
+	ref             &C.JSRuntime
+	interrupt_state &C.VJSXInterruptState
 }
 
 pub const default_runtime_max_stack_size = u32(16 * 1024 * 1024)
@@ -45,6 +49,12 @@ fn C.JS_SetGCThreshold(&C.JSRuntime, usize)
 fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
 fn C.JS_IsJobPending(&C.JSRuntime) bool
 fn C.JS_ExecutePendingJob(&C.JSRuntime, &&C.JSContext) int
+fn C.vjsx_interrupt_state_new(&C.JSRuntime) &C.VJSXInterruptState
+fn C.vjsx_interrupt_state_free(&C.JSRuntime, &C.VJSXInterruptState)
+fn C.vjsx_interrupt_set_deadline_after_ms(&C.VJSXInterruptState, u64)
+fn C.vjsx_interrupt_clear_deadline(&C.VJSXInterruptState)
+fn C.vjsx_interrupt_cancel(&C.VJSXInterruptState)
+fn C.vjsx_interrupt_reason(&C.VJSXInterruptState) int
 
 // Create new Runtime.
 // This is the low-level manual ownership path. Prefer
@@ -58,7 +68,16 @@ fn C.JS_ExecutePendingJob(&C.JSRuntime, &&C.JSContext) int
 // }
 // ```
 pub fn new_runtime() Runtime {
-	rt := Runtime{C.JS_NewRuntime()}
+	ref := C.JS_NewRuntime()
+	interrupt_state := C.vjsx_interrupt_state_new(ref)
+	if isnil(interrupt_state) {
+		C.JS_FreeRuntime(ref)
+		panic('failed to allocate QuickJS interrupt state')
+	}
+	rt := Runtime{
+		ref:             ref
+		interrupt_state: interrupt_state
+	}
 	C.JS_SetCanBlock(rt.ref, 1)
 	return rt
 }
@@ -71,6 +90,7 @@ pub fn (rt Runtime) is_job_pending() bool {
 // Execute a single pending QuickJS job if one is ready.
 // Returns `true` when a job ran, `false` when the queue was empty.
 pub fn (rt Runtime) execute_pending_job() !bool {
+	rt.ensure_executable()!
 	mut job_ctx := &C.JSContext(unsafe { nil })
 	status := C.JS_ExecutePendingJob(rt.ref, &job_ctx)
 	if status < 0 {
@@ -82,7 +102,7 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 					cleanups:          []HostCleanup{}
 					installed_modules: map[string]bool{}
 				}
-			}).js_exception()
+			}).execution_error()
 		}
 		return error('failed to execute pending QuickJS job')
 	}
@@ -113,5 +133,6 @@ pub fn (rt Runtime) run_gc() {
 // Only use this when you are managing ownership manually. When using
 // `RuntimeSession`, call `session.close()` instead.
 pub fn (rt &Runtime) free() {
+	C.vjsx_interrupt_state_free(rt.ref, rt.interrupt_state)
 	C.JS_FreeRuntime(rt.ref)
 }
