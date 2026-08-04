@@ -62,7 +62,7 @@ fn install_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry:      normalize_registry(opts.install_registry)
+		registry:      normalize_registry(opts.install_registry)!
 		root:          root
 		install_root:  staging_root
 		dev:           opts.install_dev
@@ -134,7 +134,7 @@ fn repair_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry:      normalize_registry(opts.install_registry)
+		registry:      normalize_registry(opts.install_registry)!
 		root:          root
 		install_root:  staging_root
 		installed:     map[string]bool{}
@@ -508,7 +508,7 @@ fn sorted_string_map_keys(values map[string]string) []string {
 	return keys
 }
 
-fn normalize_registry(registry string) string {
+fn normalize_registry(registry string) !string {
 	mut trimmed := registry.trim_space()
 	if trimmed == '' {
 		trimmed = 'https://registry.npmjs.org'
@@ -516,7 +516,36 @@ fn normalize_registry(registry string) string {
 	for trimmed.ends_with('/') {
 		trimmed = trimmed[..trimmed.len - 1]
 	}
+	validate_https_url(trimmed, 'registry')!
 	return trimmed
+}
+
+fn validate_https_url(url string, kind string) ! {
+	if !url.starts_with('https://') {
+		return error('${kind} URL must use https://: ${url}')
+	}
+}
+
+fn validate_package_name(name string) ! {
+	if name == '' {
+		return error('package name is required')
+	}
+	if name.len > 214 {
+		return error('package name is too long: ${name}')
+	}
+	if name.contains('\\') || name.starts_with('/') || name.contains('..') {
+		return error('invalid package name: ${name}')
+	}
+	if name.starts_with('@') {
+		parts := name.split('/')
+		if parts.len != 2 || parts[0].len <= 1 || parts[1] == '' || parts[1].contains('/') {
+			return error('invalid scoped package name: ${name}')
+		}
+		return
+	}
+	if name.contains('/') || name.starts_with('.') {
+		return error('invalid package name: ${name}')
+	}
 }
 
 fn package_json_specs(root string, include_dev bool) ![]string {
@@ -555,23 +584,29 @@ fn parse_package_spec(input string) !PackageSpec {
 		slash := spec.index('/') or { return error('invalid scoped package spec: ${spec}') }
 		rest := spec[slash + 1..]
 		if at := rest.last_index('@') {
+			name := spec[..slash + 1 + at]
+			validate_package_name(name)!
 			return PackageSpec{
-				name:    spec[..slash + 1 + at]
+				name:    name
 				version: rest[at + 1..]
 			}
 		}
+		validate_package_name(spec)!
 		return PackageSpec{
 			name: spec
 		}
 	}
 	if at := spec.last_index('@') {
 		if at > 0 {
+			name := spec[..at]
+			validate_package_name(name)!
 			return PackageSpec{
-				name:    spec[..at]
+				name:    name
 				version: spec[at + 1..]
 			}
 		}
 	}
+	validate_package_name(spec)!
 	return PackageSpec{
 		name: spec
 	}
@@ -582,6 +617,7 @@ fn registry_package_path(name string) string {
 }
 
 fn (mut installer Installer) install_spec(spec PackageSpec) ! {
+	validate_package_name(spec.name)!
 	if workspace := installer.workspaces[spec.name] {
 		installer.install_workspace(spec, workspace)!
 		return
@@ -633,6 +669,7 @@ fn (mut installer Installer) install_spec(spec PackageSpec) ! {
 }
 
 fn (mut installer Installer) install_workspace(spec PackageSpec, workspace WorkspacePackage) ! {
+	validate_package_name(spec.name)!
 	installer.package_names[spec.name] = true
 	if spec.version.starts_with('workspace:')
 		&& !workspace_version_satisfies(workspace.version, spec.version) {
@@ -664,6 +701,7 @@ fn (mut installer Installer) install_workspace(spec PackageSpec, workspace Works
 }
 
 fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg LockPackage) ! {
+	validate_package_name(spec.name)!
 	key := '${spec.name}@${lock_pkg.version}'
 	installer.package_names[spec.name] = true
 	if installer.installed[key] {
@@ -745,6 +783,7 @@ fn (installer Installer) installed_peer_version(name string) string {
 }
 
 fn (installer Installer) fetch_metadata(name string) !json2.Any {
+	validate_package_name(name)!
 	url := '${installer.registry}/${registry_package_path(name)}'
 	resp := http.fetch(url: url, method: .get)!
 	if resp.status_code < 200 || resp.status_code >= 300 {
@@ -754,6 +793,7 @@ fn (installer Installer) fetch_metadata(name string) !json2.Any {
 }
 
 fn (installer Installer) fetch_tarball(url string) ![]u8 {
+	validate_https_url(url, 'tarball')!
 	resp := http.fetch(url: url, method: .get)!
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('tarball request failed: HTTP ${resp.status_code}: ${url}')

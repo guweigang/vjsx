@@ -34,6 +34,25 @@ fn test_cli_env_runtime_profile_is_validated() {
 	assert !output.output.contains('should-not-run')
 }
 
+fn test_cli_rejects_path_like_package_names() {
+	output := os.execute('${cli_test_support.command(false)} remove ../evil')
+	assert output.exit_code != 0
+	assert output.output.contains('invalid package name')
+}
+
+fn test_cli_rejects_insecure_package_registry() {
+	root := os.join_path(os.temp_dir(), 'vjsx_cli_registry_test_${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	output :=
+		os.execute('cd ${root} && ${cli_test_support.command(false)} install --registry http://registry.invalid example')
+	assert output.exit_code != 0
+	assert output.output.contains('registry URL must use https://')
+}
+
 fn test_cli_repair_and_remove_package_graph() {
 	repair_root := os.join_path(os.temp_dir(), 'vjsx_cli_repair_test_${os.getpid()}')
 	os.rmdir_all(repair_root) or {}

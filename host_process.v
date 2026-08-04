@@ -4,7 +4,15 @@ import os
 
 const node_process_version = 'v0.0.0-vjsx'
 
-fn process_env_proxy(ctx &Context) Value {
+@[params]
+pub struct ProcessConfig {
+pub:
+	args            []string
+	allow_env_write bool = true
+}
+
+fn process_env_proxy(ctx &Context, allow_env_write bool) Value {
+	writable := if allow_env_write { 'true' } else { 'false' }
 	return ctx.eval('(() => new Proxy(Object.create(null), {
 		get(_target, prop) {
 			if (typeof prop !== "string") {
@@ -19,11 +27,17 @@ fn process_env_proxy(ctx &Context) Value {
 			if (typeof prop !== "string") {
 				return false;
 			}
+			if (!${writable}) {
+				return false;
+			}
 			globalThis.__vjs_process_env_set(prop, String(value));
 			return true;
 		},
 		deleteProperty(_target, prop) {
 			if (typeof prop !== "string") {
+				return false;
+			}
+			if (!${writable}) {
 				return false;
 			}
 			globalThis.__vjs_process_env_unset(prop);
@@ -41,7 +55,7 @@ fn process_env_proxy(ctx &Context) Value {
 				configurable: true,
 				enumerable: true,
 				value: globalThis.__vjs_process_env_get(prop),
-				writable: true
+				writable: ${writable}
 			};
 		}
 	}))()') or {
@@ -83,6 +97,12 @@ fn process_release_value(ctx &Context) Value {
 
 // Install a Node-leaning `process` global with cwd/env/stdio helpers.
 pub fn (ctx &Context) install_process(args []string) {
+	ctx.install_process_config(ProcessConfig{
+		args: args
+	})
+}
+
+pub fn (ctx &Context) install_process_config(config ProcessConfig) {
 	global := ctx.js_global()
 	process := ctx.js_object()
 	process.set('cwd', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -96,7 +116,7 @@ pub fn (ctx &Context) install_process(args []string) {
 		return ctx.js_undefined()
 	}))
 	argv := ctx.js_array()
-	for i, arg in args {
+	for i, arg in config.args {
 		argv.set(i, arg)
 	}
 	exec_argv := ctx.js_array()
@@ -104,7 +124,11 @@ pub fn (ctx &Context) install_process(args []string) {
 	process.set('arch', ctx.js_string(node_os_arch()))
 	process.set('pid', ctx.js_int(os.getpid()))
 	process.set('ppid', ctx.js_int(os.getppid()))
-	process.set('argv0', ctx.js_string(if args.len > 0 { args[0] } else { os.executable() }))
+	process.set('argv0', ctx.js_string(if config.args.len > 0 {
+		config.args[0]
+	} else {
+		os.executable()
+	}))
 	process.set('execPath', ctx.js_string(os.executable()))
 	process.set('version', ctx.js_string(node_process_version))
 	versions := process_versions_value(ctx)
@@ -151,14 +175,20 @@ pub fn (ctx &Context) install_process(args []string) {
 		}
 		return ctx.js_bool(args[0].str() in os.environ())
 	}))
-	global.set('__vjs_process_env_set', ctx.js_function(fn [ctx] (args []Value) Value {
+	global.set('__vjs_process_env_set', ctx.js_function(fn [ctx, config] (args []Value) Value {
+		if !config.allow_env_write {
+			return ctx.js_bool(false)
+		}
 		if args.len < 2 {
 			return ctx.js_bool(false)
 		}
 		os.setenv(args[0].str(), args[1].str(), true)
 		return ctx.js_bool(true)
 	}))
-	global.set('__vjs_process_env_unset', ctx.js_function(fn [ctx] (args []Value) Value {
+	global.set('__vjs_process_env_unset', ctx.js_function(fn [ctx, config] (args []Value) Value {
+		if !config.allow_env_write {
+			return ctx.js_bool(false)
+		}
 		if args.len == 0 {
 			return ctx.js_bool(false)
 		}
@@ -174,7 +204,7 @@ pub fn (ctx &Context) install_process(args []string) {
 		}
 		return arr
 	}))
-	env := process_env_proxy(ctx)
+	env := process_env_proxy(ctx, config.allow_env_write)
 	process.set('env', env)
 	global.set('process', process)
 	argv.free()

@@ -1,9 +1,82 @@
+import os
 import v.vmod
 import vjsx { Value }
 
 fn test_runtime_version_matches_vmod() {
 	vm := vmod.decode(@VMOD_FILE) or { panic(err) }
 	assert vjsx.version == vm.version
+}
+
+fn test_node_policy_can_disable_process_env_writes() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	key := 'VJSX_POLICY_ENV_${os.getpid()}'
+	ctx.install_node_compat(vjsx.NodeCompatConfig{
+		console:       false
+		timers:        false
+		fs:            false
+		path:          false
+		os:            false
+		http:          false
+		https:         false
+		fetch:         false
+		child_process: false
+		process:       true
+		sqlite:        false
+		mysql:         false
+		process_args:  ['inline.js']
+		policy:        vjsx.HostPolicy{
+			allow_env_write: false
+		}
+	})
+	value := ctx.eval('process.env.${key} = "blocked"; String(process.env.${key} === undefined)') or {
+		panic(err)
+	}
+	assert value.str() == 'true'
+	value.free()
+}
+
+fn test_node_policy_can_disable_shell_execution() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	ctx.install_node_compat(vjsx.NodeCompatConfig{
+		console:       false
+		timers:        false
+		fs:            false
+		path:          false
+		os:            false
+		http:          false
+		https:         false
+		fetch:         false
+		child_process: true
+		process:       false
+		sqlite:        false
+		mysql:         false
+		policy:        vjsx.HostPolicy{
+			allow_shell: false
+		}
+	})
+	ctx.eval('
+		import { execSync } from "child_process";
+		try {
+			execSync("printf should-not-run");
+			globalThis.__shellPolicy = "ran";
+		} catch (err) {
+			globalThis.__shellPolicy = String(err.message);
+		}
+	',
+		vjsx.type_module) or { panic(err) }
+	global := ctx.js_global()
+	value := global.get('__shellPolicy')
+	assert value.str().contains('shell execution is disabled')
+	value.free()
+	global.free()
 }
 
 fn test_atom() {

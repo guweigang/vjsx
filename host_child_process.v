@@ -10,12 +10,12 @@ enum ChildProcessStdioMode {
 
 struct ChildProcessSyncOptions {
 mut:
-	cwd      string
-	env      map[string]string
-	env_set  bool
-	stdio    ChildProcessStdioMode = .pipe
-	encoding string                = 'utf8'
-	shell    string
+	cwd       string
+	env       map[string]string
+	env_set   bool
+	stdio     ChildProcessStdioMode = .pipe
+	encoding  string                = 'utf8'
+	shell     string
 	use_shell bool
 }
 
@@ -24,6 +24,13 @@ struct ChildProcessRunResult {
 	pid    int
 	stdout string
 	stderr string
+}
+
+@[params]
+pub struct ChildProcessModuleConfig {
+pub:
+	roots       []string
+	allow_shell bool = true
 }
 
 struct ChildProcessAsyncInvocation {
@@ -196,9 +203,9 @@ fn child_process_fork_invocation(args []Value) !ChildProcessForkInvocation {
 	}
 	mut invocation := ChildProcessForkInvocation{
 		module_path: args[0].str()
-		options: ChildProcessSyncOptions{}
-		exec_path: ''
-		exec_argv: []string{}
+		options:     ChildProcessSyncOptions{}
+		exec_path:   ''
+		exec_argv:   []string{}
 	}
 	mut options_index := -1
 	if args.len > 1 && !args[1].is_undefined() && !args[1].is_null() {
@@ -337,7 +344,8 @@ fn child_process_filtered_listeners(ctx &Context, listeners Value, callback Valu
 	for i in 0 .. listeners.len() {
 		entry := listeners.get(i)
 		entry_callback := entry.get('callback')
-		should_remove := remove_all || (callback.is_function() && entry_callback.strict_eq(callback))
+		should_remove := remove_all
+			|| (callback.is_function() && entry_callback.strict_eq(callback))
 		if !should_remove {
 			next_listeners.set(next_listeners.len(), entry)
 		}
@@ -1019,7 +1027,7 @@ fn child_process_shell_escape_arg(arg string) string {
 		if arg == '' {
 			return "''"
 		}
-		return "'" + arg.replace("'", "'\"'\"'") + "'"
+		return "'" + arg.replace("'", '\'"\'"\'') + "'"
 	}
 }
 
@@ -1216,7 +1224,11 @@ fn child_process_spawn_live(ctx &Context, command string, args []string, options
 			mut process_ref := proc
 			process_ref.stdin_write(data)
 		}
-		callback := if args.len > 0 && args[args.len - 1].is_function() { args[args.len - 1] } else { ctx.js_undefined() }
+		callback := if args.len > 0 && args[args.len - 1].is_function() {
+			args[args.len - 1]
+		} else {
+			ctx.js_undefined()
+		}
 		if callback.is_function() {
 			call_result := ctx.call_this(child_ref, callback) or { ctx.js_undefined() }
 			call_result.free()
@@ -1231,7 +1243,11 @@ fn child_process_spawn_live(ctx &Context, command string, args []string, options
 	stdin_end_fn.free()
 	stdin_stream.free()
 	kill_fn := ctx.js_function_this(fn [ctx, child_ref, mut proc] (this Value, args []Value) Value {
-		signal := if args.len > 0 && args[0].is_string() && args[0].str() != '' { args[0].str() } else { 'SIGTERM' }
+		signal := if args.len > 0 && args[0].is_string() && args[0].str() != '' {
+			args[0].str()
+		} else {
+			'SIGTERM'
+		}
 		mut process_ref := proc
 		match signal {
 			'SIGKILL' {
@@ -1281,7 +1297,8 @@ fn child_process_fork_command(invocation ChildProcessForkInvocation, roots []str
 	} else {
 		child_process_default_fork_exec_path()!
 	}
-	module_path := child_process_resolve_module_path(invocation.module_path, invocation.options.cwd, roots)
+	module_path := child_process_resolve_module_path(invocation.module_path,
+		invocation.options.cwd, roots)
 	mut argv := []string{}
 	argv << invocation.exec_argv
 	argv << module_path
@@ -1294,8 +1311,16 @@ fn child_process_fork_command(invocation ChildProcessForkInvocation, roots []str
 
 // Install a Node-like `child_process` module with common synchronous helpers.
 pub fn (ctx &Context) install_child_process_module(roots []string) {
+	ctx.install_child_process_module_config(ChildProcessModuleConfig{
+		roots: roots
+	})
+}
+
+pub fn (ctx &Context) install_child_process_module_config(config ChildProcessModuleConfig) {
+	roots := config.roots
+	allow_shell := config.allow_shell
 	mut child_process_mod := ctx.js_module('child_process')
-	exec_file_sync := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	exec_file_sync := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'file is required', name: 'TypeError'))
 		}
@@ -1323,6 +1348,9 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 				))
 			}
 		}
+		if options.use_shell && !allow_shell {
+			return ctx.js_throw(ctx.js_error(message: 'shell execution is disabled', name: 'Error'))
+		}
 		result := child_process_run(command, argv, options, roots) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
 		}
@@ -1331,9 +1359,12 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		}
 		return child_process_exec_result_value(ctx, result, options.encoding)
 	})
-	exec_sync := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	exec_sync := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'command is required', name: 'TypeError'))
+		}
+		if !allow_shell {
+			return ctx.js_throw(ctx.js_error(message: 'shell execution is disabled', name: 'Error'))
 		}
 		command := args[0].str()
 		options := if args.len > 1 {
@@ -1344,17 +1375,16 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 			ChildProcessSyncOptions{}
 		}
 		shell_command, shell_args := child_process_shell_command(command, options.shell)
-		result := child_process_run(shell_command, shell_args, child_process_without_shell(options),
-			roots) or {
+		result := child_process_run(shell_command, shell_args,
+			child_process_without_shell(options), roots) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
 		}
 		if result.status != 0 {
-			return ctx.js_throw(child_process_error_value(ctx, shell_command, shell_args,
-				result))
+			return ctx.js_throw(child_process_error_value(ctx, shell_command, shell_args, result))
 		}
 		return child_process_exec_result_value(ctx, result, options.encoding)
 	})
-	spawn_sync := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	spawn_sync := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'file is required', name: 'TypeError'))
 		}
@@ -1381,6 +1411,16 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 					name:    'TypeError'
 				))
 			}
+		}
+		if options.use_shell && !allow_shell {
+			mut value := ctx.js_object()
+			value.set('pid', ctx.js_int(0))
+			value.set('status', ctx.js_null())
+			value.set('signal', ctx.js_null())
+			value.set('stdout', ctx.js_string(''))
+			value.set('stderr', ctx.js_string(''))
+			value.set('error', ctx.js_error(message: 'shell execution is disabled'))
+			return value
 		}
 		result := child_process_run(command, argv, options, roots) or {
 			mut value := ctx.js_object()
@@ -1394,13 +1434,19 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		}
 		return child_process_spawn_sync_result_value(ctx, result, command, argv)
 	})
-	exec_file := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	exec_file := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'file is required', name: 'TypeError'))
 		}
 		command := args[0].str()
 		invocation := child_process_exec_file_invocation(ctx, args) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+		}
+		if invocation.options.use_shell && !allow_shell {
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
+				invocation.callback, 'shell execution is disabled')
+			child_process_schedule(ctx, child)
+			return child
 		}
 		result := child_process_run(command, invocation.argv, invocation.options, roots) or {
 			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
@@ -1413,9 +1459,15 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		child_process_schedule(ctx, child)
 		return child
 	})
-	exec_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	exec_fn := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'command is required', name: 'TypeError'))
+		}
+		if !allow_shell {
+			child := child_process_async_spawn_error_object(ctx, '', []string{},
+				ctx.js_undefined(), 'shell execution is disabled')
+			child_process_schedule(ctx, child)
+			return child
 		}
 		command := args[0].str()
 		invocation := child_process_exec_invocation(ctx, args) or {
@@ -1434,7 +1486,7 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		child_process_schedule(ctx, child)
 		return child
 	})
-	spawn_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+	spawn_fn := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'file is required', name: 'TypeError'))
 		}
@@ -1442,8 +1494,13 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 		invocation := child_process_exec_file_invocation(ctx, args) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
-		return child_process_spawn_live(ctx, command, invocation.argv, invocation.options,
-			roots) or {
+		if invocation.options.use_shell && !allow_shell {
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
+				ctx.js_undefined(), 'shell execution is disabled')
+			child_process_schedule(ctx, child)
+			return child
+		}
+		return child_process_spawn_live(ctx, command, invocation.argv, invocation.options, roots) or {
 			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
 				ctx.js_undefined(), err.msg())
 			child_process_schedule(ctx, child)

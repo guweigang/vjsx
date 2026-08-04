@@ -3,6 +3,13 @@ module vjsx
 // Console log sink used by the host helpers.
 pub type HostLogFn = fn (line string)
 
+@[params]
+pub struct HostPolicy {
+pub:
+	allow_env_write bool = true
+	allow_shell     bool = true
+}
+
 // HostConfig keeps the legacy host installation surface.
 @[params]
 pub struct HostConfig {
@@ -22,6 +29,7 @@ pub:
 	process_args  []string
 	asset_root    string
 	fetch_config  FetchGlobalsConfig = FetchGlobalsConfig{}
+	policy        HostPolicy         = HostPolicy{}
 	log_fn        HostLogFn          = default_host_log
 	error_fn      HostLogFn          = default_host_error
 }

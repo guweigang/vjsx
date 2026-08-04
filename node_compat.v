@@ -21,6 +21,7 @@ pub:
 	process_args  []string
 	asset_root    string
 	fetch_config  FetchGlobalsConfig = FetchGlobalsConfig{}
+	policy        HostPolicy         = HostPolicy{}
 	log_fn        HostLogFn          = default_host_log
 	error_fn      HostLogFn          = default_host_error
 }
@@ -82,10 +83,16 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 		ctx.install_https_module()
 	}
 	if config.child_process {
-		ctx.install_child_process_module(config.fs_roots)
+		ctx.install_child_process_module_config(ChildProcessModuleConfig{
+			roots:       config.fs_roots
+			allow_shell: config.policy.allow_shell
+		})
 	}
 	if config.process {
-		ctx.install_process(config.process_args)
+		ctx.install_process_config(ProcessConfig{
+			args:            config.process_args
+			allow_env_write: config.policy.allow_env_write
+		})
 	}
 	if config.sqlite {
 		ctx.install_sqlite_module(config.fs_roots)
@@ -113,6 +120,7 @@ fn (config HostConfig) node_compat_config() NodeCompatConfig {
 		process_args:  config.process_args
 		asset_root:    config.asset_root
 		fetch_config:  config.fetch_config
+		policy:        config.policy
 		log_fn:        config.log_fn
 		error_fn:      config.error_fn
 	}
