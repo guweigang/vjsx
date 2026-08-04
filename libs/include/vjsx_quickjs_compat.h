@@ -4,19 +4,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdatomic.h>
 
 #if defined(_WIN32)
 #include <windows.h>
 #else
+#include <stdatomic.h>
 #include <time.h>
 #endif
 
 #include "quickjs.h"
 
 typedef struct VJSXInterruptState {
+#if defined(_WIN32)
+    volatile LONG64 deadline_ms;
+    volatile LONG reason;
+#else
     atomic_uint_fast64_t deadline_ms;
     atomic_int reason;
+#endif
 } VJSXInterruptState;
 
 enum {
@@ -24,6 +29,52 @@ enum {
     VJSX_INTERRUPT_CANCELLED = 1,
     VJSX_INTERRUPT_DEADLINE = 2,
 };
+
+static inline int vjsx_atomic_load_reason(VJSXInterruptState *state) {
+#if defined(_WIN32)
+    return (int)InterlockedCompareExchange(&state->reason, 0, 0);
+#else
+    return atomic_load_explicit(&state->reason, memory_order_acquire);
+#endif
+}
+
+static inline uint64_t vjsx_atomic_load_deadline(VJSXInterruptState *state) {
+#if defined(_WIN32)
+    return (uint64_t)InterlockedCompareExchange64(&state->deadline_ms, 0, 0);
+#else
+    return atomic_load_explicit(&state->deadline_ms, memory_order_relaxed);
+#endif
+}
+
+static inline void vjsx_atomic_store_deadline(VJSXInterruptState *state,
+                                               uint64_t deadline_ms) {
+#if defined(_WIN32)
+    InterlockedExchange64(&state->deadline_ms, (LONG64)deadline_ms);
+#else
+    atomic_store_explicit(&state->deadline_ms, deadline_ms, memory_order_release);
+#endif
+}
+
+static inline void vjsx_atomic_try_set_reason(VJSXInterruptState *state, int reason) {
+#if defined(_WIN32)
+    InterlockedCompareExchange(&state->reason, (LONG)reason, VJSX_INTERRUPT_NONE);
+#else
+    int expected = VJSX_INTERRUPT_NONE;
+    atomic_compare_exchange_strong_explicit(&state->reason, &expected, reason,
+                                             memory_order_acq_rel,
+                                             memory_order_acquire);
+#endif
+}
+
+static inline void vjsx_atomic_init(VJSXInterruptState *state) {
+#if defined(_WIN32)
+    InterlockedExchange64(&state->deadline_ms, 0);
+    InterlockedExchange(&state->reason, VJSX_INTERRUPT_NONE);
+#else
+    atomic_init(&state->deadline_ms, 0);
+    atomic_init(&state->reason, VJSX_INTERRUPT_NONE);
+#endif
+}
 
 static inline uint64_t vjsx_monotonic_time_ms(void) {
 #if defined(_WIN32)
@@ -42,23 +93,18 @@ static inline uint64_t vjsx_monotonic_time_ms(void) {
 static inline int vjsx_interrupt_handler(JSRuntime *rt, void *opaque) {
     VJSXInterruptState *state = (VJSXInterruptState *)opaque;
     uint64_t deadline_ms;
-    int expected;
     (void)rt;
     if (state == NULL) {
         return 0;
     }
-    if (atomic_load_explicit(&state->reason, memory_order_acquire) != VJSX_INTERRUPT_NONE) {
+    if (vjsx_atomic_load_reason(state) != VJSX_INTERRUPT_NONE) {
         return 1;
     }
-    deadline_ms = atomic_load_explicit(&state->deadline_ms, memory_order_relaxed);
+    deadline_ms = vjsx_atomic_load_deadline(state);
     if (deadline_ms == 0 || vjsx_monotonic_time_ms() < deadline_ms) {
         return 0;
     }
-    expected = VJSX_INTERRUPT_NONE;
-    atomic_compare_exchange_strong_explicit(&state->reason, &expected,
-                                             VJSX_INTERRUPT_DEADLINE,
-                                             memory_order_acq_rel,
-                                             memory_order_acquire);
+    vjsx_atomic_try_set_reason(state, VJSX_INTERRUPT_DEADLINE);
     return 1;
 }
 
@@ -67,8 +113,7 @@ static inline VJSXInterruptState *vjsx_interrupt_state_new(JSRuntime *rt) {
     if (state == NULL) {
         return NULL;
     }
-    atomic_init(&state->deadline_ms, 0);
-    atomic_init(&state->reason, VJSX_INTERRUPT_NONE);
+    vjsx_atomic_init(state);
     JS_SetInterruptHandler(rt, vjsx_interrupt_handler, state);
     return state;
 }
@@ -82,38 +127,33 @@ static inline void vjsx_interrupt_set_deadline_after_ms(VJSXInterruptState *stat
                                                          uint64_t delay_ms) {
     uint64_t now_ms;
     if (state == NULL ||
-        atomic_load_explicit(&state->reason, memory_order_acquire) != VJSX_INTERRUPT_NONE) {
+        vjsx_atomic_load_reason(state) != VJSX_INTERRUPT_NONE) {
         return;
     }
     now_ms = vjsx_monotonic_time_ms();
-    atomic_store_explicit(&state->deadline_ms, now_ms + delay_ms,
-                          memory_order_release);
+    vjsx_atomic_store_deadline(state, now_ms + delay_ms);
 }
 
 static inline void vjsx_interrupt_clear_deadline(VJSXInterruptState *state) {
     if (state == NULL ||
-        atomic_load_explicit(&state->reason, memory_order_acquire) != VJSX_INTERRUPT_NONE) {
+        vjsx_atomic_load_reason(state) != VJSX_INTERRUPT_NONE) {
         return;
     }
-    atomic_store_explicit(&state->deadline_ms, 0, memory_order_release);
+    vjsx_atomic_store_deadline(state, 0);
 }
 
 static inline void vjsx_interrupt_cancel(VJSXInterruptState *state) {
-    int expected = VJSX_INTERRUPT_NONE;
     if (state == NULL) {
         return;
     }
-    atomic_compare_exchange_strong_explicit(&state->reason, &expected,
-                                             VJSX_INTERRUPT_CANCELLED,
-                                             memory_order_acq_rel,
-                                             memory_order_acquire);
+    vjsx_atomic_try_set_reason(state, VJSX_INTERRUPT_CANCELLED);
 }
 
 static inline int vjsx_interrupt_reason(VJSXInterruptState *state) {
     if (state == NULL) {
         return VJSX_INTERRUPT_NONE;
     }
-    return atomic_load_explicit(&state->reason, memory_order_acquire);
+    return vjsx_atomic_load_reason(state);
 }
 
 #if defined(VJSX_QUICKJS_NG)

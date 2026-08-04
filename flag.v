@@ -8,14 +8,6 @@ $if link_quickjs ? {
 	#flag -I @VMODROOT/libs/include
 }
 
-// vjsx_quickjs_compat.h uses C11 atomics for the interrupt handler state.
-// Keep these flags common to source and prebuilt QuickJS builds: Windows
-// release binaries use msvc together with `link_quickjs`.
-$if msvc {
-	#flag /std:c11
-	#flag /experimental:c11atomics
-}
-
 $if link_quickjs ? {
 	$if quickjs_legacy ? {
 	} $else {
@@ -42,6 +34,8 @@ $if link_quickjs ? {
 		}
 	}
 	$if msvc {
+		#flag /std:c11
+		#flag /experimental:c11atomics
 		#flag -D_WINSOCKAPI_
 		#flag -D_CRT_SECURE_NO_WARNINGS
 		#flag -D_CRT_NONSTDC_NO_DEPRECATE
