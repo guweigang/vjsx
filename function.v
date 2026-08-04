@@ -1,7 +1,5 @@
 module vjsx
 
-import rand
-
 // Original `type` JS Callback function from `qjs`
 pub type JSCFunction = fn (&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
 
@@ -30,7 +28,13 @@ const ctor_code = C.JS_CFUNC_constructor
 
 @[params]
 pub struct ClassParams {
-	id   ?u32
+	name string
+	ctor ?JSConstructor
+}
+
+@[params]
+pub struct ClassWithIDParams {
+	id   u32 @[required]
 	name string
 	ctor ?JSConstructor
 }
@@ -112,7 +116,7 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
 		fn (this Value, args []Value) {}
 	}
 
-	id := cls.id or { rand.u32n(1000) or { panic(err) } }
+	mut id := u32(0)
 	ref := C.JS_NewClassID(&id)
 	name_ptr := cls.name.str
 	def := C.JSClassDef{
@@ -137,4 +141,14 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
 	C.JS_SetClassProto(ctx.ref, ref, proto.ref)
 	proto.free()
 	return ctx.c_val(class)
+}
+
+// Create a JS class with an explicit QuickJS class id.
+//
+// This is reserved for advanced embedders that need stable class-id mapping
+// across V-side native wrappers. It is intentionally not implemented yet:
+// honoring an explicit id safely requires a runtime-level registry that can
+// reject duplicate ids and keep the mapping isolated per Runtime.
+pub fn (ctx &Context) js_class_with_id(cls ClassWithIDParams) Value {
+	panic('js_class_with_id is not implemented; use js_class() for runtime-assigned class ids')
 }
