@@ -378,6 +378,20 @@ leaking them can surface later as hard-to-diagnose bootstrap failures.
 
 If you want one owner object for embedded use, prefer `vjsx.new_runtime_session()`
 and `session.close()`, which tear down the `Context` and `Runtime` together.
+
+Managed sessions can also interrupt non-yielding JavaScript with a CPU deadline
+or a thread-safe cancellation request:
+
+```v
+session.set_deadline(time.now().add(2 * time.second))
+// May be called from another thread while QuickJS is executing.
+session.cancel()
+session.clear_deadline()
+```
+
+QuickJS checks these controls from its interrupt handler while executing JS.
+An interrupted session returns `RuntimeInterruptedError`, reports its reason via
+`session.interrupt_reason()`, and must be closed rather than reused.
 For Node-style hosts, that teardown also closes tracked `sqlite` / `mysql`
 connections that were left open by JS code.
 

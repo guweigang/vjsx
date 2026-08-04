@@ -289,7 +289,7 @@ fn child_process_call_this(ctx &Context, this Value, callback Value, args []Valu
 	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
 	ret := ctx.c_val(C.JS_Call(ctx.ref, callback.ref, this.ref, c_args.len, c_val))
 	if ret.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	return ret
 }

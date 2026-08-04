@@ -30,7 +30,7 @@ fn (ctx &Context) c_val(ref C.JSValue) Value {
 fn (ctx &Context) c_tag(tag int) Value {
 	return ctx.c_val(C.JSValue{
 		tag: tag
-		u: &C.JSValueUnion{}
+		u:   &C.JSValueUnion{}
 	})
 }
 
@@ -46,6 +46,19 @@ pub fn (ctx &Context) js_exception() &JSError {
 	val := ctx.c_val(C.JS_GetException(ctx.ref))
 	err := val.to_error()
 	val.free()
+	return err
+}
+
+// Convert the current QuickJS exception to a V error, preserving the more
+// specific session interruption reason when an interrupt handler stopped JS.
+fn (ctx &Context) execution_error() IError {
+	err := ctx.js_exception()
+	reason := ctx.rt.interrupt_reason()
+	if reason != .none {
+		return &RuntimeInterruptedError{
+			reason: reason
+		}
+	}
 	return err
 }
 
@@ -94,7 +107,7 @@ pub fn (ctx &Context) json_stringify(val Value) string {
 pub fn (ctx &Context) json_parse(str string) Value {
 	len := str.len
 	c_str := str.str
-	c_fname := ''.str
+	c_fname := c''
 	return ctx.c_val(C.JS_ParseJSON(ctx.ref, c_str, usize(len), c_fname))
 }
 
@@ -203,23 +216,25 @@ pub fn (ctx &Context) js_global(keys ...string) Value {
 
 // JS call await.
 pub fn (ctx &Context) js_await(val Value) !Value {
+	ctx.rt.ensure_executable()!
 	dup := val.dup_value()
 	mut ref := ctx.js_undefined().ref
 	C.vjsx_js_std_await_out(ctx.ref, dup.ref, &ref)
 	ret := ctx.c_val(ref)
 	if ret.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	return ret
 }
 
 // JS call new class.
 pub fn (ctx &Context) js_new_class(val Value, args ...AnyValue) !Value {
+	ctx.rt.ensure_executable()!
 	c_args := args.map(ctx.any_to_val(it).ref)
 	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
 	ret := ctx.c_val(C.JS_CallConstructor(ctx.ref, val.ref, c_args.len, c_val))
 	if ret.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	return ret
 }

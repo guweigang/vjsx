@@ -201,6 +201,7 @@ pub fn compile_module(source string, options CompileModuleOptions) ![]u8 {
 // Compile a self-contained UMD/CommonJS source string using an existing
 // context. This is the lower-level counterpart of compile_module().
 pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModuleOptions) ![]u8 {
+	ctx.rt.ensure_executable()!
 	factory_source := commonjs_factory_source(source)
 	mut compiled_ref := ctx.js_undefined().ref
 	C.vjsx_js_eval_out(ctx.ref, factory_source.str, usize(factory_source.len),
@@ -210,13 +211,13 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 		compiled.free()
 	}
 	if compiled.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	mut payload_len := usize(0)
 	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref,
 		int(options.strip_source), int(options.strip_debug))
 	if isnil(payload_ptr) {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	defer {
 		C.js_free(ctx.ref, payload_ptr)
@@ -245,6 +246,7 @@ fn (ctx &Context) validate_bytecode_artifact(artifact BytecodeArtifact) ! {
 // The returned handle owns module.exports and can be retained for repeated
 // calls without reloading or reinitializing the bytecode.
 pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
+	ctx.rt.ensure_executable()!
 	artifact := parse_bytecode_artifact(bytecode)!
 	ctx.validate_bytecode_artifact(artifact)!
 	if artifact.payload.len == 0 {
@@ -255,14 +257,14 @@ pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
 	C.vjsx_js_read_bytecode_out(ctx.ref, payload_ptr, usize(artifact.payload.len), &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	if compiled.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	// JS_EvalFunction consumes the compiled bytecode object.
 	mut factory_ref := ctx.js_undefined().ref
 	C.vjsx_js_eval_function_out(ctx.ref, compiled.ref, &factory_ref)
 	factory := ctx.c_val(factory_ref)
 	if factory.is_exception() {
-		return ctx.js_exception()
+		return ctx.execution_error()
 	}
 	defer {
 		factory.free()
