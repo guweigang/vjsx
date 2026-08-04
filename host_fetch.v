@@ -128,6 +128,7 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 		args << '--data-binary'
 		args << request.body
 	}
+	args << '--'
 	args << request.url
 	mut proc := os.new_process(curl_path)
 	proc.set_args(args)

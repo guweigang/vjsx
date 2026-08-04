@@ -1,4 +1,10 @@
+import v.vmod
 import vjsx { Value }
+
+fn test_runtime_version_matches_vmod() {
+	vm := vmod.decode(@VMOD_FILE) or { panic(err) }
+	assert vjsx.version == vm.version
+}
 
 fn test_atom() {
 	mut session := vjsx.new_runtime_session()

@@ -1,5 +1,7 @@
 module vjsx
 
+import v.vmod
+
 @[typedef]
 struct C.JSRuntime {}
 
@@ -12,7 +14,9 @@ pub struct Runtime {
 pub const default_runtime_max_stack_size = u32(16 * 1024 * 1024)
 
 // Public vjsx runtime version used by embedded artifact compatibility checks.
-pub const version = '0.0.2'
+const vmod_info = vmod.decode(@VMOD_FILE) or { panic(err) }
+
+pub const version = vmod_info.version
 
 // JSError structure.
 @[params]

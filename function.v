@@ -17,6 +17,10 @@ pub type JSConstructor = fn (this Value, args []Value)
 @[typedef]
 struct C.JSClassDef {
 	class_name &char
+	finalizer  voidptr
+	gc_mark    voidptr
+	call       voidptr
+	exotic     voidptr
 }
 
 @[typedef]
@@ -128,12 +132,9 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
 		proto.free()
 		return this.ref
 	}
-	class := C.JS_NewCFunction2(ctx.ref, c_ctor, name_ptr, 0, vjsx.ctor_code, 0)
+	class := C.JS_NewCFunction2(ctx.ref, c_ctor, name_ptr, 0, ctor_code, 0)
 	C.JS_SetConstructor(ctx.ref, class, proto.ref)
 	C.JS_SetClassProto(ctx.ref, ref, proto.ref)
 	proto.free()
-	unsafe {
-		free(name_ptr)
-	}
 	return ctx.c_val(class)
 }

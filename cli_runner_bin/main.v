@@ -130,12 +130,20 @@ fn parse_env_options() ?CliOptions {
 	if file == '' {
 		return none
 	}
+	runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
+	if runtime_profile !in ['node', 'script', 'browser'] {
+		fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
+	}
+	as_module := os.getenv('VJS_AS_MODULE') == '1'
+	if runtime_profile == 'browser' && !as_module {
+		fail('browser runtime requires module mode\nuse --module with --runtime browser')
+	}
 	return CliOptions{
 		command:         'run'
 		script_file:     file
 		script_args:     read_env_script_args(args_file)
-		as_module:       os.getenv('VJS_AS_MODULE') == '1'
-		runtime_profile: os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
+		as_module:       validate_script_type(file, as_module)
+		runtime_profile: runtime_profile
 	}
 }
 

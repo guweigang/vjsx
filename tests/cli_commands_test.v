@@ -21,6 +21,19 @@ fn test_cli_help_and_version_commands() {
 	assert help_output.output.contains('Runtime profiles:')
 }
 
+fn test_cli_env_runtime_profile_is_validated() {
+	script_path := os.join_path(os.temp_dir(), 'vjsx_env_runtime_${os.getpid()}.js')
+	os.write_file(script_path, 'console.log("should-not-run")') or { panic(err) }
+	defer {
+		os.rm(script_path) or {}
+	}
+	output :=
+		os.execute('VJS_SCRIPT_FILE=${script_path} VJS_RUNTIME_PROFILE=unknown ${cli_test_support.command(false)}')
+	assert output.exit_code != 0
+	assert output.output.contains('unknown runtime profile: unknown')
+	assert !output.output.contains('should-not-run')
+}
+
 fn test_cli_repair_and_remove_package_graph() {
 	repair_root := os.join_path(os.temp_dir(), 'vjsx_cli_repair_test_${os.getpid()}')
 	os.rmdir_all(repair_root) or {}
