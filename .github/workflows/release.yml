@@ -192,6 +192,8 @@ jobs:
         run: |
           ./dist/${{ matrix.binary }} check-runtime --runtime node
           ./dist/${{ matrix.binary }} ./tests/test.js
+          ./dist/${{ matrix.binary }} build --runner ./dist/vjsx-app-runner ./tests/test.js -o ./dist/vjsx-smoke-app
+          ./dist/vjsx-smoke-app
 
       - name: Smoke Windows binary
         if: matrix.shell == 'powershell'
@@ -199,6 +201,8 @@ jobs:
         run: |
           .\dist\${{ matrix.binary }} check-runtime --runtime node
           .\dist\${{ matrix.binary }} .\tests\test.js
+          .\dist\${{ matrix.binary }} build --runner .\dist\vjsx-app-runner.exe .\tests\test.js -o .\dist\vjsx-smoke-app.exe
+          .\dist\vjsx-smoke-app.exe
 
       - name: Package Unix archive
         if: matrix.shell == 'bash'
@@ -206,6 +210,7 @@ jobs:
         run: |
           mkdir -p "release/${{ matrix.artifact }}"
           cp "dist/${{ matrix.binary }}" "release/${{ matrix.artifact }}/"
+          cp "dist/vjsx-app-runner" "release/${{ matrix.artifact }}/"
           cp README.md "release/${{ matrix.artifact }}/"
           tar -C release -czf "${{ matrix.archive }}" "${{ matrix.artifact }}"
 
@@ -215,6 +220,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "release\${{ matrix.artifact }}" | Out-Null
           Copy-Item "dist\${{ matrix.binary }}" "release\${{ matrix.artifact }}\"
+          Copy-Item "dist\vjsx-app-runner.exe" "release\${{ matrix.artifact }}\"
           Copy-Item "dist\*.dll" "release\${{ matrix.artifact }}\"
           Copy-Item "README.md" "release\${{ matrix.artifact }}\"
           Compress-Archive -Path "release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}" -Force

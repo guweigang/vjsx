@@ -16,6 +16,8 @@ fn test_cli_help_and_version_commands() {
 	assert help_output.output.contains('--entry-only          Compile one self-contained file;')
 	assert help_output.output.contains('--bundle              Compile the statically reachable JS/TS/CommonJS/JSON graph')
 	assert help_output.output.contains('vjsx run myapp.vjsx')
+	assert help_output.output.contains('vjsx build --runtime node src/main.ts -o myapp')
+	assert help_output.output.contains('--runner <path>')
 	assert help_output.output.contains('-o, --output <file>')
 	assert help_output.output.contains('Loading preserves module.exports')
 	assert help_output.output.contains('ctx.load_bytecode(bytecode)')
@@ -47,6 +49,30 @@ fn test_cli_bundle_runs_after_project_sources_are_removed() {
 	run_output := os.execute('${cli_test_support.command(false)} run ${artifact}')
 	assert run_output.exit_code == 0
 	assert run_output.output.trim_space() == 'bundle-without-sources:ok'
+}
+
+fn test_cli_build_creates_native_app_runner_with_embedded_bundle() {
+	root := os.join_path(os.temp_dir(), 'vjsx_cli_native_app_${os.getpid()}')
+	app_path := os.join_path(os.temp_dir(), 'vjsx_cli_native_app_${os.getpid()}.bin')
+	os.rmdir_all(root) or {}
+	os.rm(app_path) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+		os.rm(app_path) or {}
+	}
+	os.write_file(os.join_path(root, 'main.mts'),
+		'console.log("native:" + process.argv.slice(1).join(","));') or { panic(err) }
+	cli_test_support.app_runner()
+	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root,
+		'main.mts')} -o ${app_path}')
+	assert build_output.exit_code == 0
+	assert os.is_file(app_path)
+	os.rmdir_all(root) or { panic(err) }
+
+	run_output := os.execute('${app_path} alpha beta')
+	assert run_output.exit_code == 0
+	assert run_output.output.trim_space() == 'native:alpha,beta'
 }
 
 fn test_cli_env_runtime_profile_is_validated() {

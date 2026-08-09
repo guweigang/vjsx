@@ -13,6 +13,30 @@ pub fn command(sqlite bool) string {
 	return 'sh -c ${shell_quote(inner)} --'
 }
 
+pub fn app_runner() string {
+	runner_name := $if windows { 'vjsx-app-runner.exe' } $else { 'vjsx-app-runner' }
+	runner := os.join_path(runner_cache_dir, runner_name)
+	if runner_is_current(runner) {
+		return runner
+	}
+	lock_dir := runner + '.lock'
+	mut owns_lock := true
+	os.mkdir(lock_dir) or { owns_lock = false }
+	if owns_lock {
+		build_app_runner(runner) or {
+			os.rmdir(lock_dir) or {}
+			panic(err)
+		}
+		os.rmdir(lock_dir) or {}
+		return runner
+	}
+	wait_for_runner(runner, lock_dir)
+	if !runner_is_current(runner) {
+		return app_runner()
+	}
+	return runner
+}
+
 fn ensure_runner(sqlite bool) string {
 	os.mkdir_all(runner_cache_dir) or { panic(err) }
 	suffix := if sqlite { '-sqlite' } else { '' }
@@ -51,6 +75,22 @@ fn build_runner(runner string, sqlite bool) ! {
 	if result.exit_code != 0 {
 		os.rm(partial) or {}
 		return error('failed to build shared CLI test runner:\n${result.output}')
+	}
+	os.rm(runner) or {}
+	os.mv(partial, runner)!
+}
+
+fn build_app_runner(runner string) ! {
+	partial := '${runner}.${os.getpid()}.tmp'
+	os.rm(partial) or {}
+	quickjs_source_path := resolve_quickjs_path()
+	v_cache := os.join_path(runner_cache_dir, 'vcache-app-runner')
+	os.mkdir_all(v_cache) or { panic(err) }
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -o ${shell_quote(partial)} ./app_runner_bin'
+	result := os.execute(command)
+	if result.exit_code != 0 {
+		os.rm(partial) or {}
+		return error('failed to build shared app runner:\n${result.output}')
 	}
 	os.rm(runner) or {}
 	os.mv(partial, runner)!

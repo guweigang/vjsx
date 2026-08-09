@@ -1,5 +1,6 @@
 param(
   [string]$Out = "",
+  [string]$AppRunnerOut = "",
   [string]$QuickjsPath = "",
   [string]$QuickjsLibPath = "",
   [string]$Compiler = "",
@@ -11,6 +12,13 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($Out)) {
   $Out = Join-Path $RepoRoot "dist\vjsx.exe"
+}
+if ([string]::IsNullOrWhiteSpace($AppRunnerOut)) {
+  $appRunnerDir = Split-Path -Parent $Out
+  if ([string]::IsNullOrWhiteSpace($appRunnerDir)) {
+    $appRunnerDir = "."
+  }
+  $AppRunnerOut = Join-Path $appRunnerDir "vjsx-app-runner.exe"
 }
 if ([string]::IsNullOrWhiteSpace($QuickjsPath)) {
   $QuickjsPath = $env:VJS_QUICKJS_PATH
@@ -45,6 +53,10 @@ if ([string]::IsNullOrWhiteSpace($QuickjsPath)) {
 $outDir = Split-Path -Parent $Out
 if (![string]::IsNullOrWhiteSpace($outDir)) {
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+}
+$appRunnerOutDir = Split-Path -Parent $AppRunnerOut
+if (![string]::IsNullOrWhiteSpace($appRunnerOutDir)) {
+  New-Item -ItemType Directory -Force -Path $appRunnerOutDir | Out-Null
 }
 
 $flagList = @()
@@ -153,6 +165,10 @@ try {
     Write-Host "VJS_QUICKJS_LIB_PATH=$env:VJS_QUICKJS_LIB_PATH"
   }
   & v @flagList -prod -o $Out .\cli_runner_bin
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+  & v @flagList -prod -o $AppRunnerOut .\app_runner_bin
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }

@@ -267,6 +267,24 @@ Only statically reachable dependencies are included; dynamic dependency names
 that cannot be determined during the build are not supported by this first
 bundle format. As with `.qbc`, load only trusted artifacts.
 
+To package that bundle as a native single-file application:
+
+```bash
+./vjsx build --runtime node ./src/main.ts -o myapp
+./myapp arg1 arg2
+```
+
+`vjsx build` uses the platform-specific `vjsx-app-runner` installed next to
+the `vjsx` CLI. It appends the generated `.vjsx` bundle and a fixed 64-byte
+footer to a copy of that runner. The footer records its format version, bundle
+length, and SHA-256 checksum, allowing the runner to locate and validate the
+bundle without reading the native executable body. Use `--runner <path>` or
+`VJS_APP_RUNNER` to select an explicit runner.
+
+The resulting file is a native V/QuickJS executable containing QuickJS
+bytecode; it is not JavaScript AOT-compiled to machine code. It does not expose
+the package-management or compilation commands of the regular `vjsx` CLI.
+
 To measure parser startup and steady-state calls separately:
 
 ```bash
@@ -342,13 +360,14 @@ To build a standalone `vjsx` binary:
 ./scripts/build-vjsx.sh
 ```
 
-The build writes `dist/vjsx` by default. Set `VJS_OUT=/path/to/vjsx` to choose
-another output path.
+The build writes `dist/vjsx` and `dist/vjsx-app-runner` by default. Set
+`VJS_OUT=/path/to/vjsx` and `VJS_APP_RUNNER_OUT=/path/to/vjsx-app-runner` to
+choose other output paths.
 
 On Windows, use the PowerShell build script:
 
 ```powershell
-.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe
+.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe -AppRunnerOut .\dist\vjsx-app-runner.exe
 ```
 
 The Windows build defaults to MSVC (`-cc msvc`), matching the preferred VTable
@@ -370,8 +389,9 @@ produces platform-specific archives:
 The workflow can be run manually from GitHub Actions. Pushing a tag like
 `v0.1.0` also creates a GitHub Release and uploads those archives. Downstream
 projects such as VTable should download the archive matching their target OS
-and CPU, then place `vjsx` or `vjsx.exe` in their own packaged runtime
-directory.
+and CPU, then place `vjsx`/`vjsx.exe` and `vjsx-app-runner`/
+`vjsx-app-runner.exe` in their packaged runtime directory. The runner is only
+needed when producing native single-file applications.
 
 TypeScript module graphs are also supported, including:
 

@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 out=${VJS_OUT:-"$repo_root/dist/vjsx"}
+app_runner_out=${VJS_APP_RUNNER_OUT:-"$(dirname "$out")/vjsx-app-runner"}
 quickjs_path=${VJS_QUICKJS_PATH:-}
 
 if [ -z "$quickjs_path" ]; then
@@ -10,6 +11,7 @@ if [ -z "$quickjs_path" ]; then
 fi
 
 mkdir -p "$(dirname "$out")"
+mkdir -p "$(dirname "$app_runner_out")"
 
 v_flags=${VJS_V_FLAGS:-}
 case " $v_flags " in
@@ -23,5 +25,7 @@ esac
 cd "$repo_root"
 VJS_QUICKJS_PATH="$quickjs_path" \
   v ${v_flags:-} -prod -d build_quickjs -o "$out" ./cli_runner_bin
+VJS_QUICKJS_PATH="$quickjs_path" \
+  v ${v_flags:-} -prod -d build_quickjs -o "$app_runner_out" ./app_runner_bin
 
 echo "$out"
