@@ -235,6 +235,38 @@ deserialization. QuickJS bytecode is not safe for hostile input, so only load
 artifacts produced by a trusted build. `--entry-only` does not bundle imports;
 it is intended for self-contained files.
 
+For a project with static imports, TypeScript, JSON, or local CommonJS
+dependencies, compile the reachable module graph into one application bundle:
+
+```bash
+./vjsx compile --bundle --runtime node ./src/main.ts -o myapp.vjsx
+./vjsx run myapp.vjsx
+```
+
+The output name convention is `<appname>.vjsx`. It is a self-contained,
+versioned vjsx application artifact rather than a native machine executable.
+The bundle stores the entry manifest and each transformed module as QuickJS
+bytecode. At runtime, imports are linked from the in-memory bundle, so project
+sources and `node_modules` are not read, parsed, or compiled again.
+
+Embedders can load the same artifact and retain its initialized namespace:
+
+```v
+bundle := os.read_bytes('myapp.vjsx')!
+mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{},
+	vjsx.NodeRuntimeConfig{})
+ctx := session.context()
+mut app := ctx.load_bundle(bundle)!
+result := app.call_export('main')!
+```
+
+Keep the returned `ScriptModule` alive to preserve module-level objects and
+state across calls. `.vjsx` loading validates the container format, checksum,
+vjsx version, QuickJS ABI, and runtime profile before evaluating its entry.
+Only statically reachable dependencies are included; dynamic dependency names
+that cannot be determined during the build are not supported by this first
+bundle format. As with `.qbc`, load only trusted artifacts.
+
 To measure parser startup and steady-state calls separately:
 
 ```bash

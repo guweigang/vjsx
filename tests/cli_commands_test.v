@@ -13,12 +13,40 @@ fn test_cli_help_and_version_commands() {
 	assert help_output.output.contains('vjsx capabilities [--runtime|-r <node|script|browser>]')
 	assert help_output.output.contains('vjsx repair [--registry <url>] [package...]')
 	assert help_output.output.contains('Compile command:')
-	assert help_output.output.contains('--entry-only          Required in this release.')
+	assert help_output.output.contains('--entry-only          Compile one self-contained file;')
+	assert help_output.output.contains('--bundle              Compile the statically reachable JS/TS/CommonJS/JSON graph')
+	assert help_output.output.contains('vjsx run myapp.vjsx')
 	assert help_output.output.contains('-o, --output <file>')
 	assert help_output.output.contains('Loading preserves module.exports')
 	assert help_output.output.contains('ctx.load_bytecode(bytecode)')
 	assert help_output.output.contains('Load only trusted bytecode.')
 	assert help_output.output.contains('Runtime profiles:')
+}
+
+fn test_cli_bundle_runs_after_project_sources_are_removed() {
+	root := os.join_path(os.temp_dir(), 'vjsx_cli_bundle_${os.getpid()}')
+	artifact := os.join_path(os.temp_dir(), 'vjsx_cli_bundle_${os.getpid()}.vjsx')
+	os.rmdir_all(root) or {}
+	os.rm(artifact) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+		os.rm(artifact) or {}
+	}
+	os.write_file(os.join_path(root, 'main.mts'),
+		'import { message } from "./message.ts"; console.log(message);') or { panic(err) }
+	os.write_file(os.join_path(root, 'message.ts'),
+		'export const message: string = "bundle-without-sources:ok";') or { panic(err) }
+
+	compile_output := os.execute('${cli_test_support.command(false)} compile --bundle --runtime node ${os.join_path(root,
+		'main.mts')} -o ${artifact}')
+	assert compile_output.exit_code == 0
+	assert os.is_file(artifact)
+	os.rmdir_all(root) or { panic(err) }
+
+	run_output := os.execute('${cli_test_support.command(false)} run ${artifact}')
+	assert run_output.exit_code == 0
+	assert run_output.output.trim_space() == 'bundle-without-sources:ok'
 }
 
 fn test_cli_env_runtime_profile_is_validated() {
