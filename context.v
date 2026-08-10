@@ -14,6 +14,12 @@ struct HostCleanupState {
 mut:
 	cleanups          []HostCleanup
 	installed_modules map[string]bool
+	bundle_modules    map[string][]u8
+	bundle_sources    map[string]string
+	bundle_compiled   map[string][]u8
+	bundle_compiling  bool
+	bundle_strip_src  bool
+	bundle_strip_dbg  bool
 }
 
 pub struct Context {
@@ -164,6 +170,9 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 		host_cleanup_state: &HostCleanupState{
 			cleanups:          []HostCleanup{}
 			installed_modules: map[string]bool{}
+			bundle_modules:    map[string][]u8{}
+			bundle_sources:    map[string]string{}
+			bundle_compiled:   map[string][]u8{}
 		}
 		asset_root:         config.asset_root
 		runtime_profile:    'bare'

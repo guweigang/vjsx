@@ -303,11 +303,36 @@ fn (ctx &Context) runtime_module_source(rel_path string) !RuntimeModuleSource {
 
 fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidptr) &C.JSModuleDef {
 	name := v_str(module_name)
+	owner_ctx := context_from_c_ctx(ctx)
+	if !isnil(owner_ctx) {
+		if bytecode := owner_ctx.bundle_module_bytecode(name) {
+			mut ref := C.JSValue{}
+			C.vjsx_js_read_bytecode_out(ctx, &bytecode[0], usize(bytecode.len), &ref)
+			if C.JS_IsException(ref) == 1 {
+				return unsafe { nil }
+			}
+			if C.vjsx_js_value_is_module(ref) == 0 {
+				C.JS_FreeValue(ctx, ref)
+				C.vjsx_js_throw_bundle_module_not_found(ctx, module_name)
+				return unsafe { nil }
+			}
+			C.js_module_set_import_meta(ctx, ref, false, false)
+			return C.vjsx_js_value_to_module_def(ref)
+		}
+		if source := owner_ctx.bundle_compile_source(name) {
+			return owner_ctx.compile_bundle_loader_module(ctx, name, source) or {
+				return unsafe { nil }
+			}
+		}
+		if is_bundle_module_name(name) {
+			C.vjsx_js_throw_bundle_module_not_found(ctx, module_name)
+			return unsafe { nil }
+		}
+	}
 	rel_path := runtime_asset_module_name_to_rel_path(name)
 	if rel_path == '' {
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}
-	owner_ctx := context_from_c_ctx(ctx)
 	if isnil(owner_ctx) {
 		return C.vjsx_js_module_loader(ctx, module_name, opaque)
 	}

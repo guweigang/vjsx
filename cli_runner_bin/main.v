@@ -20,6 +20,8 @@ struct CliOptions {
 	list_json        bool
 	output_file      string
 	entry_only       bool
+	bundle           bool
+	runner_file      string
 }
 
 @[noreturn]
@@ -43,6 +45,8 @@ Usage:
   vjsx [run] [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
   vjsx check [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
   vjsx compile --entry-only [--runtime|-r <node|script|browser>] <input.js> -o <output.qbc>
+  vjsx compile --bundle [--runtime|-r <node|script|browser>] <entry.js> -o <app.vjsx>
+  vjsx build [--runtime|-r <node|script|browser>] [--runner <path>] <entry.js> -o <app>
   vjsx check-runtime [--runtime|-r <node|script|browser>]
   vjsx capabilities [--runtime|-r <node|script|browser>]
   vjsx install [--registry <url>] [--dev] [package[@version]...]
@@ -67,18 +71,30 @@ Runtime commands:
   capabilities Print globals, modules, and host features exposed by a profile.
 
 Compile command:
-  compile       Compile a self-contained UMD/CommonJS file to QuickJS bytecode.
+  compile       Compile a file or static project graph to QuickJS bytecode.
+  build         Package a project bundle with the native vjsx app runner.
 
 Compile options:
-  --entry-only          Required in this release. Compile one self-contained file;
+  --entry-only          Compile one self-contained file;
                         imports and require() dependencies are not bundled.
-  -o, --output <file>   Write the versioned bytecode artifact to this .qbc file.
+  --bundle              Compile the statically reachable JS/TS/CommonJS/JSON graph
+                        into one self-contained .vjsx application bundle.
+  -o, --output <file>   Write a .qbc entry artifact or .vjsx project bundle.
   -r, --runtime <name>  Record the required runtime profile in the artifact.
+
+Build options:
+  --runner <path>       Use this unbundled vjsx-app-runner executable. By default,
+                        use the runner installed next to the vjsx executable.
+  -o, --output <file>   Write the single-file native application executable.
 
 Bytecode artifacts:
   Loading preserves module.exports, so embedded hosts can access exports such as
   Parser through ctx.load_bytecode(bytecode). Artifacts are tied to the vjsx and
   QuickJS ABI and to the selected runtime profile. Load only trusted bytecode.
+
+Project bundles:
+  A .vjsx bundle contains its entry manifest and all statically reachable module
+  bytecode. Running it does not read project source files or node_modules.
 
 Runtime profiles:
   node      Node-like host with process, Buffer, timers, fs/path/http/https/os,
@@ -99,6 +115,9 @@ Examples:
   vjsx --module --runtime node app.mjs
   vjsx check --module app.mjs
   vjsx compile --entry-only --runtime node parser.umd.js -o parser.qbc
+  vjsx compile --bundle --runtime node src/main.ts -o myapp.vjsx
+  vjsx run myapp.vjsx
+  vjsx build --runtime node src/main.ts -o myapp
   vjsx capabilities --runtime browser
 '
 }
@@ -112,6 +131,9 @@ fn read_env_script_args(args_file string) []string {
 
 fn validate_script_type(script_file string, as_module bool) bool {
 	mut enable_module := as_module
+	if script_file.ends_with('.vjsx') {
+		return false
+	}
 	if script_file.ends_with('.mjs') || script_file.ends_with('.mts') {
 		enable_module = true
 		return enable_module
@@ -120,7 +142,7 @@ fn validate_script_type(script_file string, as_module bool) bool {
 		|| script_file.ends_with('.cts') {
 		return enable_module
 	}
-	fail('unsupported script type: ${script_file}\nexpected a .js, .mjs, .cjs, .ts, .mts, or .cts file')
+	fail('unsupported script type: ${script_file}\nexpected a .js, .mjs, .cjs, .ts, .mts, .cts, or .vjsx file')
 	return enable_module
 }
 
@@ -170,7 +192,7 @@ fn parse_args(args []string) CliOptions {
 		}
 	}
 	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
-		'repair', 'ls', 'list', 'remove', 'uninstall', 'compile'] {
+		'repair', 'ls', 'list', 'remove', 'uninstall', 'compile', 'build'] {
 		command = rest[0]
 		rest = rest[1..].clone()
 	}
@@ -179,6 +201,7 @@ fn parse_args(args []string) CliOptions {
 		mut input_file := ''
 		mut output_file := ''
 		mut entry_only := false
+		mut bundle := false
 		mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
 		mut i := 0
 		for i < rest.len {
@@ -186,6 +209,9 @@ fn parse_args(args []string) CliOptions {
 			match arg {
 				'--entry-only' {
 					entry_only = true
+				}
+				'--bundle' {
+					bundle = true
 				}
 				'--runtime', '-r' {
 					if i + 1 >= rest.len {
@@ -217,8 +243,8 @@ fn parse_args(args []string) CliOptions {
 			}
 			i++
 		}
-		if !entry_only {
-			fail('vjsx compile currently requires --entry-only; module graph bundling is not implemented')
+		if entry_only == bundle {
+			fail('vjsx compile requires exactly one of --entry-only or --bundle')
 		}
 		if runtime_profile !in ['node', 'script', 'browser'] {
 			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
@@ -227,13 +253,81 @@ fn parse_args(args []string) CliOptions {
 			fail('missing compile input path')
 		}
 		if output_file == '' {
-			fail('missing compile output path; use -o <output.qbc>')
+			fail('missing compile output path; use -o <output.qbc|app.vjsx>')
+		}
+		if bundle && !output_file.ends_with('.vjsx') {
+			fail('bundle output must use the .vjsx extension')
 		}
 		return CliOptions{
 			command:         command
 			script_file:     input_file
 			output_file:     output_file
 			entry_only:      entry_only
+			bundle:          bundle
+			runtime_profile: runtime_profile
+		}
+	}
+
+	if command == 'build' {
+		mut input_file := ''
+		mut output_file := ''
+		mut runner_file := ''
+		mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
+		mut i := 0
+		for i < rest.len {
+			arg := rest[i]
+			match arg {
+				'--runtime', '-r' {
+					if i + 1 >= rest.len {
+						fail('missing runtime profile after ${arg}')
+					}
+					runtime_profile = rest[i + 1]
+					i++
+				}
+				'--output', '-o' {
+					if i + 1 >= rest.len {
+						fail('missing output path after ${arg}')
+					}
+					output_file = rest[i + 1]
+					i++
+				}
+				'--runner' {
+					if i + 1 >= rest.len {
+						fail('missing app runner path after ${arg}')
+					}
+					runner_file = rest[i + 1]
+					i++
+				}
+				'--help', '-h' {
+					usage()
+					exit(0)
+				}
+				else {
+					if arg.starts_with('-') {
+						fail('unknown build flag: ${arg}')
+					}
+					if input_file != '' {
+						fail('unexpected build argument: ${arg}')
+					}
+					input_file = arg
+				}
+			}
+			i++
+		}
+		if runtime_profile !in ['node', 'script', 'browser'] {
+			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
+		}
+		if input_file == '' {
+			fail('missing build input path')
+		}
+		if output_file == '' {
+			fail('missing build output path; use -o <app>')
+		}
+		return CliOptions{
+			command:         command
+			script_file:     input_file
+			output_file:     output_file
+			runner_file:     runner_file
 			runtime_profile: runtime_profile
 		}
 	}
@@ -427,7 +521,7 @@ fn parse_args(args []string) CliOptions {
 			runtime_profile: runtime_profile
 		}
 	}
-	if runtime_profile == 'browser' && !as_module {
+	if runtime_profile == 'browser' && !as_module && !script_file.ends_with('.vjsx') {
 		fail('browser runtime requires module mode\nuse --module with --runtime browser')
 	}
 	if script_file == '' {
@@ -624,6 +718,15 @@ fn run_script(opts CliOptions) !string {
 	ctx := session.context()
 
 	install_runtime(ctx, opts.runtime_profile, script_dir, script_parent, prev_dir, process_args)
+	if script_path.ends_with('.vjsx') {
+		bundle := os.read_bytes(script_path)!
+		mut app := ctx.load_bundle(bundle)!
+		defer {
+			app.close()
+		}
+		ctx.end()
+		return ''
+	}
 
 	value := runtimejs.run_runtime_entry(ctx, script_path, opts.as_module,
 		script_path + '.vjsbuild') or { fail(err.msg()) }
@@ -642,11 +745,6 @@ fn compile_script(opts CliOptions) !string {
 	if !os.exists(input_path) {
 		return error('script not found: ${input_path}')
 	}
-	source := os.read_file(input_path)!
-	bytecode := vjsx.compile_module(source,
-		filename:        input_path
-		runtime_profile: opts.runtime_profile
-	)!
 	output_path := if os.is_abs_path(opts.output_file) {
 		opts.output_file
 	} else {
@@ -656,7 +754,69 @@ fn compile_script(opts CliOptions) !string {
 	if output_dir != '' && output_dir != '.' {
 		os.mkdir_all(output_dir)!
 	}
-	os.write_file_array(output_path, bytecode)!
+	if opts.bundle {
+		mut compiler := vjsx.new_runtime_session()
+		defer {
+			compiler.close()
+		}
+		app_name := os.file_name(output_path).all_before_last('.')
+		bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
+			app_name:        app_name
+			runtime_profile: opts.runtime_profile
+		)!
+		os.write_file_array(output_path, bundle)!
+	} else {
+		source := os.read_file(input_path)!
+		bytecode := vjsx.compile_module(source,
+			filename:        input_path
+			runtime_profile: opts.runtime_profile
+		)!
+		os.write_file_array(output_path, bytecode)!
+	}
+	return ''
+}
+
+fn default_app_runner_path() string {
+	runner_name := $if windows { 'vjsx-app-runner.exe' } $else { 'vjsx-app-runner' }
+	return os.join_path(os.dir(os.real_path(os.executable())), runner_name)
+}
+
+fn resolve_app_runner(opts CliOptions) !string {
+	candidate := if opts.runner_file != '' {
+		opts.runner_file
+	} else if configured := os.getenv_opt('VJS_APP_RUNNER') {
+		configured
+	} else {
+		default_app_runner_path()
+	}
+	resolved := os.real_path(candidate)
+	if !os.is_file(resolved) {
+		return error('vjsx app runner not found: ${resolved}\ninstall vjsx-app-runner next to vjsx or pass --runner <path>')
+	}
+	return resolved
+}
+
+fn build_app(opts CliOptions) !string {
+	input_path := os.real_path(opts.script_file)
+	if !os.is_file(input_path) {
+		return error('script not found: ${input_path}')
+	}
+	output_path := if os.is_abs_path(opts.output_file) {
+		opts.output_file
+	} else {
+		os.join_path(os.getwd(), opts.output_file)
+	}
+	runner_path := resolve_app_runner(opts)!
+	mut compiler := vjsx.new_runtime_session()
+	defer {
+		compiler.close()
+	}
+	app_name := os.file_name(output_path).all_before_last('.')
+	bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
+		app_name:        app_name
+		runtime_profile: opts.runtime_profile
+	)!
+	vjsx.pack_app_executable(runner_path, bundle, output_path)!
 	return ''
 }
 
@@ -685,6 +845,9 @@ fn main() {
 		}
 		'compile' {
 			compile_script(opts) or { fail(err.msg()) }
+		}
+		'build' {
+			build_app(opts) or { fail(err.msg()) }
 		}
 		'install' {
 			install_packages(opts) or { fail(err.msg()) }

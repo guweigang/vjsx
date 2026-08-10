@@ -235,6 +235,56 @@ deserialization. QuickJS bytecode is not safe for hostile input, so only load
 artifacts produced by a trusted build. `--entry-only` does not bundle imports;
 it is intended for self-contained files.
 
+For a project with static imports, TypeScript, JSON, or local CommonJS
+dependencies, compile the reachable module graph into one application bundle:
+
+```bash
+./vjsx compile --bundle --runtime node ./src/main.ts -o myapp.vjsx
+./vjsx run myapp.vjsx
+```
+
+The output name convention is `<appname>.vjsx`. It is a self-contained,
+versioned vjsx application artifact rather than a native machine executable.
+The bundle stores the entry manifest and each transformed module as QuickJS
+bytecode. At runtime, imports are linked from the in-memory bundle, so project
+sources and `node_modules` are not read, parsed, or compiled again.
+
+Embedders can load the same artifact and retain its initialized namespace:
+
+```v
+bundle := os.read_bytes('myapp.vjsx')!
+mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{},
+	vjsx.NodeRuntimeConfig{})
+ctx := session.context()
+mut app := ctx.load_bundle(bundle)!
+result := app.call_export('main')!
+```
+
+Keep the returned `ScriptModule` alive to preserve module-level objects and
+state across calls. `.vjsx` loading validates the container format, checksum,
+vjsx version, QuickJS ABI, and runtime profile before evaluating its entry.
+Only statically reachable dependencies are included; dynamic dependency names
+that cannot be determined during the build are not supported by this first
+bundle format. As with `.qbc`, load only trusted artifacts.
+
+To package that bundle as a native single-file application:
+
+```bash
+./vjsx build --runtime node ./src/main.ts -o myapp
+./myapp arg1 arg2
+```
+
+`vjsx build` uses the platform-specific `vjsx-app-runner` installed next to
+the `vjsx` CLI. It appends the generated `.vjsx` bundle and a fixed 64-byte
+footer to a copy of that runner. The footer records its format version, bundle
+length, and SHA-256 checksum, allowing the runner to locate and validate the
+bundle without reading the native executable body. Use `--runner <path>` or
+`VJS_APP_RUNNER` to select an explicit runner.
+
+The resulting file is a native V/QuickJS executable containing QuickJS
+bytecode; it is not JavaScript AOT-compiled to machine code. It does not expose
+the package-management or compilation commands of the regular `vjsx` CLI.
+
 To measure parser startup and steady-state calls separately:
 
 ```bash
@@ -310,13 +360,14 @@ To build a standalone `vjsx` binary:
 ./scripts/build-vjsx.sh
 ```
 
-The build writes `dist/vjsx` by default. Set `VJS_OUT=/path/to/vjsx` to choose
-another output path.
+The build writes `dist/vjsx` and `dist/vjsx-app-runner` by default. Set
+`VJS_OUT=/path/to/vjsx` and `VJS_APP_RUNNER_OUT=/path/to/vjsx-app-runner` to
+choose other output paths.
 
 On Windows, use the PowerShell build script:
 
 ```powershell
-.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe
+.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe -AppRunnerOut .\dist\vjsx-app-runner.exe
 ```
 
 The Windows build defaults to MSVC (`-cc msvc`), matching the preferred VTable
@@ -338,8 +389,9 @@ produces platform-specific archives:
 The workflow can be run manually from GitHub Actions. Pushing a tag like
 `v0.1.0` also creates a GitHub Release and uploads those archives. Downstream
 projects such as VTable should download the archive matching their target OS
-and CPU, then place `vjsx` or `vjsx.exe` in their own packaged runtime
-directory.
+and CPU, then place `vjsx`/`vjsx.exe` and `vjsx-app-runner`/
+`vjsx-app-runner.exe` in their packaged runtime directory. The runner is only
+needed when producing native single-file applications.
 
 TypeScript module graphs are also supported, including:
 

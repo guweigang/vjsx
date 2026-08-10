@@ -101,6 +101,9 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 				host_cleanup_state: &HostCleanupState{
 					cleanups:          []HostCleanup{}
 					installed_modules: map[string]bool{}
+					bundle_modules:    map[string][]u8{}
+					bundle_sources:    map[string]string{}
+					bundle_compiled:   map[string][]u8{}
 				}
 			}).execution_error()
 		}

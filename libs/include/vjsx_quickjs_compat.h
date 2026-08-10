@@ -248,6 +248,21 @@ static inline void vjsx_js_read_bytecode_out(JSContext *ctx, const uint8_t *buf,
 	*out = JS_ReadObject(ctx, buf, buf_len, JS_READ_OBJ_BYTECODE);
 }
 
+static inline int vjsx_js_value_is_module(JSValueConst value) {
+	return JS_VALUE_GET_TAG(value) == JS_TAG_MODULE;
+}
+
+static inline void vjsx_js_get_module_def_namespace_out(JSContext *ctx,
+                                                         JSModuleDef *module_def,
+                                                         JSValue *out) {
+	*out = JS_GetModuleNamespace(ctx, module_def);
+}
+
+static inline void vjsx_js_throw_bundle_module_not_found(JSContext *ctx,
+                                                         const char *module_name) {
+	JS_ThrowReferenceError(ctx, "bundle module not found: %s", module_name);
+}
+
 static inline const char *vjsx_quickjs_version(void) {
 #if defined(VJSX_QUICKJS_NG)
 	return JS_GetVersion();
