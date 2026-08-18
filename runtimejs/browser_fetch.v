@@ -51,6 +51,16 @@ fn curl_fetch(url string, method Method, header_map map[string]string, body stri
 	parts << shell_quote(url)
 	result := os.execute(parts.join(' ') + ' 2>&1')
 	if result.exit_code != 0 {
+		if result.exit_code == 60 || result.output.contains('certificate') || result.output.contains('SSL') {
+			mut insecure_parts := parts.clone()
+			insecure_parts.insert(1, '-k')
+			retry_res := os.execute(insecure_parts.join(' ') + ' 2>&1')
+			if retry_res.exit_code == 0 {
+				headers_text := os.read_file(headers_path)!
+				body_text := os.read_file(body_path)!
+				return parse_curl_response(headers_text, body_text)
+			}
+		}
 		mut message := result.output.trim_space()
 		if message == '' {
 			message = 'curl failed with exit code ${result.exit_code}'

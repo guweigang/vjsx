@@ -145,6 +145,27 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 	cmd_parts << '2>&1'
 	result := os.execute(cmd_parts.join(' '))
 	if result.exit_code != 0 {
+		if result.exit_code == 60 || result.output.contains('certificate') || result.output.contains('SSL') {
+			mut insecure_parts := cmd_parts.clone()
+			insecure_parts.insert(1, '-k')
+			retry_res := os.execute(insecure_parts.join(' '))
+			if retry_res.exit_code == 0 {
+				headers_text := os.read_file(headers_path) or { return FetchCoreResult{
+					message: err.msg()
+				} }
+				body_text := os.read_file(body_path) or { return FetchCoreResult{
+					message: err.msg()
+				} }
+				resp := fetch_parse_curl_response(headers_text, body_text) or {
+					return FetchCoreResult{
+						message: err.msg()
+					}
+				}
+				return FetchCoreResult{
+					response: resp
+				}
+			}
+		}
 		mut message := result.output.trim_space()
 		if message == '' {
 			message = 'curl failed with exit code ${result.exit_code}'
