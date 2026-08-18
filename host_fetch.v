@@ -113,7 +113,10 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 	}
 	mut cmd_parts := [
 		fetch_shell_quote(curl_path),
+		'-q',
 		'-sS',
+		'--connect-timeout',
+		'5',
 		'-L',
 		'--max-redirs',
 		'16',
@@ -145,25 +148,26 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 	cmd_parts << '2>&1'
 	result := os.execute(cmd_parts.join(' '))
 	if result.exit_code != 0 {
-		if result.exit_code == 60 || result.output.contains('certificate') || result.output.contains('SSL') {
-			mut insecure_parts := cmd_parts.clone()
-			insecure_parts.insert(1, '-k')
-			retry_res := os.execute(insecure_parts.join(' '))
-			if retry_res.exit_code == 0 {
-				headers_text := os.read_file(headers_path) or { return FetchCoreResult{
-					message: err.msg()
-				} }
-				body_text := os.read_file(body_path) or { return FetchCoreResult{
-					message: err.msg()
-				} }
-				resp := fetch_parse_curl_response(headers_text, body_text) or {
-					return FetchCoreResult{
-						message: err.msg()
-					}
-				}
+		// If failed (dead proxy, self-signed cert, refused connection, etc.), retry bypassing proxy with -k
+		mut fallback_parts := cmd_parts.clone()
+		fallback_parts.insert(1, '-k')
+		fallback_parts.insert(1, '"*"')
+		fallback_parts.insert(1, '--noproxy')
+		retry_res := os.execute(fallback_parts.join(' '))
+		if retry_res.exit_code == 0 {
+			headers_text := os.read_file(headers_path) or { return FetchCoreResult{
+				message: err.msg()
+			} }
+			body_text := os.read_file(body_path) or { return FetchCoreResult{
+				message: err.msg()
+			} }
+			resp := fetch_parse_curl_response(headers_text, body_text) or {
 				return FetchCoreResult{
-					response: resp
+					message: err.msg()
 				}
+			}
+			return FetchCoreResult{
+				response: resp
 			}
 		}
 		mut message := result.output.trim_space()
@@ -244,21 +248,7 @@ fn fetch_parse_curl_response(headers_text string, body_text string) !http.Respon
 }
 
 fn fetch_core_run_with_deadline(request FetchCoreRequest, deadline i64) !http.Response {
-	ch := chan FetchCoreResult{cap: 1}
-	spawn fn [ch, request] () {
-		ch <- fetch_core_run(request)
-	}()
-	mut output := FetchCoreResult{}
-	select {
-		result := <-ch {
-			output = result
-		}
-		deadline * time.nanosecond {
-			output = FetchCoreResult{
-				message: 'fetch timed out after ${deadline / time.second} seconds'
-			}
-		}
-	}
+	output := fetch_core_run(request)
 	if output.message != '' {
 		return error(output.message)
 	}
@@ -420,8 +410,8 @@ fn fetch_config_from_boot(boot Value) FetchGlobalsConfig {
 	}
 	max_retries := if max_retries_value.is_undefined() { -1 } else { max_retries_value.to_int() }
 	return FetchGlobalsConfig{
-		read_timeout:        if read_timeout > 0 { read_timeout } else { 30 * time.second }
-		write_timeout:       if write_timeout > 0 { write_timeout } else { 30 * time.second }
+		read_timeout:        if read_timeout > 0 { read_timeout * time.millisecond } else { 30 * time.second }
+		write_timeout:       if write_timeout > 0 { write_timeout * time.millisecond } else { 30 * time.second }
 		max_retries:         if max_retries >= 0 { max_retries } else { 5 }
 		curl_proxy_fallback: if curl_proxy_fallback_value.is_undefined() {
 			true
@@ -520,8 +510,8 @@ fn fetch_boot(ctx &Context, boot Value) {
 pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
 	glob, boot := fetch_get_bootstrap(ctx)
 	config_object := ctx.js_object()
-	config_object.set('readTimeout', int(config.read_timeout))
-	config_object.set('writeTimeout', int(config.write_timeout))
+	config_object.set('readTimeout', int(config.read_timeout / time.millisecond))
+	config_object.set('writeTimeout', int(config.write_timeout / time.millisecond))
 	config_object.set('maxRetries', config.max_retries)
 	config_object.set('curlProxyFallback', config.curl_proxy_fallback)
 	boot.set(fetch_globals_config_key, config_object)
