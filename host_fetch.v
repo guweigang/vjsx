@@ -46,7 +46,7 @@ fn fetch_core_deadline(config FetchGlobalsConfig) i64 {
 fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
 	if request.curl_proxy_fallback {
 		curl_res := fetch_core_run_curl(request)
-		if curl_res.message == '' {
+		if curl_res.message != 'curl is not available' {
 			return curl_res
 		}
 	}

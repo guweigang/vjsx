@@ -130,13 +130,21 @@ fn cli_browser_fetch_boot(ctx &vjsx.Context, boot vjsx.Value) {
 		request_method := method_from_str(method.to_upper())
 		if boundary.is_undefined() {
 			resp = curl_fetch(url, request_method, curl_headers, body) or {
-				fetch(
-					method:     request_method
-					url:        url
-					header:     hd
-					data:       body
-					user_agent: user_agent
-				) or {
+				if err.msg() == 'curl is not available' {
+					fetch(
+						method:     request_method
+						url:        url
+						header:     hd
+						data:       body
+						user_agent: user_agent
+					) or {
+						error = this.ctx.js_error(message: err.msg())
+						unsafe {
+							goto reject
+						}
+						Response{}
+					}
+				} else {
 					error = this.ctx.js_error(message: err.msg())
 					unsafe {
 						goto reject
