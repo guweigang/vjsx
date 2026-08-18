@@ -44,8 +44,11 @@ fn fetch_core_deadline(config FetchGlobalsConfig) i64 {
 }
 
 fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
-	if request.curl_proxy_fallback && fetch_proxy_env() != '' {
-		return fetch_core_run_curl(request)
+	if request.curl_proxy_fallback {
+		curl_res := fetch_core_run_curl(request)
+		if curl_res.message == '' {
+			return curl_res
+		}
 	}
 	mut resp := http.Response{}
 	if request.boundary == '' {
@@ -56,11 +59,8 @@ fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
 			data:          request.body
 			read_timeout:  request.read_timeout
 			write_timeout: request.write_timeout
-			max_retries:   request.max_retries
+			max_retries:   0
 		) or {
-			if request.curl_proxy_fallback {
-				return fetch_core_run_curl(request)
-			}
 			return FetchCoreResult{
 				message: err.msg()
 			}
@@ -117,6 +117,9 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 		'-X',
 		request.method.str(),
 	]
+	if os.getenv('NODE_TLS_REJECT_UNAUTHORIZED') == '0' || os.getenv('VJS_FETCH_INSECURE') == '1' {
+		args << '-k'
+	}
 	for key in request.header.keys() {
 		values := request.header.custom_values(key)
 		if values.len > 0 {
