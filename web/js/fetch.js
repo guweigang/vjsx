@@ -67,12 +67,7 @@ async function fetch(input, opts = {}) {
     resInit.headers = res.header;
     resInit.url = url;
     return new Response(res.body, resInit);
-  })().catch((err) => {
-    if (aborted || signal?.aborted) {
-      return new Promise(() => {});
-    }
-    throw err;
-  });
+  })();
   try {
     return await (abortPromise == null
       ? requestPromise
