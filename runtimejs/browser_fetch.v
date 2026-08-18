@@ -6,7 +6,11 @@ import time
 import vjsx
 
 fn shell_quote(value string) string {
-	return "'" + value.replace("'", "'\"'\"'") + "'"
+	$if windows {
+		return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+	} $else {
+		return "'" + value.replace("'", "'\"'\"'") + "'"
+	}
 }
 
 fn curl_fetch(url string, method Method, header_map map[string]string, body string) !Response {

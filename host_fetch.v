@@ -91,7 +91,11 @@ fn fetch_proxy_env() string {
 }
 
 fn fetch_shell_quote(value string) string {
-	return "'" + value.replace("'", "'\"'\"'") + "'"
+	$if windows {
+		return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+	} $else {
+		return "'" + value.replace("'", "'\"'\"'") + "'"
+	}
 }
 
 fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
