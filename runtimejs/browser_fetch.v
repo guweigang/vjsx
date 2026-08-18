@@ -33,6 +33,9 @@ fn curl_fetch(url string, method Method, header_map map[string]string, body stri
 		'-X',
 		shell_quote(method.str()),
 	]
+	if os.getenv('NODE_TLS_REJECT_UNAUTHORIZED') == '0' || os.getenv('VJS_FETCH_INSECURE') == '1' {
+		parts << '-k'
+	}
 	for key, value in header_map {
 		parts << '-H'
 		parts << shell_quote('${key}: ${value}')
@@ -126,14 +129,14 @@ fn cli_browser_fetch_boot(ctx &vjsx.Context, boot vjsx.Value) {
 		mut resp := Response{}
 		request_method := method_from_str(method.to_upper())
 		if boundary.is_undefined() {
-			resp = fetch(
-				method:     request_method
-				url:        url
-				header:     hd
-				data:       body
-				user_agent: user_agent
-			) or {
-				curl_fetch(url, request_method, curl_headers, body) or {
+			resp = curl_fetch(url, request_method, curl_headers, body) or {
+				fetch(
+					method:     request_method
+					url:        url
+					header:     hd
+					data:       body
+					user_agent: user_agent
+				) or {
 					error = this.ctx.js_error(message: err.msg())
 					unsafe {
 						goto reject
