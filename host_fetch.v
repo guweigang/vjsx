@@ -90,6 +90,10 @@ fn fetch_proxy_env() string {
 	return ''
 }
 
+fn fetch_shell_quote(value string) string {
+	return "'" + value.replace("'", "'\"'\"'") + "'"
+}
+
 fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 	curl_path := os.find_abs_path_of_executable('curl') or {
 		return FetchCoreResult{
@@ -103,7 +107,8 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 		os.rm(headers_path) or {}
 		os.rm(body_path) or {}
 	}
-	mut args := [
+	mut cmd_parts := [
+		fetch_shell_quote(curl_path),
 		'-sS',
 		'-L',
 		'--max-redirs',
@@ -111,44 +116,34 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 		'--max-time',
 		'${fetch_core_deadline_seconds(request)}',
 		'-D',
-		headers_path,
+		fetch_shell_quote(headers_path),
 		'-o',
-		body_path,
+		fetch_shell_quote(body_path),
 		'-X',
-		request.method.str(),
+		fetch_shell_quote(request.method.str()),
 	]
 	if os.getenv('NODE_TLS_REJECT_UNAUTHORIZED') == '0' || os.getenv('VJS_FETCH_INSECURE') == '1' {
-		args << '-k'
+		cmd_parts << '-k'
 	}
 	for key in request.header.keys() {
 		values := request.header.custom_values(key)
-		if values.len > 0 {
-			args << '-H'
-			args << '${key}: ${values.join('; ')}'
+		for val in values {
+			cmd_parts << '-H'
+			cmd_parts << fetch_shell_quote('${key}: ${val}')
 		}
 	}
 	if request.method !in [.get, .head] && request.body != '' {
-		args << '--data-binary'
-		args << request.body
+		cmd_parts << '--data-binary'
+		cmd_parts << fetch_shell_quote(request.body)
 	}
-	args << '--'
-	args << request.url
-	mut proc := os.new_process(curl_path)
-	proc.set_args(args)
-	proc.set_redirect_stdio()
-	proc.run()
-	stdout := proc.stdout_slurp()
-	stderr := proc.stderr_slurp()
-	proc.wait()
-	exit_code := proc.code
-	proc.close()
-	if exit_code != 0 {
-		mut message := stderr.trim_space()
+	cmd_parts << '--'
+	cmd_parts << fetch_shell_quote(request.url)
+	cmd_parts << '2>&1'
+	result := os.execute(cmd_parts.join(' '))
+	if result.exit_code != 0 {
+		mut message := result.output.trim_space()
 		if message == '' {
-			message = stdout.trim_space()
-		}
-		if message == '' {
-			message = 'curl failed with exit code ${exit_code}'
+			message = 'curl failed with exit code ${result.exit_code}'
 		}
 		return FetchCoreResult{
 			message: message
