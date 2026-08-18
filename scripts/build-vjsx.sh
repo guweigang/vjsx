@@ -13,19 +13,88 @@ fi
 mkdir -p "$(dirname "$out")"
 mkdir -p "$(dirname "$app_runner_out")"
 
-v_flags=${VJS_V_FLAGS:-}
-case " $v_flags " in
-  *" -cc "*|*" -cc="*|*" -cc")
-    ;;
-  *)
-    v_flags="-cc clang${v_flags:+ $v_flags}"
-    ;;
-esac
+find_libcrypto_a() {
+  local candidate
+  if [ -n "${OPENSSL_CRYPTO_STATIC_LIB:-}" ] && [ -f "$OPENSSL_CRYPTO_STATIC_LIB" ]; then
+    echo "$OPENSSL_CRYPTO_STATIC_LIB"
+    return 0
+  fi
+  if [ -n "${OPENSSL_ROOT_DIR:-}" ] && [ -f "$OPENSSL_ROOT_DIR/lib/libcrypto.a" ]; then
+    echo "$OPENSSL_ROOT_DIR/lib/libcrypto.a"
+    return 0
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    local brew_prefix
+    brew_prefix=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null || true)
+    if [ -n "$brew_prefix" ] && [ -f "$brew_prefix/lib/libcrypto.a" ]; then
+      echo "$brew_prefix/lib/libcrypto.a"
+      return 0
+    fi
+  fi
+  for candidate in \
+    /opt/homebrew/opt/openssl@3/lib/libcrypto.a \
+    /opt/homebrew/opt/openssl/lib/libcrypto.a \
+    /opt/homebrew/lib/libcrypto.a \
+    /usr/local/opt/openssl@3/lib/libcrypto.a \
+    /usr/local/opt/openssl/lib/libcrypto.a \
+    /usr/local/lib/libcrypto.a \
+    /usr/lib/x86_64-linux-gnu/libcrypto.a \
+    /usr/lib/aarch64-linux-gnu/libcrypto.a \
+    /usr/lib64/libcrypto.a \
+    /usr/lib/libcrypto.a; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+v_args=()
+if [ -n "${VJS_V_FLAGS:-}" ]; then
+  # Split user-provided flags by whitespace into array
+  read -r -a custom_flags <<< "${VJS_V_FLAGS}"
+  v_args=("${custom_flags[@]}")
+fi
+
+has_cc=0
+if [ "${#v_args[@]}" -gt 0 ]; then
+  for arg in "${v_args[@]}"; do
+    case "$arg" in
+      -cc|-cc=*)
+        has_cc=1
+        break
+        ;;
+    esac
+  done
+fi
+
+if [ "$has_cc" -eq 0 ]; then
+  v_args+=(-cc clang)
+fi
+
+crypto_static_a=$(find_libcrypto_a || true)
+if [ -n "$crypto_static_a" ]; then
+  static_dir="$repo_root/.cache/static-crypto"
+  mkdir -p "$static_dir"
+  ln -sf "$crypto_static_a" "$static_dir/libcrypto.a"
+  v_args+=(-cflags "-L$static_dir")
+fi
 
 cd "$repo_root"
 VJS_QUICKJS_PATH="$quickjs_path" \
-  v ${v_flags:-} -prod -d build_quickjs -o "$out" ./cli_runner_bin
+  v "${v_args[@]}" -prod -d build_quickjs -o "$out" ./cli_runner_bin
 VJS_QUICKJS_PATH="$quickjs_path" \
-  v ${v_flags:-} -prod -d build_quickjs -o "$app_runner_out" ./app_runner_bin
+  v "${v_args[@]}" -prod -d build_quickjs -o "$app_runner_out" ./app_runner_bin
+
+if [ "$(uname -s)" = "Darwin" ] && command -v otool >/dev/null 2>&1; then
+  if otool -L "$out" | grep -q 'libcrypto.*dylib'; then
+    echo "Warning: $out is still dynamically linked against libcrypto dylib" >&2
+  fi
+  if otool -L "$app_runner_out" | grep -q 'libcrypto.*dylib'; then
+    echo "Warning: $app_runner_out is still dynamically linked against libcrypto dylib" >&2
+  fi
+fi
 
 echo "$out"
+
