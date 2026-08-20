@@ -31,12 +31,14 @@ async function fetch(input, opts = {}) {
   }
   const url = req.url;
   let aborted = false;
+  let cancelCoreFetch = () => false;
   let cleanupAbort = () => {};
   const abortPromise = signal == null
     ? null
     : new Promise((_, reject) => {
       const onAbort = () => {
         aborted = true;
+        cancelCoreFetch();
         reject(abortError(signal.reason));
       };
       signal.addEventListener("abort", onAbort, { once: true });
@@ -46,17 +48,24 @@ async function fetch(input, opts = {}) {
     const boundary = typeof FormData !== "undefined" && opts.body instanceof FormData
       ? Math.random().toString()
       : void 0;
-    const body = typeof opts.body !== "string"
-      ? await req.text(boundary)
-      : opts.body;
+    const body = opts.body == null
+      ? ""
+      : typeof opts.body !== "string"
+        ? await req.text(boundary)
+        : opts.body;
     if (aborted || signal?.aborted) {
       throw abortError(signal?.reason);
     }
-    const res = await core_fetch(url, {
-      method: req.method,
-      headers: req.headers.toJSON(),
-      body: body,
-      boundary: boundary,
+    const res = await new Promise((resolve, reject) => {
+      const cancel = core_fetch(url, {
+        method: req.method,
+        headers: req.headers.toJSON(),
+        body: body,
+        boundary: boundary,
+      }, resolve, reject);
+      if (typeof cancel === "function") {
+        cancelCoreFetch = cancel;
+      }
     });
     if (aborted || signal?.aborted) {
       throw abortError(signal?.reason);

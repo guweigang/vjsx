@@ -11,9 +11,8 @@ pub:
 	write_timeout       i64  = 30 * time.second
 	max_retries         int  = 5
 	curl_proxy_fallback bool = true
+	curl_path           string
 }
-
-const fetch_globals_config_key = '__vjs_fetch_globals_config'
 
 struct FetchCoreRequest {
 	url                 string
@@ -32,24 +31,27 @@ struct FetchCoreResult {
 	message  string
 }
 
-fn fetch_core_deadline(config FetchGlobalsConfig) i64 {
-	mut deadline := config.read_timeout
-	if config.write_timeout > deadline {
-		deadline = config.write_timeout
-	}
-	if deadline <= 0 {
-		deadline = 30 * time.second
-	}
-	return deadline + 250 * time.millisecond
+@[heap]
+struct FetchCoreConfigState {
+	config FetchGlobalsConfig
 }
 
-fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
-	if request.curl_proxy_fallback {
-		curl_res := fetch_core_run_curl(request)
-		if curl_res.message != 'curl is not available' {
-			return curl_res
-		}
-	}
+@[heap]
+struct FetchCurlTask {
+mut:
+	process      CurlProcess
+	headers_path string
+	body_path    string
+	output_path  string
+	resolve      Value
+	reject       Value
+	settled      bool
+	cleaned      bool
+	cancelled    bool
+	cancel_polls int
+}
+
+fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
 	mut resp := http.Response{}
 	if request.boundary == '' {
 		resp = http.fetch(
@@ -60,11 +62,9 @@ fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
 			read_timeout:  request.read_timeout
 			write_timeout: request.write_timeout
 			max_retries:   0
-		) or {
-			return FetchCoreResult{
-				message: err.msg()
-			}
-		}
+		) or { return FetchCoreResult{
+			message: err.msg()
+		} }
 	} else {
 		form, files := http.parse_multipart_form(request.body, '----formdata-' + request.boundary)
 		resp = http.post_multipart_form(request.url,
@@ -80,39 +80,16 @@ fn fetch_core_run(request FetchCoreRequest) FetchCoreResult {
 	}
 }
 
-fn fetch_proxy_env() string {
-	for key in ['https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY', 'all_proxy', 'ALL_PROXY'] {
-		value := os.getenv(key).trim_space()
-		if value != '' {
-			return value
-		}
-	}
-	return ''
-}
-
-fn fetch_shell_quote(value string) string {
-	$if windows {
-		return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
-	} $else {
-		return "'" + value.replace("'", "'\"'\"'") + "'"
-	}
-}
-
-fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
-	curl_path := os.find_abs_path_of_executable('curl') or {
-		return FetchCoreResult{
-			message: 'curl is not available'
-		}
-	}
+fn fetch_curl_paths() (string, string, string) {
 	stamp := '${os.getpid()}-${time.now().unix_micro()}'
 	headers_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.headers')
 	body_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.body')
-	defer {
-		os.rm(headers_path) or {}
-		os.rm(body_path) or {}
-	}
-	mut cmd_parts := [
-		fetch_shell_quote(curl_path),
+	output_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.output')
+	return headers_path, body_path, output_path
+}
+
+fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path string) []string {
+	mut args := [
 		'-q',
 		'-sS',
 		'--connect-timeout',
@@ -123,77 +100,29 @@ fn fetch_core_run_curl(request FetchCoreRequest) FetchCoreResult {
 		'--max-time',
 		'${fetch_core_deadline_seconds(request)}',
 		'-D',
-		fetch_shell_quote(headers_path),
+		headers_path,
 		'-o',
-		fetch_shell_quote(body_path),
+		body_path,
 		'-X',
-		fetch_shell_quote(request.method.str()),
+		request.method.str(),
 	]
 	if os.getenv('NODE_TLS_REJECT_UNAUTHORIZED') == '0' || os.getenv('VJS_FETCH_INSECURE') == '1' {
-		cmd_parts << '-k'
+		args << '-k'
 	}
 	for key in request.header.keys() {
 		values := request.header.custom_values(key)
 		for val in values {
-			cmd_parts << '-H'
-			cmd_parts << fetch_shell_quote('${key}: ${val}')
+			args << '-H'
+			args << '${key}: ${val}'
 		}
 	}
 	if request.method !in [.get, .head] && request.body != '' {
-		cmd_parts << '--data-binary'
-		cmd_parts << fetch_shell_quote(request.body)
+		args << '--data-binary'
+		args << request.body
 	}
-	cmd_parts << '--'
-	cmd_parts << fetch_shell_quote(request.url)
-	cmd_parts << '2>&1'
-	result := os.execute(cmd_parts.join(' '))
-	if result.exit_code != 0 {
-		// If failed (dead proxy, self-signed cert, refused connection, etc.), retry bypassing proxy with -k
-		mut fallback_parts := cmd_parts.clone()
-		fallback_parts.insert(1, '-k')
-		fallback_parts.insert(1, '"*"')
-		fallback_parts.insert(1, '--noproxy')
-		retry_res := os.execute(fallback_parts.join(' '))
-		if retry_res.exit_code == 0 {
-			headers_text := os.read_file(headers_path) or { return FetchCoreResult{
-				message: err.msg()
-			} }
-			body_text := os.read_file(body_path) or { return FetchCoreResult{
-				message: err.msg()
-			} }
-			resp := fetch_parse_curl_response(headers_text, body_text) or {
-				return FetchCoreResult{
-					message: err.msg()
-				}
-			}
-			return FetchCoreResult{
-				response: resp
-			}
-		}
-		mut message := result.output.trim_space()
-		if message == '' {
-			message = 'curl failed with exit code ${result.exit_code}'
-		}
-		return FetchCoreResult{
-			message: message
-		}
-	}
-	headers_text := os.read_file(headers_path) or {
-		return FetchCoreResult{
-			message: err.msg()
-		}
-	}
-	body_text := os.read_file(body_path) or { return FetchCoreResult{
-		message: err.msg()
-	} }
-	resp := fetch_parse_curl_response(headers_text, body_text) or {
-		return FetchCoreResult{
-			message: err.msg()
-		}
-	}
-	return FetchCoreResult{
-		response: resp
-	}
+	args << '--'
+	args << request.url
+	return args
 }
 
 fn fetch_core_deadline_seconds(request FetchCoreRequest) int {
@@ -247,12 +176,160 @@ fn fetch_parse_curl_response(headers_text string, body_text string) !http.Respon
 	}
 }
 
-fn fetch_core_run_with_deadline(request FetchCoreRequest, deadline i64) !http.Response {
-	output := fetch_core_run(request)
-	if output.message != '' {
-		return error(output.message)
+fn fetch_response_value(ctx &Context, response http.Response) Value {
+	obj_header := ctx.js_object()
+	for key in response.header.keys() {
+		vals := response.header.custom_values(key)
+		obj_header.set(key, vals.join('; '))
 	}
-	return output.response
+	obj := ctx.js_object()
+	arr_buf := ctx.js_array_buffer(response.body.bytes())
+	obj.set('body', arr_buf)
+	arr_buf.free()
+	obj.set('status', response.status_code)
+	obj.set('status_message', response.status_msg)
+	obj.set('header', obj_header)
+	obj_header.free()
+	return obj
+}
+
+fn fetch_curl_task_cleanup(mut task FetchCurlTask) {
+	if task.cleaned {
+		return
+	}
+	task.cleaned = true
+	os.rm(task.headers_path) or {}
+	os.rm(task.body_path) or {}
+	os.rm(task.output_path) or {}
+}
+
+fn fetch_curl_task_stop(mut task FetchCurlTask) {
+	if !task.process.done {
+		task.process.terminate(true)
+		task.process.reap()
+	}
+	fetch_curl_task_cleanup(mut task)
+}
+
+fn fetch_curl_task_settle(ctx Context, mut task FetchCurlTask, value Value, reject bool) {
+	if task.settled {
+		value.free()
+		return
+	}
+	task.settled = true
+	callback := if reject { task.reject } else { task.resolve }
+	call_result := ctx.call(callback, value) or { ctx.js_undefined() }
+	call_result.free()
+	value.free()
+	task.resolve.free()
+	task.reject.free()
+	for ctx.rt.is_job_pending() {
+		ctx.rt.execute_pending_job() or { break }
+	}
+}
+
+fn fetch_curl_task_finish(ctx Context, mut task FetchCurlTask) {
+	defer {
+		fetch_curl_task_cleanup(mut task)
+	}
+	if task.cancelled || task.settled {
+		return
+	}
+	if task.process.exit_code != 0 {
+		mut message := os.read_file(task.output_path) or { '' }
+		message = message.trim_space()
+		if message == '' {
+			message = 'curl failed with exit code ${task.process.exit_code}'
+		}
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(message: message), true)
+		return
+	}
+	headers_text := os.read_file(task.headers_path) or {
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(message: err.msg()), true)
+		return
+	}
+	body_text := os.read_file(task.body_path) or {
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(message: err.msg()), true)
+		return
+	}
+	response := fetch_parse_curl_response(headers_text, body_text) or {
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(message: err.msg()), true)
+		return
+	}
+	fetch_curl_task_settle(ctx, mut task, fetch_response_value(ctx, response), false)
+}
+
+fn fetch_curl_task_schedule(ctx Context, mut task FetchCurlTask) {
+	timeout := ctx.js_global('setTimeout')
+	if !timeout.is_function() {
+		timeout.free()
+		fetch_curl_task_stop(mut task)
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(
+			message: 'curl transport requires setTimeout'
+		), true)
+		return
+	}
+	runner := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
+		finished := task.process.poll() or {
+			fetch_curl_task_settle(ctx, mut task, ctx.js_error(message: err.msg()), true)
+			fetch_curl_task_stop(mut task)
+			return ctx.js_undefined()
+		}
+		if finished {
+			fetch_curl_task_finish(ctx, mut task)
+			return ctx.js_undefined()
+		}
+		if task.cancelled {
+			task.cancel_polls++
+			if task.cancel_polls >= 25 {
+				task.process.terminate(true)
+			}
+		}
+		fetch_curl_task_schedule(ctx, mut task)
+		return ctx.js_undefined()
+	})
+	call_result := ctx.call(timeout, runner, 10) or { ctx.js_undefined() }
+	call_result.free()
+	runner.free()
+	timeout.free()
+}
+
+fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, resolve Value, reject Value) !Value {
+	headers_path, body_path, output_path := fetch_curl_paths()
+	args := fetch_curl_args(request, headers_path, body_path)
+	process := start_curl_process(curl_path, args, output_path) or {
+		os.rm(headers_path) or {}
+		os.rm(body_path) or {}
+		os.rm(output_path) or {}
+		return err
+	}
+	mut task := &FetchCurlTask{
+		process:      process
+		headers_path: headers_path
+		body_path:    body_path
+		output_path:  output_path
+		resolve:      resolve.dup_value()
+		reject:       reject.dup_value()
+	}
+	cancel := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
+		if task.cancelled || task.cleaned {
+			return ctx.js_bool(false)
+		}
+		task.cancelled = true
+		task.process.terminate(false)
+		fetch_curl_task_settle(ctx, mut task, ctx.js_error(
+			message: 'This operation was aborted'
+			name:    'AbortError'
+		), true)
+		return ctx.js_bool(true)
+	})
+	ctx.register_host_cleanup(fn [mut task] () {
+		if !task.cleaned {
+			fetch_curl_task_stop(mut task)
+		}
+	})
+	fetch_curl_task_schedule(ctx, mut task)
+	return cancel
 }
 
 fn fetch_get_bootstrap(ctx &Context) (Value, Value) {
@@ -374,62 +451,25 @@ fn fetch_encoding_boot(ctx &Context, boot Value) {
 	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
 }
 
-fn fetch_config_from_boot(boot Value) FetchGlobalsConfig {
-	value := boot.get(fetch_globals_config_key)
-	defer {
-		value.free()
+fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Value) Value {
+	ctx := this.ctx
+	noop_cancel := ctx.js_function(fn [ctx] (args []Value) Value {
+		return ctx.js_bool(false)
+	})
+	if args.len < 4 || !args[2].is_function() || !args[3].is_function() {
+		return ctx.js_throw('core_fetch requires resolve and reject callbacks')
 	}
-	if !value.is_object() {
-		return FetchGlobalsConfig{}
-	}
-	read_timeout_value := value.get('readTimeout')
-	defer {
-		read_timeout_value.free()
-	}
-	write_timeout_value := value.get('writeTimeout')
-	defer {
-		write_timeout_value.free()
-	}
-	max_retries_value := value.get('maxRetries')
-	defer {
-		max_retries_value.free()
-	}
-	curl_proxy_fallback_value := value.get('curlProxyFallback')
-	defer {
-		curl_proxy_fallback_value.free()
-	}
-	read_timeout := if read_timeout_value.is_undefined() {
-		i64(0)
-	} else {
-		i64(read_timeout_value.to_int())
-	}
-	write_timeout := if write_timeout_value.is_undefined() {
-		i64(0)
-	} else {
-		i64(write_timeout_value.to_int())
-	}
-	max_retries := if max_retries_value.is_undefined() { -1 } else { max_retries_value.to_int() }
-	return FetchGlobalsConfig{
-		read_timeout:        if read_timeout > 0 { read_timeout * time.millisecond } else { 30 * time.second }
-		write_timeout:       if write_timeout > 0 { write_timeout * time.millisecond } else { 30 * time.second }
-		max_retries:         if max_retries >= 0 { max_retries } else { 5 }
-		curl_proxy_fallback: if curl_proxy_fallback_value.is_undefined() {
-			true
-		} else {
-			curl_proxy_fallback_value.to_bool()
-		}
-	}
-}
-
-fn fetch_core(this Value, args []Value) Value {
-	mut error := this.ctx.js_undefined()
-	promise := this.ctx.js_promise()
-	if args.len == 0 {
-		error = this.ctx.js_error(message: 'url is required', name: 'TypeError')
-		return promise.reject(error)
+	resolve := args[2]
+	reject := args[3]
+	if args[0].is_undefined() || args[0].is_null() {
+		error := ctx.js_error(message: 'url is required', name: 'TypeError')
+		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+		call_result.free()
+		error.free()
+		return noop_cancel
 	}
 	url := args[0].str()
-	opts := if args.len > 1 { args[1].dup_value() } else { this.ctx.js_object() }
+	opts := if args.len > 1 { args[1].dup_value() } else { ctx.js_object() }
 	defer {
 		opts.free()
 	}
@@ -452,28 +492,29 @@ fn fetch_core(this Value, args []Value) Value {
 	mut hd := http.new_header()
 	if headers.is_object() {
 		props := headers.property_names() or {
-			error = this.ctx.js_error(message: err.msg())
-			return promise.reject(error)
+			error := ctx.js_error(message: err.msg())
+			call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+			call_result.free()
+			error.free()
+			return noop_cancel
 		}
 		for data in props {
 			key := data.atom.str()
 			val := headers.get(key)
 			hd.set_custom(key, val.str()) or {
 				val.free()
-				error = this.ctx.js_error(message: err.msg())
-				return promise.reject(error)
+				error := ctx.js_error(message: err.msg())
+				call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+				call_result.free()
+				error.free()
+				return noop_cancel
 			}
 			val.free()
 		}
 	}
 	request_method := http.Method.from(method.str().to_lower()) or { http.Method.get }
 	body := raw_body.str()
-	boot := this.ctx.js_global('__bootstrap')
-	defer {
-		boot.free()
-	}
-	fetch_config := fetch_config_from_boot(boot)
-	resp := fetch_core_run_with_deadline(FetchCoreRequest{
+	request := FetchCoreRequest{
 		url:                 url
 		method:              request_method
 		header:              hd
@@ -483,42 +524,59 @@ fn fetch_core(this Value, args []Value) Value {
 		write_timeout:       fetch_config.write_timeout
 		max_retries:         fetch_config.max_retries
 		curl_proxy_fallback: fetch_config.curl_proxy_fallback
-	}, fetch_core_deadline(fetch_config)) or {
-		error = this.ctx.js_error(message: err.msg())
-		return promise.reject(error)
 	}
-	obj_header := this.ctx.js_object()
-	for key in resp.header.keys() {
-		vals := resp.header.custom_values(key)
-		obj_header.set(key, vals.join('; '))
+	if request.curl_proxy_fallback && request.boundary == '' {
+		curl_path := if fetch_config.curl_path != '' {
+			fetch_config.curl_path
+		} else {
+			os.find_abs_path_of_executable('curl') or { '' }
+		}
+		if curl_path != '' {
+			cancel := fetch_start_curl(ctx, curl_path, request, resolve, reject) or {
+				error := ctx.js_error(message: err.msg())
+				call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+				call_result.free()
+				error.free()
+				return noop_cancel
+			}
+			noop_cancel.free()
+			return cancel
+		}
 	}
-	obj := this.ctx.js_object()
-	arr_buf := this.ctx.js_array_buffer(resp.body.bytes())
-	obj.set('body', arr_buf)
-	arr_buf.free()
-	obj.set('status', resp.status_code)
-	obj.set('status_message', resp.status_msg)
-	obj.set('header', obj_header)
-	obj_header.free()
-	return promise.resolve(obj)
+	result := fetch_core_run_native(request)
+	if result.message != '' {
+		error := ctx.js_error(message: result.message)
+		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+		call_result.free()
+		error.free()
+		return noop_cancel
+	}
+	response_value := fetch_response_value(ctx, result.response)
+	call_result := ctx.call(resolve, response_value) or { ctx.js_undefined() }
+	call_result.free()
+	response_value.free()
+	return noop_cancel
 }
 
-fn fetch_boot(ctx &Context, boot Value) {
-	boot.set('core_fetch', ctx.js_function_this(fetch_core))
+fn fetch_boot(ctx &Context, boot Value, config FetchGlobalsConfig) {
+	state := &FetchCoreConfigState{
+		config: config
+	}
+	boot.set('core_fetch', ctx.js_function_this(fn [state] (this Value, args []Value) Value {
+		return fetch_core_with_config(state.config, this, args)
+	}))
+}
+
+// Install the native fetch transport into an existing runtime bootstrap.
+pub fn install_fetch_core_boot(ctx &Context, boot Value, config FetchGlobalsConfig) {
+	fetch_boot(ctx, boot, config)
 }
 
 pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
 	glob, boot := fetch_get_bootstrap(ctx)
-	config_object := ctx.js_object()
-	config_object.set('readTimeout', int(config.read_timeout / time.millisecond))
-	config_object.set('writeTimeout', int(config.write_timeout / time.millisecond))
-	config_object.set('maxRetries', config.max_retries)
-	config_object.set('curlProxyFallback', config.curl_proxy_fallback)
-	boot.set(fetch_globals_config_key, config_object)
-	config_object.free()
+	install_fetch_core_boot(ctx, boot, config)
 	fetch_util_boot(ctx, boot)
 	fetch_encoding_boot(ctx, boot)
-	fetch_boot(ctx, boot)
 	ctx.eval_runtime_file('web/js/util.js', type_module) or { panic(err) }
 	ctx.eval_runtime_file('web/js/stream.js', type_module) or { panic(err) }
 	ctx.eval_runtime_file('web/js/encoding.js', type_module) or { panic(err) }

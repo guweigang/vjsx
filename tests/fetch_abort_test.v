@@ -13,18 +13,20 @@ fn install_fake_fetch_runtime(ctx &vjsx.Context) {
 				isTypedArray: (value) => ArrayBuffer.isView(value) && !(value instanceof DataView),
 				isRedirect: (status) => [301, 302, 303, 307, 308].includes(status),
 			},
-			core_fetch(url, init) {
+			core_fetch(url, init, resolve, reject) {
 				globalThis.__fetch_abort_core_calls = (globalThis.__fetch_abort_core_calls || 0) + 1;
-				return new Promise((resolve) => {
-					setTimeout(() => {
-						resolve({
-							status: 200,
-							status_message: "OK",
-							header: { "x-test": "yes" },
-							body: new TextEncoder().encode(url.endsWith("/ok") ? "ok" : "late").buffer,
-						});
-					}, 25);
-				});
+				const timer = setTimeout(() => {
+					resolve({
+						status: 200,
+						status_message: "OK",
+						header: { "x-test": "yes" },
+						body: new TextEncoder().encode(url.endsWith("/ok") ? "ok" : "late").buffer,
+					});
+				}, 25);
+				return () => {
+					clearTimeout(timer);
+					reject(new DOMException("This operation was aborted", "AbortError"));
+				};
 			},
 		};
 	') or {
