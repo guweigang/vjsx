@@ -143,7 +143,6 @@ fn validate_script_type(script_file string, as_module bool) bool {
 		return enable_module
 	}
 	fail('unsupported script type: ${script_file}\nexpected a .js, .mjs, .cjs, .ts, .mts, .cts, or .vjsx file')
-	return enable_module
 }
 
 fn parse_env_options() ?CliOptions {

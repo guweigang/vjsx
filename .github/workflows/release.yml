@@ -161,11 +161,18 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")
 
+      - name: Setup Unix OpenSSL SDK
+        if: matrix.shell == 'bash' && startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+
       - name: Build Unix binary
         if: matrix.shell == 'bash'
         shell: bash
         run: |
-          VJS_OUT="$PWD/dist/${{ matrix.binary }}" ./scripts/build-vjsx.sh
+          VJS_REQUIRE_STATIC_CRYPTO=1 VJS_OUT="$PWD/dist/${{ matrix.binary }}" ./scripts/build-vjsx.sh
 
       - name: Build Windows binary
         if: matrix.shell == 'powershell'
@@ -190,10 +197,23 @@ jobs:
         if: matrix.shell == 'bash'
         shell: bash
         run: |
+          if [ "$(uname -s)" = "Darwin" ] && command -v otool >/dev/null 2>&1; then
+            if otool -L "./dist/${{ matrix.binary }}" | grep -q 'libcrypto.*dylib'; then
+              echo "Error: ./dist/${{ matrix.binary }} has unexpected dynamic dependency on libcrypto" >&2
+              otool -L "./dist/${{ matrix.binary }}"
+              exit 1
+            fi
+            if otool -L "./dist/vjsx-app-runner" | grep -q 'libcrypto.*dylib'; then
+              echo "Error: ./dist/vjsx-app-runner has unexpected dynamic dependency on libcrypto" >&2
+              otool -L "./dist/vjsx-app-runner"
+              exit 1
+            fi
+          fi
           ./dist/${{ matrix.binary }} check-runtime --runtime node
           ./dist/${{ matrix.binary }} ./tests/test.js
           ./dist/${{ matrix.binary }} build --runner ./dist/vjsx-app-runner ./tests/test.js -o ./dist/vjsx-smoke-app
           ./dist/vjsx-smoke-app
+
 
       - name: Smoke Windows binary
         if: matrix.shell == 'powershell'

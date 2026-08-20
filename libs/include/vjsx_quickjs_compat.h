@@ -276,6 +276,19 @@ static inline int vjsx_js_resolve_module(JSContext *ctx, JSValueConst module_obj
 }
 
 static inline void vjsx_js_std_await_out(JSContext *ctx, JSValue val, JSValue *out) {
+	/*
+	 * quickjs-ng's js_std_await executes one promise job and then immediately
+	 * enters js_os_poll. A future timer can therefore block later microtasks
+	 * that are already queued. Drain the current job queue before allowing the
+	 * std loop to sleep so fast host promises are not starved by long timers.
+	 */
+	JSRuntime *rt = JS_GetRuntime(ctx);
+	while (JS_IsJobPending(rt)) {
+		JSContext *job_ctx = NULL;
+		if (JS_ExecutePendingJob(rt, &job_ctx) <= 0) {
+			break;
+		}
+	}
 	*out = js_std_await(ctx, val);
 }
 
