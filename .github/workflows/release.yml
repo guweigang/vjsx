@@ -172,7 +172,7 @@ jobs:
         if: matrix.shell == 'bash'
         shell: bash
         run: |
-          VJS_OUT="$PWD/dist/${{ matrix.binary }}" ./scripts/build-vjsx.sh
+          VJS_REQUIRE_STATIC_CRYPTO=1 VJS_OUT="$PWD/dist/${{ matrix.binary }}" ./scripts/build-vjsx.sh
 
       - name: Build Windows binary
         if: matrix.shell == 'powershell'

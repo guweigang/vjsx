@@ -7,6 +7,7 @@ mkdir -p "$VMODULES"
 out=${VJS_OUT:-"$repo_root/dist/vjsx"}
 app_runner_out=${VJS_APP_RUNNER_OUT:-"$(dirname "$out")/vjsx-app-runner"}
 quickjs_path=${VJS_QUICKJS_PATH:-}
+require_static_crypto=${VJS_REQUIRE_STATIC_CRYPTO:-0}
 
 if [ -z "$quickjs_path" ]; then
   quickjs_path=$(VJS_QUICKJS_WORK_ROOT="${VJS_QUICKJS_WORK_ROOT:-$repo_root}" "$repo_root/scripts/ensure-quickjs.sh")
@@ -81,6 +82,10 @@ if [ -n "$crypto_static_a" ]; then
   mkdir -p "$static_dir"
   ln -sf "$crypto_static_a" "$static_dir/libcrypto.a"
   v_args+=(-cflags "-L$static_dir")
+elif [ "$require_static_crypto" = "1" ]; then
+  echo "Static libcrypto is required but libcrypto.a was not found" >&2
+  echo "Set OPENSSL_CRYPTO_STATIC_LIB to the absolute archive path" >&2
+  exit 1
 fi
 
 cd "$repo_root"
@@ -89,14 +94,32 @@ VJS_QUICKJS_PATH="$quickjs_path" \
 VJS_QUICKJS_PATH="$quickjs_path" \
   v "${v_args[@]}" -prod -d build_quickjs -o "$app_runner_out" ./app_runner_bin
 
-if [ "$(uname -s)" = "Darwin" ] && command -v otool >/dev/null 2>&1; then
-  if otool -L "$out" | grep -q 'libcrypto.*dylib'; then
-    echo "Warning: $out is still dynamically linked against libcrypto dylib" >&2
+check_dynamic_crypto() {
+  local binary=$1
+  local dependency=''
+  case "$(uname -s)" in
+    Darwin)
+      if command -v otool >/dev/null 2>&1; then
+        dependency=$(otool -L "$binary" | grep 'libcrypto.*dylib' || true)
+      fi
+      ;;
+    Linux)
+      if command -v ldd >/dev/null 2>&1; then
+        dependency=$(ldd "$binary" 2>/dev/null | grep 'libcrypto\.so' || true)
+      fi
+      ;;
+  esac
+  if [ -z "$dependency" ]; then
+    return 0
   fi
-  if otool -L "$app_runner_out" | grep -q 'libcrypto.*dylib'; then
-    echo "Warning: $app_runner_out is still dynamically linked against libcrypto dylib" >&2
+  if [ "$require_static_crypto" = "1" ]; then
+    echo "$binary unexpectedly depends on dynamic libcrypto: $dependency" >&2
+    return 1
   fi
-fi
+  echo "Warning: $binary depends on dynamic libcrypto: $dependency" >&2
+}
+
+check_dynamic_crypto "$out"
+check_dynamic_crypto "$app_runner_out"
 
 echo "$out"
-
