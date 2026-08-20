@@ -27,6 +27,8 @@ dist/
 *.iml
 .build/
 .vmodules/
+.cache/
+node_modules/
 
 # ENV
 .env
@@ -46,5 +48,7 @@ tests/.wechat_*
 # Generated JS/TS runtime build directories
 *.vjsbuild/
 
+# Generated example executables
+/examples/stock_demo/stock-app
+
 # Shared CLI test runners and compiler cache
-/.cache/cli-tests/
