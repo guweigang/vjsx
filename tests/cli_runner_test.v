@@ -212,6 +212,30 @@ fn test_install_script_runtime_profile() {
 		value.free()
 	}
 	assert value.to_string() == 'object|object|object|undefined|inline.js,arg-one|function'
+	assert 'sqlite' !in ctx.runtime_modules()
+	assert 'mysql' !in ctx.runtime_modules()
+}
+
+fn test_script_runtime_can_disable_host_identity_capabilities() {
+	mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
+		fetch:   false
+		path:    false
+		os:      false
+		process: false
+	})
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	value := ctx.eval('typeof process') or { panic(err) }
+	defer {
+		value.free()
+	}
+	assert value.to_string() == 'undefined'
+	assert 'path' !in ctx.runtime_modules()
+	assert 'os' !in ctx.runtime_modules()
+	assert 'sqlite' !in ctx.runtime_modules()
+	assert 'mysql' !in ctx.runtime_modules()
 }
 
 fn test_runtime_profile_snapshot_for_script_runtime() {

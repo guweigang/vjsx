@@ -200,6 +200,73 @@ function makeIterator(arr) {
 
 const iof8 = (a, b = "/") => a.indexOf(b, 8);
 
+function normalizeURLPath(pathname) {
+  const absolute = pathname.startsWith("/");
+  const trailingSlash = pathname.endsWith("/");
+  const output = [];
+  for (const segment of pathname.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      output.pop();
+    } else {
+      output.push(segment);
+    }
+  }
+  let normalized = `${absolute ? "/" : ""}${output.join("/")}`;
+  if (trailingSlash && normalized !== "/") normalized += "/";
+  return normalized || (absolute ? "/" : "");
+}
+
+function splitURLSuffix(value) {
+  const hashIndex = value.indexOf("#");
+  const hash = hashIndex === -1 ? "" : value.slice(hashIndex);
+  const withoutHash = hashIndex === -1 ? value : value.slice(0, hashIndex);
+  const queryIndex = withoutHash.indexOf("?");
+  return {
+    pathname: queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex),
+    search: queryIndex === -1 ? "" : withoutHash.slice(queryIndex),
+    hash,
+  };
+}
+
+function normalizeAbsoluteURL(value) {
+  const match = String(value).match(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*)(.*)$/);
+  if (!match) throw new TypeError(`Invalid URL ${value}`);
+  const suffix = splitURLSuffix(match[2] || "/");
+  const pathname = encodeURI(normalizeURLPath(suffix.pathname || "/"));
+  const search = suffix.search ? `?${encodeURI(suffix.search.slice(1))}` : "";
+  const hash = suffix.hash ? `#${encodeURI(suffix.hash.slice(1))}` : "";
+  return `${match[1]}${pathname}${search}${hash}`;
+}
+
+function resolveURLInput(input, base) {
+  input = String(input);
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(input)) {
+    return normalizeAbsoluteURL(input);
+  }
+  if (!base) throw new TypeError(`Invalid URL ${input}`);
+  const normalizedBase = normalizeAbsoluteURL(base);
+  const baseMatch = normalizedBase.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)(\/\/[^/?#]*)(.*)$/);
+  if (!baseMatch) throw new TypeError(`Invalid base URL ${base}`);
+  if (input.startsWith("//")) return normalizeAbsoluteURL(baseMatch[1] + input);
+  const baseSuffix = splitURLSuffix(baseMatch[3]);
+  if (input.startsWith("?")) {
+    return normalizeAbsoluteURL(`${baseMatch[1]}${baseMatch[2]}${baseSuffix.pathname}${input}`);
+  }
+  if (input.startsWith("#")) {
+    return normalizeAbsoluteURL(
+      `${baseMatch[1]}${baseMatch[2]}${baseSuffix.pathname}${baseSuffix.search}${input}`,
+    );
+  }
+  const suffix = splitURLSuffix(input);
+  const pathname = suffix.pathname.startsWith("/")
+    ? suffix.pathname
+    : `${baseSuffix.pathname.slice(0, baseSuffix.pathname.lastIndexOf("/") + 1)}${suffix.pathname}`;
+  return normalizeAbsoluteURL(
+    `${baseMatch[1]}${baseMatch[2]}${pathname}${suffix.search}${suffix.hash}`,
+  );
+}
+
 class URL {
   #pathname = void 0;
   #protocol = void 0;
@@ -212,17 +279,17 @@ class URL {
   #idx = -1;
   constructor(input, base) {
     if (base instanceof URL) {
-      base = base.origin;
+      base = base.href;
     }
     if (input instanceof URL) {
-      input = base ? input.pathname : input.href;
+      input = input.href;
     }
-    this.href = base ? base + input : input;
-    if (/^[a-zA-z]+:\/\/.*/.test(this.href) === false) {
-      throw new TypeError(`Invalid URL ${this.href}`);
-    }
+    this.href = resolveURLInput(input, base);
     const idx = this.#idx = iof8(this.href, "?");
-    this.search = idx !== -1 ? this.href.slice(idx) : "";
+    const hashIndex = iof8(this.href, "#");
+    this.search = idx !== -1
+      ? this.href.slice(idx, hashIndex !== -1 ? hashIndex : undefined)
+      : "";
   }
   static canParse(input, base) {
     try {
@@ -292,17 +359,18 @@ class URL {
   }
   #oriPathname() {
     const idx = iof8(this.href);
-    return this.#idx !== -1
-      ? this.href.slice(idx, this.#idx)
-      : this.href.slice(idx);
+    const hashIndex = iof8(this.href, "#");
+    const end = this.#idx !== -1
+      ? this.#idx
+      : hashIndex !== -1
+      ? hashIndex
+      : undefined;
+    return this.href.slice(idx, end);
   }
   get hash() {
     if (this.#hash) return this.#hash;
-    const hash = this.#oriPathname();
-    if (hash.includes("#")) {
-      return hash.slice(hash.indexOf("#"));
-    }
-    return "";
+    const index = iof8(this.href, "#");
+    return index === -1 ? "" : this.href.slice(index);
   }
   set hash(val) {
     this.#hash = val;

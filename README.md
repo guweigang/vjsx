@@ -21,6 +21,9 @@ the foundational work that helped kick off `vjsx`.
 - Call V from JS.
 - Call JS from V.
 - Top-Level `await` support. using `vjsx.type_module`.
+- Managed runtime turns with memory, stack, GC and execution-time limits.
+- Thread-safe `runtimejs.SessionLane` serialization with bounded admission.
+- QuickJS memory snapshots, lifecycle state and bounded turn observations.
 
 ## Install
 
@@ -143,6 +146,11 @@ fn main() {
 
 For the full host-first embedding guidance, see
 [`docs/EMBEDDING.md`](docs/EMBEDDING.md).
+
+Long-lived hosts should run user work through `RuntimeSession.run_turn(...)` or
+transfer the session to `runtimejs.SessionLane`. See the
+[runtime contract](docs/RUNTIME_CONTRACT.md#turn-and-lifecycle-contract) for
+the lifecycle, resource-limit and ownership rules.
 
 ## Run
 
@@ -667,6 +675,12 @@ Higher-level runtime entrypoints:
 - `web.inject_browser_runtime(ctx)`
 - `web.inject_browser_runtime_minimal(ctx)`
 
+`ScriptRuntimeConfig` keeps `path`, `os`, and `process` enabled by default for
+backwards compatibility, but embedders running untrusted code can disable each
+capability explicitly. Direct `sqlite` and `mysql` modules are disabled by
+default in the script profile and must be opted into; the full Node profile
+continues to install them.
+
 CLI runtime profiles:
 
 - `./vjsx --runtime node ...`
@@ -689,6 +703,9 @@ import herudi.vjsx.web
 fn main() {
   mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
     process_args: ['inline.js']
+    process: false
+    path: false
+    os: false
   })
   defer {
     session.close()

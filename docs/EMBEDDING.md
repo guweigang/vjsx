@@ -80,6 +80,43 @@ If you want to avoid over-design, stop here:
 That gives you a clear mental model without turning `vjsx` into a full plugin
 platform framework.
 
+## Long-Lived And Concurrent Hosts
+
+For a service that keeps extensions alive or accepts work from several V
+threads, configure engine limits and transfer the session to a lane:
+
+```v
+mut session := runtimejs.new_node_runtime_session(vjsx.ContextConfig{},
+	vjsx.NodeRuntimeConfig{})
+session.configure_engine_limits(vjsx.RuntimeEngineLimits{
+	memory_limit_bytes: 128 * 1024 * 1024
+	default_turn_timeout_ms: 5_000
+})
+mut lane := runtimejs.new_session_lane(session, runtimejs.SessionLaneConfig{
+	max_queue: 64
+	admission_wait_ms: 1_000
+})
+defer {
+	lane.close()
+}
+
+result := lane.run_turn(vjsx.RuntimeSessionTurnOptions{
+	kind: 'request'
+}, fn (ctx &vjsx.Context) !vjsx.Value {
+	return ctx.eval('handleRequest()')
+})!
+defer {
+	result.free()
+}
+```
+
+The lane owns the session after construction. Do not use the old session copy.
+Use `lane.snapshot()`, `lane.debug_snapshot()`, and `lane.observations()` for
+admission, lifecycle, memory, timing, and dropped-observation reporting.
+
+This layer deliberately does not provide distributed ownership, persistence or
+heap snapshots. Persistent application state remains a host capability.
+
 ## API Surface Guidance
 
 Not every public helper should be treated as the same-level entrypoint.

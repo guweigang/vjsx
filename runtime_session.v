@@ -20,11 +20,13 @@ pub struct RuntimeSession {
 	runtime Runtime
 	context &Context
 mut:
-	closed           bool
-	bridge           RuntimeSessionBridge
-	event_loop_state &RuntimeSessionEventLoopState  = new_runtime_session_event_loop_state()
-	diagnostic_state &RuntimeSessionDiagnosticState = new_runtime_session_diagnostic_state()
-	limit_state      &RuntimeSessionLimitState      = new_runtime_session_limit_state()
+	closed            bool
+	bridge            RuntimeSessionBridge
+	event_loop_state  &RuntimeSessionEventLoopState   = new_runtime_session_event_loop_state()
+	diagnostic_state  &RuntimeSessionDiagnosticState  = new_runtime_session_diagnostic_state()
+	limit_state       &RuntimeSessionLimitState       = new_runtime_session_limit_state()
+	lifecycle_state   &RuntimeSessionLifecycleState   = new_runtime_session_lifecycle_state()
+	observation_state &RuntimeSessionObservationState = new_runtime_session_observation_state()
 }
 
 fn runtime_session_bridge_missing_run(_ctx &Context, _script_path string, _as_module bool, _temp_root string) !Value {
@@ -131,7 +133,7 @@ pub fn (session RuntimeSession) pump() {
 
 // Report whether the session has already been closed.
 pub fn (session RuntimeSession) is_closed() bool {
-	return session.closed
+	return session.closed || session.phase() == .closed
 }
 
 // Install the high-level runtime bridge used for run/load/call helpers.
@@ -142,8 +144,8 @@ pub fn (mut session RuntimeSession) set_runtime_bridge(bridge RuntimeSessionBrid
 // Run a script or module by extension. `.mjs` and `.mts` use module mode.
 pub fn (session RuntimeSession) run(path string) !Value {
 	script_path := runtime_session_resolve_path(path)!
-	return session.bridge.run(session.context, script_path, runtime_session_is_module_path(script_path),
-		'')
+	return session.bridge.run(session.context, script_path,
+		runtime_session_is_module_path(script_path), '')
 }
 
 // Run a file in script mode.
@@ -231,8 +233,7 @@ pub fn (session RuntimeSession) call_module_method_with_host(path string, export
 	defer {
 		module_exports.close()
 	}
-	return module_exports.call_export_method_with_host(export_name, method_name, host_api,
-		...args)
+	return module_exports.call_export_method_with_host(export_name, method_name, host_api, ...args)
 }
 
 // Call a method on a module's default export object.
@@ -243,8 +244,7 @@ pub fn (session RuntimeSession) call_default_export_method(path string, method_n
 // Call a method on a module's default export object with an explicit host
 // context object/value as the first argument.
 pub fn (session RuntimeSession) call_default_export_method_with_host(path string, method_name string, host_api HostValueBuilder, args ...AnyValue) !Value {
-	return session.call_module_method_with_host(path, 'default', method_name, host_api,
-		...args)
+	return session.call_module_method_with_host(path, 'default', method_name, host_api, ...args)
 }
 
 // Load a script module into a plugin-style lifecycle handle.
@@ -286,8 +286,10 @@ pub fn (mut session RuntimeSession) close() {
 	if session.closed {
 		return
 	}
+	session.mark_closing()
 	session.close_event_loop()
 	session.context.free()
 	session.runtime.free()
 	session.closed = true
+	session.mark_closed()
 }
