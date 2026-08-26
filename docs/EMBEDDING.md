@@ -117,6 +117,10 @@ admission, lifecycle, memory, timing, and dropped-observation reporting.
 This layer deliberately does not provide distributed ownership, persistence or
 heap snapshots. Persistent application state remains a host capability.
 
+For the full production-hosting model, including lifecycle transitions,
+resource semantics, capability hardening, observations, migration, and
+non-goals, see [Managed Runtime Hosting](MANAGED_RUNTIME_HOSTING.md).
+
 ## API Surface Guidance
 
 Not every public helper should be treated as the same-level entrypoint.

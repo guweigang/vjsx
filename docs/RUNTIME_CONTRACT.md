@@ -123,6 +123,19 @@ timer queue.
 Timer wakeup hints are not timers. They are `vjsx` facade state that lets the
 host schedule an efficient lane/session wakeup instead of polling.
 
+## Node Builtin Module Contract
+
+The full `node` profile installs the filesystem aliases `fs`, `node:fs`,
+`fs/promises`, and `node:fs/promises`, plus the Ed25519-focused `crypto` and
+`node:crypto` modules. The `script` and `node_compat_minimal()` profiles do not
+install the filesystem or crypto modules.
+
+These modules are compatibility subsets. Their supported exports, behavioral
+differences from Node.js, key formats, and security boundaries are documented
+in [`NODE_COMPATIBILITY.md`](NODE_COMPATIBILITY.md). New exports should be added
+to that document and covered by the executable compatibility test before they
+are treated as part of the runtime contract.
+
 ## Diagnostics Contract
 
 `RuntimeSession` records runtime diagnostics at facade boundaries such as:
@@ -185,6 +198,9 @@ stops new turns while allowing the current owner to finish.
 `runtimejs.SessionLane` adds thread-safe serialization and bounded admission.
 Creating a lane transfers ownership of the session to it. Callers must no
 longer enter the old `RuntimeSession` copy directly.
+
+The operational guide and migration checklist are documented in
+[Managed Runtime Hosting](MANAGED_RUNTIME_HOSTING.md).
 
 ## Profile Contract
 

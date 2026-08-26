@@ -25,6 +25,14 @@ the foundational work that helped kick off `vjsx`.
 - Thread-safe `runtimejs.SessionLane` serialization with bounded admission.
 - QuickJS memory snapshots, lifecycle state and bounded turn observations.
 
+Hosting documentation:
+
+- [Embedding VJSX](docs/EMBEDDING.md) for the host-first extension path.
+- [Managed Runtime Hosting](docs/MANAGED_RUNTIME_HOSTING.md) for production
+  limits, lifecycle, lanes, observations, capability hardening, and migration.
+- [Runtime Contract](docs/RUNTIME_CONTRACT.md) for ownership and engine/host
+  boundaries.
+
 ## Install
 
 ```bash
@@ -150,7 +158,8 @@ For the full host-first embedding guidance, see
 Long-lived hosts should run user work through `RuntimeSession.run_turn(...)` or
 transfer the session to `runtimejs.SessionLane`. See the
 [runtime contract](docs/RUNTIME_CONTRACT.md#turn-and-lifecycle-contract) for
-the lifecycle, resource-limit and ownership rules.
+the lifecycle contract, and [Managed Runtime Hosting](docs/MANAGED_RUNTIME_HOSTING.md)
+for limits, serialized lanes, observations, capability hardening, and migration.
 
 ## Run
 
@@ -548,6 +557,9 @@ complete implementation of Node's `FileHandle` API.
 - `KeyObject.export()` to PKCS8/SPKI PEM or DER
 
 Encrypted private keys and non-Ed25519 algorithms are intentionally rejected.
+See [`docs/NODE_COMPATIBILITY.md`](docs/NODE_COMPATIBILITY.md) for the complete
+specifier matrix, examples, compatibility differences, key formats, and
+security boundaries.
 
 For the embedding ownership, event-loop, timer, diagnostics, limits, and profile
 contracts, see [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
