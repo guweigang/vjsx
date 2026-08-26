@@ -171,6 +171,8 @@ fn test_cli_capabilities_command() {
 	assert output.output.contains('runtime: node')
 	assert output.output.contains('yes globalThis')
 	assert output.output.contains('yes fs')
+	assert output.output.contains('yes node:crypto')
+	assert output.output.contains('yes node:fs/promises')
 	assert output.output.contains('yes path')
 }
 

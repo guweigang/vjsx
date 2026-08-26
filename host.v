@@ -15,6 +15,7 @@ pub:
 pub struct HostConfig {
 pub:
 	console       bool = true
+	crypto        bool = true
 	fs            bool = true
 	path          bool = true
 	os            bool = true

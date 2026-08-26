@@ -25,6 +25,7 @@ const runtime_asset_inject_js = $embed_file('web/js/inject.js')
 const runtime_asset_intl_js = $embed_file('web/js/intl.js')
 const runtime_asset_navigator_js = $embed_file('web/js/navigator.js')
 const runtime_asset_node_timers_promises_js = $embed_file('web/js/node_timers_promises.js')
+const runtime_asset_node_crypto_js = $embed_file('web/js/node_crypto.js')
 const runtime_asset_perf_js = $embed_file('web/js/perf.js')
 const runtime_asset_polyfill_stream_js = $embed_file('web/js/polyfill/stream.js')
 const runtime_asset_polyfill_url_pattern_js = $embed_file('web/js/polyfill/url_pattern.js')
@@ -195,6 +196,7 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'web/js/intl.js' { runtime_asset_intl_js.to_string() }
 		'web/js/navigator.js' { runtime_asset_navigator_js.to_string() }
 		'web/js/node_timers_promises.js' { runtime_asset_node_timers_promises_js.to_string() }
+		'web/js/node_crypto.js' { runtime_asset_node_crypto_js.to_string() }
 		'web/js/perf.js' { runtime_asset_perf_js.to_string() }
 		'web/js/polyfill/stream.js' { runtime_asset_polyfill_stream_js.to_string() }
 		'web/js/polyfill/url_pattern.js' { runtime_asset_polyfill_url_pattern_js.to_string() }
@@ -413,6 +415,7 @@ pub fn embedded_runtime_asset_paths() []string {
 		'web/js/inject.js',
 		'web/js/intl.js',
 		'web/js/navigator.js',
+		'web/js/node_crypto.js',
 		'web/js/node_timers_promises.js',
 		'web/js/perf.js',
 		'web/js/polyfill/stream.js',

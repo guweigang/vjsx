@@ -5,6 +5,7 @@ module vjsx
 pub struct NodeCompatConfig {
 pub:
 	console       bool                 = true
+	crypto        bool                 = true
 	timers        bool                 = true
 	fs            bool                 = true
 	path          bool                 = true
@@ -39,6 +40,7 @@ pub fn node_compat_full(fs_roots []string, process_args []string) NodeCompatConf
 // Keeps console/path/process plus core runtime globals, but skips `fs`.
 pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatConfig {
 	return NodeCompatConfig{
+		crypto:        false
 		fs:            false
 		timers:        true
 		http:          false
@@ -63,6 +65,9 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	ctx.install_runtime_globals(config.runtime)
 	if config.timers {
 		ctx.install_node_timers_promises_module()
+	}
+	if config.crypto {
+		ctx.install_node_crypto_module()
 	}
 	if config.fetch {
 		ctx.install_fetch_globals(config.fetch_config)
@@ -105,6 +110,7 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 fn (config HostConfig) node_compat_config() NodeCompatConfig {
 	return NodeCompatConfig{
 		console:       config.console
+		crypto:        config.crypto
 		fs:            config.fs
 		path:          config.path
 		os:            config.os
