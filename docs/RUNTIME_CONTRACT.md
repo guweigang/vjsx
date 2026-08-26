@@ -199,6 +199,9 @@ stops new turns while allowing the current owner to finish.
 Creating a lane transfers ownership of the session to it. Callers must no
 longer enter the old `RuntimeSession` copy directly.
 
+The operational guide and migration checklist are documented in
+[Managed Runtime Hosting](MANAGED_RUNTIME_HOSTING.md).
+
 ## Profile Contract
 
 Runtime capabilities are layered:

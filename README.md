@@ -25,6 +25,14 @@ the foundational work that helped kick off `vjsx`.
 - Thread-safe `runtimejs.SessionLane` serialization with bounded admission.
 - QuickJS memory snapshots, lifecycle state and bounded turn observations.
 
+Hosting documentation:
+
+- [Embedding VJSX](docs/EMBEDDING.md) for the host-first extension path.
+- [Managed Runtime Hosting](docs/MANAGED_RUNTIME_HOSTING.md) for production
+  limits, lifecycle, lanes, observations, capability hardening, and migration.
+- [Runtime Contract](docs/RUNTIME_CONTRACT.md) for ownership and engine/host
+  boundaries.
+
 ## Install
 
 ```bash
@@ -150,7 +158,8 @@ For the full host-first embedding guidance, see
 Long-lived hosts should run user work through `RuntimeSession.run_turn(...)` or
 transfer the session to `runtimejs.SessionLane`. See the
 [runtime contract](docs/RUNTIME_CONTRACT.md#turn-and-lifecycle-contract) for
-the lifecycle, resource-limit and ownership rules.
+the lifecycle contract, and [Managed Runtime Hosting](docs/MANAGED_RUNTIME_HOSTING.md)
+for limits, serialized lanes, observations, capability hardening, and migration.
 
 ## Run
 
