@@ -30,6 +30,7 @@ pub:
 // Install a lightweight script runtime profile.
 pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 	ctx.install_node_compat(NodeCompatConfig{
+		crypto:        false
 		fs:            false
 		http:          false
 		https:         false

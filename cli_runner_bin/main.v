@@ -98,7 +98,7 @@ Project bundles:
 
 Runtime profiles:
   node      Node-like host with process, Buffer, timers, fs/path/http/https/os,
-            child_process, fetch, sqlite, and mysql when compiled in.
+            Ed25519 crypto, child_process, fetch, sqlite, and mysql when compiled in.
   script    Lighter script host with process, Buffer, URL, path, and
             node:timers/promises; no filesystem/network modules by default.
   browser   Browser-style module host with window/self, fetch, URL, timers,
@@ -663,6 +663,9 @@ fn runtime_capabilities(runtime_profile string) !string {
 		'typeof crypto === "object" && typeof crypto.subtle === "object"'))
 	lines << 'modules:'
 	append_capability(mut lines, 'node:timers/promises', snapshot.has_node_timers_promises)
+	append_capability(mut lines, 'node:crypto', snapshot.has_node_crypto_module)
+	append_capability(mut lines, 'node:fs', snapshot.has_node_fs_module)
+	append_capability(mut lines, 'node:fs/promises', snapshot.has_node_fs_promises)
 	append_capability(mut lines, 'fs', snapshot.has_fs_module)
 	append_capability(mut lines, 'path', snapshot.has_path_module)
 	append_capability(mut lines, 'http', snapshot.has_http_module)

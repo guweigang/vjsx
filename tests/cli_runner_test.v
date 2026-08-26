@@ -80,6 +80,9 @@ fn test_runtime_profile_snapshot_for_runtime_globals_minimal() {
 		'setTimeout',
 		'clearTimeout',
 		'node:timers/promises',
+		'node:crypto',
+		'node:fs',
+		'node:fs/promises',
 		'fs',
 		'path',
 		'http',
@@ -189,7 +192,8 @@ fn test_runtime_profile_snapshot_for_node_compat_minimal() {
 	assert snapshot.matches(.node_minimal)
 	assert snapshot.infer_kind() == .node_minimal
 	assert snapshot.has_path_module
-	assert snapshot.missing_for(.node) == ['setTimeout', 'clearTimeout', 'fs', 'http', 'https']
+	assert snapshot.missing_for(.node) == ['setTimeout', 'clearTimeout', 'node:crypto', 'node:fs',
+		'node:fs/promises', 'fs', 'http', 'https']
 }
 
 fn test_install_script_runtime_profile() {
@@ -224,6 +228,9 @@ fn test_runtime_profile_snapshot_for_script_runtime() {
 	assert snapshot.has_process
 	assert snapshot.has_set_timeout == false
 	assert snapshot.has_node_timers_promises
+	assert snapshot.has_node_crypto_module == false
+	assert snapshot.has_node_fs_module == false
+	assert snapshot.has_node_fs_promises == false
 	assert snapshot.has_path_module
 	assert snapshot.has_fs_module == false
 	assert snapshot.has_http_module == false
@@ -265,6 +272,9 @@ fn test_runtime_profile_snapshot_for_node_runtime() {
 	assert snapshot.has_set_timeout
 	assert snapshot.has_clear_timeout
 	assert snapshot.has_node_timers_promises
+	assert snapshot.has_node_crypto_module
+	assert snapshot.has_node_fs_module
+	assert snapshot.has_node_fs_promises
 	assert snapshot.has_fs_module
 	assert snapshot.has_path_module
 	assert snapshot.has_http_module

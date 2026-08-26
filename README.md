@@ -517,6 +517,30 @@ browser-facing modules you want, while still letting higher-level features like
 The legacy `ctx.install_host(...)` entrypoint still works as a compatibility
 wrapper around `install_node_compat(...)`.
 
+The Node profile accepts both legacy bare and modern `node:` builtin names for
+the implemented filesystem modules:
+
+```js
+import fs from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+// `fs`, `fs/promises`, and `node:fs/promises` are also available.
+```
+
+The promise filesystem modules expose the existing asynchronous `readFile`,
+`writeFile`, `exists`, `mkdir`, `readdir`, `rm`, `stat`, `copyFile`, `rename`,
+`readJson`, and `writeJson` helpers. They are a practical subset rather than a
+complete implementation of Node's `FileHandle` API.
+
+`crypto` and `node:crypto` provide an Ed25519-focused compatibility subset:
+
+- `createPrivateKey()` with unencrypted PKCS8 PEM/DER keys
+- `createPublicKey()` with SPKI PEM/DER keys or an Ed25519 private `KeyObject`
+- `sign(null, data, privateKey)` and `verify(null, data, publicKey, signature)`
+- `generateKeyPairSync("ed25519")` and callback-based `generateKeyPair()`
+- `KeyObject.export()` to PKCS8/SPKI PEM or DER
+
+Encrypted private keys and non-Ed25519 algorithms are intentionally rejected.
+
 For the embedding ownership, event-loop, timer, diagnostics, limits, and profile
 contracts, see [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
 That contract also records the QuickJS FFI ownership rules: borrowed V string

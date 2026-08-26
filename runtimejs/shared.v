@@ -11,6 +11,11 @@ struct ModuleRewrite {
 
 const node_builtin_module_specifiers = [
 	'fs',
+	'node:fs',
+	'fs/promises',
+	'node:fs/promises',
+	'crypto',
+	'node:crypto',
 	'path',
 	'os',
 	'http',

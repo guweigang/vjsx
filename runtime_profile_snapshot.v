@@ -20,6 +20,9 @@ pub:
 	has_fetch                bool
 	has_process              bool
 	has_node_timers_promises bool
+	has_node_crypto_module   bool
+	has_node_fs_module       bool
+	has_node_fs_promises     bool
 	has_fs_module            bool
 	has_path_module          bool
 	has_http_module          bool
@@ -70,6 +73,9 @@ fn (kind RuntimeProfileKind) required_capabilities() []string {
 				'setTimeout',
 				'clearTimeout',
 				'node:timers/promises',
+				'node:crypto',
+				'node:fs',
+				'node:fs/promises',
 				'fs',
 				'path',
 				'http',
@@ -94,6 +100,9 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'fetch' { snapshot.has_fetch }
 		'process' { snapshot.has_process }
 		'node:timers/promises' { snapshot.has_node_timers_promises }
+		'node:crypto' { snapshot.has_node_crypto_module }
+		'node:fs' { snapshot.has_node_fs_module }
+		'node:fs/promises' { snapshot.has_node_fs_promises }
 		'fs' { snapshot.has_fs_module }
 		'path' { snapshot.has_path_module }
 		'http' { snapshot.has_http_module }
@@ -148,16 +157,24 @@ fn runtime_profile_has_global(ctx &Context, expr string) bool {
 
 pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 	return RuntimeProfileSnapshot{
-		has_abort_controller:     runtime_profile_has_global(ctx, 'typeof AbortController === "function"')
-		has_abort_signal:         runtime_profile_has_global(ctx, 'typeof AbortSignal === "function"')
-		has_event_target:         runtime_profile_has_global(ctx, 'typeof EventTarget === "function"')
+		has_abort_controller:     runtime_profile_has_global(ctx,
+			'typeof AbortController === "function"')
+		has_abort_signal:         runtime_profile_has_global(ctx,
+			'typeof AbortSignal === "function"')
+		has_event_target:         runtime_profile_has_global(ctx,
+			'typeof EventTarget === "function"')
 		has_url:                  runtime_profile_has_global(ctx, 'typeof URL === "function"')
 		has_buffer:               runtime_profile_has_global(ctx, 'typeof Buffer !== "undefined"')
-		has_set_timeout:          runtime_profile_has_global(ctx, 'typeof setTimeout === "function"')
-		has_clear_timeout:        runtime_profile_has_global(ctx, 'typeof clearTimeout === "function"')
+		has_set_timeout:          runtime_profile_has_global(ctx,
+			'typeof setTimeout === "function"')
+		has_clear_timeout:        runtime_profile_has_global(ctx,
+			'typeof clearTimeout === "function"')
 		has_fetch:                runtime_profile_has_global(ctx, 'typeof fetch === "function"')
 		has_process:              runtime_profile_has_global(ctx, 'typeof process === "object"')
 		has_node_timers_promises: ctx.has_runtime_module('node:timers/promises')
+		has_node_crypto_module:   ctx.has_runtime_module('node:crypto')
+		has_node_fs_module:       ctx.has_runtime_module('node:fs')
+		has_node_fs_promises:     ctx.has_runtime_module('node:fs/promises')
 		has_fs_module:            ctx.has_runtime_module('fs')
 		has_path_module:          ctx.has_runtime_module('path')
 		has_http_module:          ctx.has_runtime_module('http')

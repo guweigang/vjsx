@@ -203,7 +203,8 @@ fn fs_create_write_stream(ctx &Context, roots []string, path string) !Value {
 	return stream
 }
 
-// Install a small `fs` host module with file and directory helpers.
+// Install small `fs`/`node:fs` host modules with file and directory helpers,
+// plus the promise-only `fs/promises` aliases used by modern Node packages.
 pub fn (ctx &Context) install_fs_module(roots []string) {
 	mut fs := ctx.js_module('fs')
 	read_file := ctx.js_function(fn [ctx, roots] (args []Value) Value {
@@ -711,6 +712,31 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	default_obj.set('writeJson', write_json_fn)
 	fs.export_default(default_obj)
 	fs.create()
+	mut node_fs := ctx.js_module('node:fs')
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
+		'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync', 'readdirSync',
+		'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream', 'rename', 'readJson',
+		'writeJson'] {
+		node_fs.export(name, fs.get(name))
+	}
+	node_fs.export_default(default_obj)
+	node_fs.create()
+
+	mut promises_obj := ctx.js_object()
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
+		'rename', 'readJson', 'writeJson'] {
+		promises_obj.set(name, fs.get(name))
+	}
+	for module_name in ['fs/promises', 'node:fs/promises'] {
+		mut promises_mod := ctx.js_module(module_name)
+		for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
+			'rename', 'readJson', 'writeJson'] {
+			promises_mod.export(name, fs.get(name))
+		}
+		promises_mod.export_default(promises_obj)
+		promises_mod.create()
+	}
+	promises_obj.free()
 	default_obj.free()
 	read_file.free()
 	write_file.free()
