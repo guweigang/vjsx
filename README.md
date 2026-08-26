@@ -548,6 +548,9 @@ complete implementation of Node's `FileHandle` API.
 - `KeyObject.export()` to PKCS8/SPKI PEM or DER
 
 Encrypted private keys and non-Ed25519 algorithms are intentionally rejected.
+See [`docs/NODE_COMPATIBILITY.md`](docs/NODE_COMPATIBILITY.md) for the complete
+specifier matrix, examples, compatibility differences, key formats, and
+security boundaries.
 
 For the embedding ownership, event-loop, timer, diagnostics, limits, and profile
 contracts, see [`docs/RUNTIME_CONTRACT.md`](docs/RUNTIME_CONTRACT.md).
