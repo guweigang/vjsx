@@ -163,9 +163,28 @@ Currently supported limits:
   when the ring buffer is full.
 - `max_timer_wakeup_hints`: maximum retained timer wakeup hints. `0` means
   unlimited and is the default.
+- `max_observations`: maximum retained structured turn observations. Recording
+  never invokes host code on the turn's hot path; old observations are dropped
+  and counted when the buffer is full.
 
-QuickJS resource controls remain the source of truth for engine-level limits,
-such as stack size and memory limits.
+`RuntimeEngineLimits` applies the actual QuickJS memory, stack and GC limits and
+defines an optional default timeout for `run_turn(...)`. `memory_usage()` and
+`debug_snapshot()` expose QuickJS's measured allocator and heap state.
+
+## Turn And Lifecycle Contract
+
+`RuntimeSession.run_turn(...)` is the managed entry point for hosts that need
+production lifecycle guarantees. It rejects concurrent, draining, poisoned and
+closed sessions; applies the configured deadline; and records duration, queue
+wait and memory before/after the turn.
+
+The visible phases are `ready`, `running`, `draining`, `poisoned`, and `closed`.
+An interrupted runtime becomes `poisoned` and must be closed. `begin_drain()`
+stops new turns while allowing the current owner to finish.
+
+`runtimejs.SessionLane` adds thread-safe serialization and bounded admission.
+Creating a lane transfers ownership of the session to it. Callers must no
+longer enter the old `RuntimeSession` copy directly.
 
 ## Profile Contract
 
@@ -174,7 +193,9 @@ Runtime capabilities are layered:
 - `install_runtime_globals(...)` installs reusable globals such as `Buffer`,
   `URL`, `EventTarget`, and `AbortController`.
 - `install_node_compat(...)` installs Node-like host capabilities and modules.
-- `install_script_runtime(...)` is a lightweight script profile.
+- `install_script_runtime(...)` is a lightweight script profile. Its direct
+  `sqlite` and `mysql` modules are opt-in, and embedders can disable
+  `path`/`os`/`process` when evaluating untrusted code.
 - `install_node_runtime(...)` is the fuller Node-style profile.
 
 `runtime_profile_snapshot(ctx)` returns the actual installed capability state.
@@ -243,11 +264,16 @@ Hosts should:
 - log or emit `RuntimeSessionDiagnostic` through `set_diagnostic_handler`
 - inspect `debug_snapshot()` when reporting session health
 - use `runtime_profile_snapshot(ctx)` to verify installed capabilities
+- use `run_turn(...)` for managed execution, or `runtimejs.SessionLane` when
+  callers can arrive from multiple threads
+- configure `RuntimeEngineLimits` before loading untrusted or variable code
 
 Hosts should not:
 
 - maintain a second JS job queue
 - treat timer wakeup hints as the source of timer truth
 - call lane-owned sessions from arbitrary caller threads
+- use or close the old `RuntimeSession` copy after transferring it to a
+  `runtimejs.SessionLane`
 - change global `setTimeout` semantics to accept non-standard options
 - rely on dynamic imports to probe installed modules

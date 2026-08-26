@@ -114,17 +114,32 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 
 // Set limit memory. (default to unlimited)
 pub fn (rt Runtime) set_memory_limit(limit u32) {
-	C.JS_SetMemoryLimit(rt.ref, usize(limit))
+	rt.set_memory_limit_bytes(usize(limit))
+}
+
+// Set the memory limit without the legacy u32 size ceiling.
+pub fn (rt Runtime) set_memory_limit_bytes(limit usize) {
+	C.JS_SetMemoryLimit(rt.ref, limit)
 }
 
 // Set maximum stack size in bytes.
 pub fn (rt Runtime) set_max_stack_size(stack_size u32) {
-	C.JS_SetMaxStackSize(rt.ref, usize(stack_size))
+	rt.set_max_stack_size_bytes(usize(stack_size))
+}
+
+// Set maximum stack size in bytes without the legacy u32 size ceiling.
+pub fn (rt Runtime) set_max_stack_size_bytes(stack_size usize) {
+	C.JS_SetMaxStackSize(rt.ref, stack_size)
 }
 
 // Set gc threshold.
 pub fn (rt Runtime) set_gc_threshold(th i64) {
 	C.JS_SetGCThreshold(rt.ref, usize(th))
+}
+
+// Set the GC threshold using the host's native size type.
+pub fn (rt Runtime) set_gc_threshold_bytes(th usize) {
+	C.JS_SetGCThreshold(rt.ref, th)
 }
 
 // Run qjs garbage collector

@@ -91,6 +91,13 @@ pub:
 	dropped_diagnostic_count         int
 	timer_wakeup_hint_limit          int
 	rejected_timer_wakeup_hint_count int
+	phase                            RuntimeSessionPhase
+	in_flight_turns                  int
+	completed_turns                  u64
+	rejected_turns                   u64
+	observation_count                int
+	dropped_observation_count        int
+	memory                           RuntimeMemoryUsage
 }
 
 fn new_runtime_session_event_loop_state() &RuntimeSessionEventLoopState {
@@ -246,7 +253,8 @@ pub fn (mut session RuntimeSession) request_timer_wakeup_after(timer_id string, 
 		if max_hints > 0 && state.timer_wakeup_hints.len >= max_hints {
 			mut limit_state := session.limit_state
 			limit_state.rejected_timer_wakeup_hints++
-			session.record_runtime_error('timer_wakeup_hint_limit', 'timer wakeup hint limit reached')
+			session.record_runtime_error('timer_wakeup_hint_limit',
+				'timer wakeup hint limit reached')
 			return -1
 		}
 	}
@@ -334,6 +342,12 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 	has_ready := if session.closed || state.closed { false } else { session.has_ready_task() }
 	has_pending := !session.closed && !state.closed && state.has_pending_wakeup
 	last_error := session.last_diagnostic() or { RuntimeSessionDiagnostic{} }
+	lifecycle := session.lifecycle_snapshot()
+	memory := if session.closed || state.closed {
+		RuntimeMemoryUsage{}
+	} else {
+		session.memory_usage()
+	}
 	return RuntimeSessionDebugSnapshot{
 		session_id:                       state.config.session_id
 		closed:                           session.closed || state.closed
@@ -374,6 +388,17 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 		} else {
 			session.rejected_timer_wakeup_hint_count()
 		}
+		phase:                            lifecycle.phase
+		in_flight_turns:                  lifecycle.in_flight_turns
+		completed_turns:                  lifecycle.completed_turns
+		rejected_turns:                   lifecycle.rejected_turns
+		observation_count:                if session.closed || state.closed {
+			0
+		} else {
+			session.observation_count()
+		}
+		dropped_observation_count:        session.dropped_observation_count()
+		memory:                           memory
 	}
 }
 
