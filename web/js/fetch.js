@@ -50,9 +50,11 @@ async function fetch(input, opts = {}) {
       : void 0;
     const body = opts.body == null
       ? ""
-      : typeof opts.body !== "string"
-        ? await req.text(boundary)
-        : opts.body;
+      : typeof opts.body === "string"
+        ? opts.body
+        : opts.body instanceof ArrayBuffer || ArrayBuffer.isView(opts.body)
+          ? opts.body
+          : await req.text(boundary);
     if (aborted || signal?.aborted) {
       throw abortError(signal?.reason);
     }

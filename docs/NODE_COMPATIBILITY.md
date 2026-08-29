@@ -19,8 +19,11 @@ The following crypto specifiers resolve to the same Ed25519 implementation:
 
 | Specifier | Scope |
 | --- | --- |
-| `crypto` | Ed25519 key import/export, generation, signing, and verification |
+| `crypto` | Ed25519 operations, SHA-256/MD5 hashing, and UUID generation |
 | `node:crypto` | Alias of `crypto` |
+
+`path`/`node:path`, `os`/`node:os`, and `zlib`/`node:zlib` are paired aliases.
+The zlib subset currently exports `deflateRawSync()`.
 
 These specifiers are also recognized as builtins by the TypeScript/runtime
 module graph emitter, so they are not incorrectly resolved from
@@ -37,6 +40,8 @@ The promise modules export:
 - `readdir`
 - `rm`
 - `stat`
+- `lstat`
+- `chmod`
 - `copyFile`
 - `rename`
 - `readJson`
@@ -54,16 +59,19 @@ console.log(await readFile("./data/message.txt"));
 
 The current behavior intentionally follows the existing vjsx filesystem host:
 
-- `readFile()` resolves to a string, including when no encoding is provided.
-- `writeFile()` writes the string representation of its data argument.
+- `readFile()` resolves to a Buffer-compatible `Uint8Array` by default and to
+  a string for the `utf8`/`utf-8` encoding.
+- `writeFile()` preserves string, Buffer, TypedArray, and ArrayBuffer bytes.
+  The `{ flag: "wx", mode }` form uses atomic exclusive creation and applies
+  the requested creation mode.
 - `mkdir()` creates missing parent directories.
 - `rm(path, recursive)` accepts a boolean recursive flag rather than Node's
   complete options object.
 - Operations execute through V's filesystem functions and return an already
   settled or rejected JavaScript `Promise`; they are not backed by Node's
   libuv worker pool.
-- `FileHandle`, `open()`, streams in the promise module, `AbortSignal`, flags,
-  encoding options, and the complete Node error-code surface are not yet
+- `FileHandle`, `open()`, streams in the promise module, `AbortSignal`, most
+  flags/encodings, and the complete Node error-code surface are not yet
   implemented.
 
 Filesystem resolution remains governed by `NodeCompatConfig.fs_roots`. Relative
@@ -79,10 +87,12 @@ policy boundary.
 The crypto module exports:
 
 - `KeyObject`
+- `createHash()` (`sha256`/`sha-256` and `md5`)
 - `createPrivateKey()`
 - `createPublicKey()`
 - `generateKeyPair()`
 - `generateKeyPairSync()`
+- `randomUUID()`
 - `sign()`
 - `verify()`
 
@@ -112,9 +122,10 @@ Ed25519 follows Node's rule that the algorithm passed to `sign()` and
 | Key | Container | Encoding |
 | --- | --- | --- |
 | Private | PKCS8 | PEM or DER |
-| Public | SPKI | PEM or DER |
+| Public | SPKI or OKP JWK | PEM, DER, or JWK |
 
-String input defaults to PEM. Binary input should use an explicit descriptor:
+String and PEM Buffer input default to PEM. Binary DER input should use an
+explicit descriptor:
 
 ```js
 const privateKey = createPrivateKey({
@@ -131,8 +142,7 @@ const publicKey = createPublicKey({
 ```
 
 `createPublicKey()` also accepts an Ed25519 private `KeyObject`, a PKCS8 PEM
-string, or an explicit PKCS8 DER descriptor and derives the matching public
-key.
+string/Buffer, an explicit PKCS8 DER descriptor, or an OKP Ed25519 public JWK.
 
 ### Key generation and export
 
@@ -170,9 +180,10 @@ The following are intentionally unsupported and rejected:
 
 - encrypted PKCS8 and passphrases
 - RSA, DSA, ECDSA, X25519, and other algorithms through `node:crypto`
-- PKCS1, SEC1, JWK, certificates, and OpenSSH key containers
+- PKCS1, SEC1, private JWK, certificates, and OpenSSH key containers
 - streaming `Sign`/`Verify` objects
-- hashing, HMAC, ciphers, KDFs, and the rest of the full Node crypto surface
+- hashes other than SHA-256 and MD5, HMAC, ciphers, KDFs, and the rest of the
+  full Node crypto surface
 
 Browser-profile applications should continue using `crypto.subtle`; the
 `node:crypto` module is installed only by the full Node-style compatibility
@@ -186,7 +197,7 @@ Use the CLI to check the selected runtime:
 vjsx capabilities --runtime node
 ```
 
-The module section reports `node:crypto`, `node:fs`, and
+The module section reports `node:crypto`, `node:zlib`, `node:fs`, and
 `node:fs/promises`. Embedders can inspect the corresponding fields on
 `RuntimeProfileSnapshot`.
 

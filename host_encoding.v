@@ -67,7 +67,11 @@ pub fn host_decode_text_bytes(this Value, value Value) ![]u8 {
 	defer {
 		array_buffer.free()
 	}
-	is_view_value := array_buffer.call('isView', value)
+	is_view_fn := array_buffer.get('isView')
+	defer {
+		is_view_fn.free()
+	}
+	is_view_value := this.ctx.call_this(array_buffer, is_view_fn, value)!
 	defer {
 		is_view_value.free()
 	}
@@ -76,7 +80,16 @@ pub fn host_decode_text_bytes(this Value, value Value) ![]u8 {
 		defer {
 			buf.free()
 		}
-		return buf.to_bytes()
+		bytes := buf.to_bytes()
+		offset_value := value.get('byteOffset')
+		length_value := value.get('byteLength')
+		defer {
+			offset_value.free()
+			length_value.free()
+		}
+		offset := offset_value.to_int()
+		length := length_value.to_int()
+		return bytes[offset..offset + length].clone()
 	}
 	return error('argument is not an ArrayBuffer or TypedArray')
 }

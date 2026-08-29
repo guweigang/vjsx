@@ -3,6 +3,16 @@ module vjsx
 import os
 import time
 
+#include <fcntl.h>
+$if windows {
+	#include <io.h>
+} $else {
+	#include <unistd.h>
+}
+
+fn C._write(int, voidptr, int) int
+fn C._close(int) int
+
 fn candidate_paths(path string, roots []string) []string {
 	mut candidates := []string{}
 	if os.is_abs_path(path) {
@@ -98,17 +108,97 @@ fn stat_object(ctx &Context, st os.Stat, path string) Value {
 	obj.set('isDirectory', ctx.js_function(fn [ctx, st] (args []Value) Value {
 		return ctx.js_bool(st.get_filetype() == .directory)
 	}))
+	obj.set('isSymbolicLink', ctx.js_function(fn [ctx, st] (args []Value) Value {
+		return ctx.js_bool(st.get_filetype() == .symbolic_link)
+	}))
 	return obj
+}
+
+fn fs_bytes_value(ctx &Context, bytes []u8) Value {
+	array_buffer := ctx.js_array_buffer(bytes)
+	defer {
+		array_buffer.free()
+	}
+	buffer := ctx.js_global('Buffer')
+	defer {
+		buffer.free()
+	}
+	from_fn := buffer.get('from')
+	defer {
+		from_fn.free()
+	}
+	return ctx.call_this(buffer, from_fn, array_buffer) or {
+		ctx.js_throw(ctx.js_error(message: err.msg()))
+	}
+}
+
+fn fs_write_exclusive(path string, bytes []u8, mode int) ! {
+	fd := $if windows {
+		C._wopen(path.to_wide(), C._O_WRONLY | C._O_CREAT | C._O_EXCL | C._O_BINARY, mode)
+	} $else {
+		C.open(&char(path.str), C.O_WRONLY | C.O_CREAT | C.O_EXCL, mode)
+	}
+	if fd < 0 {
+		return error('exclusive file creation failed: ${path}')
+	}
+	defer {
+		$if windows {
+			C._close(fd)
+		} $else {
+			C.close(fd)
+		}
+	}
+	mut offset := 0
+	for offset < bytes.len {
+		data_ptr := unsafe { &u8(bytes.data) + offset }
+		written := $if windows {
+			C._write(fd, data_ptr, bytes.len - offset)
+		} $else {
+			int(C.write(fd, data_ptr, usize(bytes.len - offset)))
+		}
+		if written <= 0 {
+			return error('failed to write file: ${path}')
+		}
+		offset += written
+	}
 }
 
 fn fs_value_to_bytes(value Value) ![]u8 {
 	if value.is_string() {
 		return value.str().bytes()
 	}
-	if value.is_object() && value.has('byteLength') {
+	if value.instanceof('ArrayBuffer') {
 		return value.to_bytes()
 	}
-	return error('write stream chunk must be a string or ArrayBuffer')
+	array_buffer := value.ctx.js_global('ArrayBuffer')
+	defer {
+		array_buffer.free()
+	}
+	is_view_fn := array_buffer.get('isView')
+	defer {
+		is_view_fn.free()
+	}
+	is_view := value.ctx.call_this(array_buffer, is_view_fn, value)!
+	defer {
+		is_view.free()
+	}
+	if is_view.to_bool() && !value.instanceof('DataView') {
+		buffer := value.get('buffer')
+		defer {
+			buffer.free()
+		}
+		bytes := buffer.to_bytes()
+		offset_value := value.get('byteOffset')
+		length_value := value.get('byteLength')
+		defer {
+			offset_value.free()
+			length_value.free()
+		}
+		offset := offset_value.to_int()
+		length := length_value.to_int()
+		return bytes[offset..offset + length].clone()
+	}
+	return error('write stream chunk must be a string, ArrayBuffer, or TypedArray')
 }
 
 fn fs_append_bytes(path string, bytes []u8) ! {
@@ -220,13 +310,18 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		candidates := candidate_paths(path, roots)
 		for candidate in candidates {
 			if os.exists(candidate) {
-				return promise.resolve(os.read_file(candidate) or {
+				bytes := os.read_bytes(candidate) or {
 					read_err = ctx.js_error(message: err.msg())
 					unsafe {
 						goto reject
 					}
-					''
-				})
+					[]u8{}
+				}
+				if args.len > 1 && args[1].is_string()
+					&& args[1].str().to_lower() in ['utf8', 'utf-8'] {
+					return promise.resolve(bytes.bytestr())
+				}
+				return promise.resolve(fs_bytes_value(ctx, bytes))
 			}
 		}
 		read_err = ctx.js_error(message: 'file not found: ${path}', name: 'Error')
@@ -243,12 +338,41 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		data := args[1].str()
+		data := if args[1].is_string() {
+			args[1].str().bytes()
+		} else {
+			fs_value_to_bytes(args[1]) or {
+				write_err = ctx.js_error(message: err.msg(), name: 'TypeError')
+				unsafe {
+					goto reject
+				}
+				[]u8{}
+			}
+		}
 		target := write_target_path(path, roots)
-		os.write_file(target, data) or {
-			write_err = ctx.js_error(message: err.msg())
-			unsafe {
-				goto reject
+		flag := if args.len > 2 { string_option(args[2], 'flag', 'w') or { 'w' } } else { 'w' }
+		mode := if args.len > 2 && args[2].is_object() {
+			mode_value := args[2].get('mode')
+			defer {
+				mode_value.free()
+			}
+			if mode_value.is_number() { mode_value.to_int() } else { 0o666 }
+		} else {
+			0o666
+		}
+		if flag == 'wx' {
+			fs_write_exclusive(target, data, mode) or {
+				write_err = ctx.js_error(message: err.msg())
+				unsafe {
+					goto reject
+				}
+			}
+		} else {
+			os.write_file_array(target, data) or {
+				write_err = ctx.js_error(message: err.msg())
+				unsafe {
+					goto reject
+				}
 			}
 		}
 		return promise.resolve(ctx.js_undefined())
@@ -290,6 +414,19 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			unsafe {
 				goto reject
 			}
+		}
+		if args.len > 1 && args[1].is_object() {
+			mode_value := args[1].get('mode')
+			if mode_value.is_number() {
+				os.chmod(target, mode_value.to_int()) or {
+					mode_value.free()
+					mkdir_err = ctx.js_error(message: err.msg())
+					unsafe {
+						goto reject
+					}
+				}
+			}
+			mode_value.free()
 		}
 		return promise.resolve(ctx.js_undefined())
 		reject:
@@ -382,6 +519,30 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		stat_err = ctx.js_error(message: 'path not found: ${path}', name: 'Error')
 		reject:
 		return promise.reject(stat_err)
+	})
+	lstat_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+		promise := ctx.js_promise()
+		if args.len == 0 {
+			return promise.reject(ctx.js_error(message: 'path is required', name: 'TypeError'))
+		}
+		for candidate in candidate_paths(args[0].str(), roots) {
+			st := os.lstat(candidate) or { continue }
+			return promise.resolve(stat_object(ctx, st, candidate))
+		}
+		return promise.reject(ctx.js_error(message: 'path not found: ${args[0].str()}'))
+	})
+	chmod_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
+		promise := ctx.js_promise()
+		if args.len < 2 {
+			return promise.reject(ctx.js_error(
+				message: 'path and mode are required'
+				name:    'TypeError'
+			))
+		}
+		target := write_target_path(args[0].str(), roots)
+		mode := if args[1].is_number() { args[1].to_int() } else { args[1].str().int() }
+		os.chmod(target, mode) or { return promise.reject(ctx.js_error(message: err.msg())) }
+		return promise.resolve(ctx.js_undefined())
 	})
 	copy_file_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
 		mut copy_err := ctx.js_undefined()
@@ -672,6 +833,8 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	fs.export('readdir', readdir_fn)
 	fs.export('rm', rm_fn)
 	fs.export('stat', stat_fn)
+	fs.export('lstat', lstat_fn)
+	fs.export('chmod', chmod_fn)
 	fs.export('copyFile', copy_file_fn)
 	fs.export('readFileSync', read_file_sync)
 	fs.export('writeFileSync', write_file_sync)
@@ -695,6 +858,8 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	default_obj.set('readdir', readdir_fn)
 	default_obj.set('rm', rm_fn)
 	default_obj.set('stat', stat_fn)
+	default_obj.set('lstat', lstat_fn)
+	default_obj.set('chmod', chmod_fn)
 	default_obj.set('copyFile', copy_file_fn)
 	default_obj.set('readFileSync', read_file_sync)
 	default_obj.set('writeFileSync', write_file_sync)
@@ -713,24 +878,24 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	fs.export_default(default_obj)
 	fs.create()
 	mut node_fs := ctx.js_module('node:fs')
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
-		'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync', 'readdirSync',
-		'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream', 'rename', 'readJson',
-		'writeJson'] {
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
+		'chmod', 'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync',
+		'mkdtempSync', 'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync',
+		'createWriteStream', 'rename', 'readJson', 'writeJson'] {
 		node_fs.export(name, fs.get(name))
 	}
 	node_fs.export_default(default_obj)
 	node_fs.create()
 
 	mut promises_obj := ctx.js_object()
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
-		'rename', 'readJson', 'writeJson'] {
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
+		'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
 		promises_obj.set(name, fs.get(name))
 	}
 	for module_name in ['fs/promises', 'node:fs/promises'] {
 		mut promises_mod := ctx.js_module(module_name)
-		for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'copyFile',
-			'rename', 'readJson', 'writeJson'] {
+		for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
+			'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
 			promises_mod.export(name, fs.get(name))
 		}
 		promises_mod.export_default(promises_obj)
@@ -745,6 +910,8 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	readdir_fn.free()
 	rm_fn.free()
 	stat_fn.free()
+	lstat_fn.free()
+	chmod_fn.free()
 	copy_file_fn.free()
 	read_file_sync.free()
 	write_file_sync.free()

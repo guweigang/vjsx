@@ -19,6 +19,7 @@ struct FetchCoreRequest {
 	method              http.Method
 	header              http.Header
 	body                string
+	body_is_binary      bool
 	boundary            string
 	read_timeout        i64
 	write_timeout       i64
@@ -39,16 +40,17 @@ struct FetchCoreConfigState {
 @[heap]
 struct FetchCurlTask {
 mut:
-	process      CurlProcess
-	headers_path string
-	body_path    string
-	output_path  string
-	resolve      Value
-	reject       Value
-	settled      bool
-	cleaned      bool
-	cancelled    bool
-	cancel_polls int
+	process           CurlProcess
+	headers_path      string
+	body_path         string
+	output_path       string
+	request_body_path string
+	resolve           Value
+	reject            Value
+	settled           bool
+	cleaned           bool
+	cancelled         bool
+	cancel_polls      int
 }
 
 fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
@@ -88,7 +90,7 @@ fn fetch_curl_paths() (string, string, string) {
 	return headers_path, body_path, output_path
 }
 
-fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path string) []string {
+fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path string, request_body_path string) []string {
 	mut args := [
 		'-q',
 		'-sS',
@@ -118,7 +120,7 @@ fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path stri
 	}
 	if request.method !in [.get, .head] && request.body != '' {
 		args << '--data-binary'
-		args << request.body
+		args << if request.body_is_binary { '@${request_body_path}' } else { request.body }
 	}
 	args << '--'
 	args << request.url
@@ -201,6 +203,9 @@ fn fetch_curl_task_cleanup(mut task FetchCurlTask) {
 	os.rm(task.headers_path) or {}
 	os.rm(task.body_path) or {}
 	os.rm(task.output_path) or {}
+	if task.request_body_path != '' {
+		os.rm(task.request_body_path) or {}
+	}
 }
 
 fn fetch_curl_task_stop(mut task FetchCurlTask) {
@@ -296,20 +301,29 @@ fn fetch_curl_task_schedule(ctx Context, mut task FetchCurlTask) {
 
 fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, resolve Value, reject Value) !Value {
 	headers_path, body_path, output_path := fetch_curl_paths()
-	args := fetch_curl_args(request, headers_path, body_path)
+	request_body_path := if request.body_is_binary { output_path + '.request' } else { '' }
+	if request_body_path != '' {
+		os.write_file_array(request_body_path, request.body.bytes())!
+		os.chmod(request_body_path, 0o600)!
+	}
+	args := fetch_curl_args(request, headers_path, body_path, request_body_path)
 	process := start_curl_process(curl_path, args, output_path) or {
 		os.rm(headers_path) or {}
 		os.rm(body_path) or {}
 		os.rm(output_path) or {}
+		if request_body_path != '' {
+			os.rm(request_body_path) or {}
+		}
 		return err
 	}
 	mut task := &FetchCurlTask{
-		process:      process
-		headers_path: headers_path
-		body_path:    body_path
-		output_path:  output_path
-		resolve:      resolve.dup_value()
-		reject:       reject.dup_value()
+		process:           process
+		headers_path:      headers_path
+		body_path:         body_path
+		output_path:       output_path
+		request_body_path: request_body_path
+		resolve:           resolve.dup_value()
+		reject:            reject.dup_value()
 	}
 	cancel := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
 		if task.cancelled || task.cleaned {
@@ -513,12 +527,27 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Va
 		}
 	}
 	request_method := http.Method.from(method.str().to_lower()) or { http.Method.get }
-	body := raw_body.str()
+	mut body := ''
+	mut body_is_binary := false
+	if raw_body.instanceof('ArrayBuffer') || fetch_is_typed_array_bool(this, [raw_body]) {
+		bytes := host_decode_text_bytes(this, raw_body) or {
+			error := ctx.js_error(message: err.msg(), name: 'TypeError')
+			call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+			call_result.free()
+			error.free()
+			return noop_cancel
+		}
+		body = bytes.bytestr()
+		body_is_binary = true
+	} else {
+		body = raw_body.str()
+	}
 	request := FetchCoreRequest{
 		url:                 url
 		method:              request_method
 		header:              hd
 		body:                body
+		body_is_binary:      body_is_binary
 		boundary:            if boundary.is_undefined() { '' } else { boundary.str() }
 		read_timeout:        fetch_config.read_timeout
 		write_timeout:       fetch_config.write_timeout

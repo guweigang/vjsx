@@ -38,7 +38,8 @@ fn (mut handler HostFetchOpenAICompatHandler) handle(req http.Request) http.Resp
 			header.add_custom('content-type', 'text/event-stream') or {}
 			header.add_custom('cache-control', 'no-cache') or {}
 			mut response := http.Response{
-				body:   'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
+				body:
+					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
 					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}\n\n' +
 					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":" vjsx"},"finish_reason":null}]}\n\n' +
 					'data: [DONE]\n\n'
@@ -90,6 +91,42 @@ fn test_node_runtime_fetch_globals() {
 		result.free()
 	}
 	assert result.to_string() == 'function\nfunction\nfunction\nfunction\n200\ntrue\nPOST\nvia=request\nvjsx\nping\napplication/json\n{"ok":true}'
+}
+
+fn test_node_runtime_fetch_preserves_binary_request_body() {
+	listener := net.listen_tcp(.ip, 'localhost:0') or { panic(err) }
+	port := listener.addr() or { panic(err) }.port() or { panic(err) }
+	mut server := &http.Server{
+		accept_timeout:       200 * time.millisecond
+		addr:                 '127.0.0.1:${port}'
+		handler:              HostFetchHandler{}
+		listener:             listener
+		show_startup_message: false
+	}
+	server_thread := spawn server.listen_and_serve()
+	server.wait_till_running() or { panic(err) }
+	defer {
+		server.stop()
+		server_thread.wait()
+	}
+
+	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
+		fs_roots:     [@VMODROOT]
+		process_args: ['host_fetch_binary_runtime.mjs', 'http://127.0.0.1:${port}']
+	})
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	value := ctx.run_file('./tests/host_fetch_binary_runtime.mjs', vjsx.type_module) or {
+		panic(err)
+	}
+	value.free()
+	result := ctx.js_global('__host_fetch_binary_result')
+	defer {
+		result.free()
+	}
+	assert result.to_string() == '0,255,1,128'
 }
 
 fn test_node_runtime_fetch_openai_compat_stream_helpers() {
