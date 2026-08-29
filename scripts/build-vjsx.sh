@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 export VMODULES="${VMODULES:-$repo_root/.cache/vmodules}"
 mkdir -p "$VMODULES"
-out=${VJS_OUT:-"$repo_root/dist/vjsx"}
+out=${VJS_OUT:-"$repo_root/bin/vjsx"}
 app_runner_out=${VJS_APP_RUNNER_OUT:-"$(dirname "$out")/vjsx-app-runner"}
 quickjs_path=${VJS_QUICKJS_PATH:-}
 require_static_crypto=${VJS_REQUIRE_STATIC_CRYPTO:-0}

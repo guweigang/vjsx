@@ -377,14 +377,14 @@ To build a standalone `vjsx` binary:
 ./scripts/build-vjsx.sh
 ```
 
-The build writes `dist/vjsx` and `dist/vjsx-app-runner` by default. Set
+The build writes `bin/vjsx` and `bin/vjsx-app-runner` by default. Set
 `VJS_OUT=/path/to/vjsx` and `VJS_APP_RUNNER_OUT=/path/to/vjsx-app-runner` to
 choose other output paths.
 
 On Windows, use the PowerShell build script:
 
 ```powershell
-.\scripts\build-vjsx.ps1 -Out .\dist\vjsx.exe -AppRunnerOut .\dist\vjsx-app-runner.exe
+.\scripts\build-vjsx.ps1
 ```
 
 The Windows build defaults to MSVC (`-cc msvc`), matching the preferred VTable

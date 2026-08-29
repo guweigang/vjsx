@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($Out)) {
-  $Out = Join-Path $RepoRoot "dist\vjsx.exe"
+  $Out = Join-Path $RepoRoot "bin\vjsx.exe"
 }
 if ([string]::IsNullOrWhiteSpace($AppRunnerOut)) {
   $appRunnerDir = Split-Path -Parent $Out
