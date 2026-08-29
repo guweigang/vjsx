@@ -124,9 +124,9 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 		}
 	}
 	if vjsx.is_typescript_file(source_path) {
-		source := os.read_file(source_path)!
+		source := strip_shebang(os.read_file(source_path)!)
 		if typescript_needs_emit(ctx, source_path)! {
-			transpiled := transpile_typescript(ctx, source_path, true, config_json)!
+			transpiled := strip_shebang(transpile_typescript(ctx, source_path, true, config_json)!)
 			os.write_file(target_path, prepend_dom_runtime_import(rewrite_module_specifiers(transpiled,
 				rewrites), target_path, root))!
 		} else {
@@ -134,7 +134,7 @@ fn emit_runtime_module_graph(ctx &vjsx.Context, source_path string, root string,
 				rewrites), target_path, root))!
 		}
 	} else {
-		source := os.read_file(source_path)!
+		source := strip_shebang(os.read_file(source_path)!)
 		if vjsx.is_javascript_file(source_path) && (is_commonjs_module(ctx, source_path) or {
 			false
 		}) {

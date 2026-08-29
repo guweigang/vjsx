@@ -12,6 +12,10 @@ fn fail(message string) {
 
 fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string) ! {
 	wd := os.getwd()
+	mut process_args := [executable_path, executable_path]
+	if os.args.len > 1 {
+		process_args << os.args[1..]
+	}
 	mut fs_roots := [wd]
 	executable_dir := os.dir(executable_path)
 	if executable_dir != wd {
@@ -21,13 +25,13 @@ fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string
 		'node' {
 			ctx.install_node_runtime(
 				fs_roots:     fs_roots
-				process_args: os.args
+				process_args: process_args
 			)
 		}
 		'script' {
 			ctx.install_script_runtime(
 				fs_roots:     fs_roots
-				process_args: os.args
+				process_args: process_args
 			)
 		}
 		'browser' {
@@ -39,7 +43,7 @@ fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string
 	}
 }
 
-fn run_embedded_app() ! {
+fn run_embedded_app() !int {
 	executable_path := os.real_path(os.executable())
 	bundle := vjsx.read_appended_bundle(executable_path)!
 	info := vjsx.bundle_info(bundle)!
@@ -54,8 +58,16 @@ fn run_embedded_app() ! {
 		app.close()
 	}
 	ctx.end()
+	exit_code := ctx.eval('typeof process === "object" ? (Number(process.exitCode) || 0) : 0')!
+	defer {
+		exit_code.free()
+	}
+	return exit_code.to_int()
 }
 
 fn main() {
-	run_embedded_app() or { fail(err.msg()) }
+	exit_code := run_embedded_app() or { fail(err.msg()) }
+	if exit_code != 0 {
+		exit(exit_code)
+	}
 }

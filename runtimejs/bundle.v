@@ -64,6 +64,28 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	if !os.exists(entry) || os.is_dir(entry) {
 		return error('bundle entry not found: ${entry}')
 	}
+	entry_dir := os.dir(entry)
+	fs_roots := [entry_dir, os.dir(entry_dir), os.getwd()]
+	match options.runtime_profile {
+		'node' {
+			ctx.install_node_runtime(
+				fs_roots:     fs_roots
+				process_args: [entry]
+			)
+		}
+		'script' {
+			ctx.install_script_runtime(
+				fs_roots:     fs_roots
+				process_args: [entry]
+			)
+		}
+		'browser' {
+			install_cli_browser_runtime(ctx)
+		}
+		else {
+			return error('unsupported bundle runtime profile: ${options.runtime_profile}')
+		}
+	}
 	app_name := sanitize_bundle_app_name(if options.app_name == '' {
 		os.file_name(entry).all_before_last('.')
 	} else {
