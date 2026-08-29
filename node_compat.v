@@ -6,6 +6,7 @@ pub struct NodeCompatConfig {
 pub:
 	console       bool                 = true
 	crypto        bool                 = true
+	zlib          bool                 = true
 	timers        bool                 = true
 	fs            bool                 = true
 	path          bool                 = true
@@ -41,6 +42,7 @@ pub fn node_compat_full(fs_roots []string, process_args []string) NodeCompatConf
 pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatConfig {
 	return NodeCompatConfig{
 		crypto:        false
+		zlib:          false
 		fs:            false
 		timers:        true
 		http:          false
@@ -68,6 +70,9 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	}
 	if config.crypto {
 		ctx.install_node_crypto_module()
+	}
+	if config.zlib {
+		ctx.install_zlib_module()
 	}
 	if config.fetch {
 		ctx.install_fetch_globals(config.fetch_config)

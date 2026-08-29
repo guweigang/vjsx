@@ -40,41 +40,29 @@ function binaryString(bytes) {
 }
 
 function base64Encode(bytes) {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i];
-    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    out += alphabet[a >> 2];
-    out += alphabet[((a & 3) << 4) | (b >> 4)];
-    out += i + 1 < bytes.length ? alphabet[((b & 15) << 2) | (c >> 6)] : "=";
-    out += i + 2 < bytes.length ? alphabet[c & 63] : "=";
-  }
-  return out;
+  return Buffer.from(bytes).toString("base64");
 }
 
 function base64Decode(value) {
-  const clean = String(value).replace(/\s+/g, "");
-  if (clean.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(clean)) fail("Invalid base64 data");
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  const out = [];
-  for (let i = 0; i < clean.length; i += 4) {
-    const a = alphabet.indexOf(clean[i]);
-    const b = alphabet.indexOf(clean[i + 1]);
-    const c = clean[i + 2] === "=" ? 0 : alphabet.indexOf(clean[i + 2]);
-    const d = clean[i + 3] === "=" ? 0 : alphabet.indexOf(clean[i + 3]);
-    if (a < 0 || b < 0 || c < 0 || d < 0) fail("Invalid base64 data");
-    out.push((a << 2) | (b >> 4));
-    if (clean[i + 2] !== "=") out.push(((b & 15) << 4) | (c >> 2));
-    if (clean[i + 3] !== "=") out.push(((c & 3) << 6) | d);
-  }
-  return Uint8Array.from(out);
+  return Uint8Array.from(Buffer.from(value, "base64"));
+}
+
+function base64UrlDecode(value) {
+  const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  return base64Decode(normalized + "=".repeat((4 - normalized.length % 4) % 4));
 }
 
 function makeBuffer(input) {
   const bytes = input instanceof Uint8Array ? input.slice() : new Uint8Array(input);
   Object.defineProperty(bytes, "__vjs_buffer", { value: true });
+	Object.defineProperty(bytes, "subarray", {
+	  configurable: true,
+	  value(start, end) { return makeBuffer(Uint8Array.prototype.subarray.call(this, start, end)); },
+	});
+	Object.defineProperty(bytes, "slice", {
+	  configurable: true,
+	  value(start, end) { return makeBuffer(Uint8Array.prototype.slice.call(this, start, end)); },
+	});
   Object.defineProperty(bytes, "toString", {
     configurable: true,
     value(encoding = "utf8") {
@@ -238,8 +226,24 @@ function normalizeKeyInput(input, kind) {
     if (input.passphrase != null) fail("Encrypted private keys are not supported");
   }
   if (keyMaterial.has(key)) return key;
-  if (format == null) format = typeof key === "string" ? "pem" : "der";
+	if (format == null && typeof key !== "string") {
+	  const bytes = exactBytes(key, "key");
+	  const text = typeof TextDecoder === "function" ? new TextDecoder().decode(bytes) : binaryString(bytes);
+	  if (text.startsWith("-----BEGIN ")) {
+	    key = text;
+	    format = "pem";
+	  }
+	}
+	if (format == null) format = typeof key === "string" ? "pem" : "der";
   format = String(format).toLowerCase();
+  if (format === "jwk") {
+    if (kind !== "public" || !key || key.kty !== "OKP" || key.crv !== "Ed25519" || typeof key.x !== "string") {
+      fail("Ed25519 public JWK must use kty OKP, crv Ed25519, and x");
+    }
+    const publicKey = base64UrlDecode(key.x);
+    if (publicKey.length !== 32) fail("Ed25519 JWK public key must be 32 bytes");
+    return publicKey;
+  }
   if (format === "pem") {
     const label = kind === "private" ? "PRIVATE KEY" : "PUBLIC KEY";
     return kind === "private"
@@ -356,6 +360,32 @@ function verify(algorithm, data, key, signature) {
   );
 }
 
+function createHash(algorithm) {
+  const name = String(algorithm).toLowerCase();
+  if (name !== "sha256" && name !== "sha-256" && name !== "md5") {
+    throw new TypeError(`Digest method not supported: ${algorithm}`);
+  }
+  const chunks = [];
+  let finalized = false;
+  return {
+    update(data, encoding) {
+      if (finalized) throw new Error("Digest already called");
+      chunks.push(typeof data === "string" && encoding ? exactBytes(Buffer.from(data, encoding)) : exactBytes(data));
+      return this;
+    },
+    digest(encoding) {
+      if (finalized) throw new Error("Digest already called");
+      finalized = true;
+      const result = makeBuffer(new Uint8Array(nodeCryptoNative.digest(name, concat(...chunks).buffer)));
+      return encoding == null ? result : result.toString(encoding);
+    },
+  };
+}
+
+function randomUUID() {
+  return nodeCryptoNative.randomUUID();
+}
+
 function encodeGeneratedKey(key, options) {
   return options ? key.export(options) : key;
 }
@@ -389,10 +419,12 @@ function generateKeyPair(type, options, callback) {
 
 globalThis.__vjsxNodeCrypto = Object.freeze({
   KeyObject,
+  createHash,
   createPrivateKey,
   createPublicKey,
   generateKeyPair,
   generateKeyPairSync,
+  randomUUID,
   sign,
   verify,
 });

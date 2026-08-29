@@ -664,6 +664,7 @@ fn runtime_capabilities(runtime_profile string) !string {
 	lines << 'modules:'
 	append_capability(mut lines, 'node:timers/promises', snapshot.has_node_timers_promises)
 	append_capability(mut lines, 'node:crypto', snapshot.has_node_crypto_module)
+	append_capability(mut lines, 'node:zlib', snapshot.has_node_zlib_module)
 	append_capability(mut lines, 'node:fs', snapshot.has_node_fs_module)
 	append_capability(mut lines, 'node:fs/promises', snapshot.has_node_fs_promises)
 	append_capability(mut lines, 'fs', snapshot.has_fs_module)

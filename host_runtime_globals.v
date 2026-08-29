@@ -5,13 +5,32 @@ import encoding.base64
 // Install a tiny `atob` and `Buffer` global for Node/browser-leaning packages.
 pub fn (ctx &Context) install_binary_globals() {
 	global := ctx.js_global()
-	global.set('atob', ctx.js_function(fn [ctx] (args []Value) Value {
+	native := ctx.js_object()
+	native.set('base64Decode', ctx.js_function(fn [ctx] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw('args[0] is required')
 		}
-		ret := base64.decode_str(args[0].str())
-		return ctx.js_string(ret)
+		bytes := base64.decode(args[0].str())
+		if bytes.len == 0 {
+			array_buffer := ctx.js_global('ArrayBuffer')
+			defer {
+				array_buffer.free()
+			}
+			return array_buffer.new(0)
+		}
+		return ctx.js_array_buffer(bytes)
 	}))
+	native.set('base64Encode', ctx.js_function_this(fn [ctx] (this Value, args []Value) Value {
+		if args.len == 0 {
+			return ctx.js_throw('args[0] is required')
+		}
+		bytes := host_decode_text_bytes(this, args[0]) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+		}
+		return ctx.js_string(base64.encode(bytes))
+	}))
+	global.set('__vjsxBinaryNative', native)
+	native.free()
 	global.set('structuredClone', ctx.js_function(fn [ctx] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_undefined()
@@ -19,9 +38,10 @@ pub fn (ctx &Context) install_binary_globals() {
 		source := args[0].json_stringify()
 		return ctx.eval('(' + source + ')') or { ctx.js_throw(err.msg()) }
 	}))
-	global.free()
 	ctx.eval_runtime_file('web/js/typed_array.js', type_module) or { panic(err) }
 	ctx.eval_runtime_file('web/js/buffer.js', type_module) or { panic(err) }
+	global.delete('__vjsxBinaryNative')
+	global.free()
 }
 
 // Install timer globals (`setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`).

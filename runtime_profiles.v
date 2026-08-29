@@ -42,6 +42,7 @@ pub:
 pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 	ctx.install_node_compat(NodeCompatConfig{
 		crypto:        false
+		zlib:          false
 		fs:            false
 		http:          false
 		https:         false

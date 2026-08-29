@@ -52,7 +52,7 @@ fn relative_path(from string, to string) string {
 
 // Install a small `path` host module with path helpers.
 pub fn (ctx &Context) install_path_module() {
-	mut path_mod := ctx.js_module('path')
+	sep := ctx.js_string(os.path_separator.str())
 	join_fn := ctx.js_function(fn [ctx] (args []Value) Value {
 		parts := args.map(it.str())
 		if parts.len == 0 {
@@ -98,14 +98,8 @@ pub fn (ctx &Context) install_path_module() {
 		}
 		return ctx.js_bool(os.is_abs_path(args[0].str()))
 	})
-	path_mod.export('join', join_fn)
-	path_mod.export('dirname', dirname_fn)
-	path_mod.export('basename', basename_fn)
-	path_mod.export('extname', extname_fn)
-	path_mod.export('resolve', resolve_fn)
-	path_mod.export('relative', relative_fn)
-	path_mod.export('isAbsolute', is_absolute_fn)
 	default_obj := ctx.js_object()
+	default_obj.set('sep', sep)
 	default_obj.set('join', join_fn)
 	default_obj.set('dirname', dirname_fn)
 	default_obj.set('basename', basename_fn)
@@ -113,9 +107,21 @@ pub fn (ctx &Context) install_path_module() {
 	default_obj.set('resolve', resolve_fn)
 	default_obj.set('relative', relative_fn)
 	default_obj.set('isAbsolute', is_absolute_fn)
-	path_mod.export_default(default_obj)
-	path_mod.create()
+	for module_name in ['path', 'node:path'] {
+		mut path_mod := ctx.js_module(module_name)
+		path_mod.export('sep', sep)
+		path_mod.export('join', join_fn)
+		path_mod.export('dirname', dirname_fn)
+		path_mod.export('basename', basename_fn)
+		path_mod.export('extname', extname_fn)
+		path_mod.export('resolve', resolve_fn)
+		path_mod.export('relative', relative_fn)
+		path_mod.export('isAbsolute', is_absolute_fn)
+		path_mod.export_default(default_obj)
+		path_mod.create()
+	}
 	default_obj.free()
+	sep.free()
 	join_fn.free()
 	dirname_fn.free()
 	basename_fn.free()

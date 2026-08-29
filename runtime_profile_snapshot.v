@@ -21,6 +21,7 @@ pub:
 	has_process              bool
 	has_node_timers_promises bool
 	has_node_crypto_module   bool
+	has_node_zlib_module     bool
 	has_node_fs_module       bool
 	has_node_fs_promises     bool
 	has_fs_module            bool
@@ -74,6 +75,7 @@ fn (kind RuntimeProfileKind) required_capabilities() []string {
 				'clearTimeout',
 				'node:timers/promises',
 				'node:crypto',
+				'node:zlib',
 				'node:fs',
 				'node:fs/promises',
 				'fs',
@@ -101,6 +103,7 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'process' { snapshot.has_process }
 		'node:timers/promises' { snapshot.has_node_timers_promises }
 		'node:crypto' { snapshot.has_node_crypto_module }
+		'node:zlib' { snapshot.has_node_zlib_module }
 		'node:fs' { snapshot.has_node_fs_module }
 		'node:fs/promises' { snapshot.has_node_fs_promises }
 		'fs' { snapshot.has_fs_module }
@@ -173,6 +176,7 @@ pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 		has_process:              runtime_profile_has_global(ctx, 'typeof process === "object"')
 		has_node_timers_promises: ctx.has_runtime_module('node:timers/promises')
 		has_node_crypto_module:   ctx.has_runtime_module('node:crypto')
+		has_node_zlib_module:     ctx.has_runtime_module('node:zlib')
 		has_node_fs_module:       ctx.has_runtime_module('node:fs')
 		has_node_fs_promises:     ctx.has_runtime_module('node:fs/promises')
 		has_fs_module:            ctx.has_runtime_module('fs')

@@ -1,6 +1,9 @@
 module vjsx
 
 import crypto.ed25519
+import crypto.md5
+import crypto.sha256
+import rand
 
 // Install the practical Ed25519 subset of Node's `crypto`/`node:crypto`
 // modules. The JS compatibility layer owns KeyObject and RFC 8410 DER/PEM
@@ -8,6 +11,33 @@ import crypto.ed25519
 pub fn (ctx &Context) install_node_crypto_module() {
 	glob, boot := fetch_get_bootstrap(ctx)
 	native := ctx.js_object()
+	native.set('digest', ctx.js_function(fn [ctx] (args []Value) Value {
+		if args.len < 2 {
+			return ctx.js_throw(ctx.js_error(
+				message: 'algorithm and data are required'
+				name:    'TypeError'
+			))
+		}
+		bytes := args[1].to_bytes()
+		digest := match args[0].str().to_lower() {
+			'sha256', 'sha-256' {
+				sha256.sum(bytes)
+			}
+			'md5' {
+				md5.sum(bytes)
+			}
+			else {
+				return ctx.js_throw(ctx.js_error(
+					message: 'Digest method not supported: ${args[0].str()}'
+					name:    'TypeError'
+				))
+			}
+		}
+		return ctx.js_array_buffer(digest)
+	}))
+	native.set('randomUUID', ctx.js_function(fn [ctx] (args []Value) Value {
+		return ctx.js_string(rand.uuid_v4())
+	}))
 	native.set('generateKey', ctx.js_function(fn [ctx] (args []Value) Value {
 		public_key, private_key := ed25519.generate_key() or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
@@ -62,8 +92,8 @@ pub fn (ctx &Context) install_node_crypto_module() {
 	ctx.eval_runtime_file('web/js/node_crypto.js', type_module) or { panic(err) }
 
 	helpers := ctx.js_global('__vjsxNodeCrypto')
-	export_names := ['KeyObject', 'createPrivateKey', 'createPublicKey', 'generateKeyPair',
-		'generateKeyPairSync', 'sign', 'verify']
+	export_names := ['KeyObject', 'createHash', 'createPrivateKey', 'createPublicKey',
+		'generateKeyPair', 'generateKeyPairSync', 'randomUUID', 'sign', 'verify']
 	for module_name in ['crypto', 'node:crypto'] {
 		mut crypto_mod := ctx.js_module(module_name)
 		default_obj := ctx.js_object()

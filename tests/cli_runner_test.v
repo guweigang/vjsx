@@ -81,6 +81,7 @@ fn test_runtime_profile_snapshot_for_runtime_globals_minimal() {
 		'clearTimeout',
 		'node:timers/promises',
 		'node:crypto',
+		'node:zlib',
 		'node:fs',
 		'node:fs/promises',
 		'fs',
@@ -192,8 +193,8 @@ fn test_runtime_profile_snapshot_for_node_compat_minimal() {
 	assert snapshot.matches(.node_minimal)
 	assert snapshot.infer_kind() == .node_minimal
 	assert snapshot.has_path_module
-	assert snapshot.missing_for(.node) == ['setTimeout', 'clearTimeout', 'node:crypto', 'node:fs',
-		'node:fs/promises', 'fs', 'http', 'https']
+	assert snapshot.missing_for(.node) == ['setTimeout', 'clearTimeout', 'node:crypto', 'node:zlib',
+		'node:fs', 'node:fs/promises', 'fs', 'http', 'https']
 }
 
 fn test_install_script_runtime_profile() {

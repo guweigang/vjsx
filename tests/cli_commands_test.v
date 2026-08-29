@@ -62,7 +62,7 @@ fn test_cli_build_creates_native_app_runner_with_embedded_bundle() {
 		os.rm(app_path) or {}
 	}
 	os.write_file(os.join_path(root, 'main.mts'),
-		'console.log("native:" + process.argv.slice(1).join(","));') or { panic(err) }
+		'console.log("native:" + process.argv.slice(2).join(","));') or { panic(err) }
 	cli_test_support.app_runner()
 	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root,
 		'main.mts')} -o ${app_path}')
@@ -73,6 +73,25 @@ fn test_cli_build_creates_native_app_runner_with_embedded_bundle() {
 	run_output := os.execute('${app_path} alpha beta')
 	assert run_output.exit_code == 0
 	assert run_output.output.trim_space() == 'native:alpha,beta'
+}
+
+fn test_cli_native_app_runner_preserves_process_exit_code() {
+	root := os.join_path(os.temp_dir(), 'vjsx_cli_native_exit_${os.getpid()}')
+	app_path := os.join_path(os.temp_dir(), 'vjsx_cli_native_exit_${os.getpid()}.bin')
+	os.rmdir_all(root) or {}
+	os.rm(app_path) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+		os.rm(app_path) or {}
+	}
+	os.write_file(os.join_path(root, 'main.mjs'), 'process.exitCode = 7;') or { panic(err) }
+	cli_test_support.app_runner()
+	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root,
+		'main.mjs')} -o ${app_path}')
+	assert build_output.exit_code == 0
+	run_output := os.execute(app_path)
+	assert run_output.exit_code == 7
 }
 
 fn test_cli_env_runtime_profile_is_validated() {
@@ -172,6 +191,7 @@ fn test_cli_capabilities_command() {
 	assert output.output.contains('yes globalThis')
 	assert output.output.contains('yes fs')
 	assert output.output.contains('yes node:crypto')
+	assert output.output.contains('yes node:zlib')
 	assert output.output.contains('yes node:fs/promises')
 	assert output.output.contains('yes path')
 }
