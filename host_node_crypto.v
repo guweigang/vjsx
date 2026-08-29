@@ -3,7 +3,6 @@ module vjsx
 import crypto.ed25519
 import crypto.md5
 import crypto.sha256
-import rand
 
 // Install the practical Ed25519 subset of Node's `crypto`/`node:crypto`
 // modules. The JS compatibility layer owns KeyObject and RFC 8410 DER/PEM
@@ -36,7 +35,8 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		return ctx.js_array_buffer(digest)
 	}))
 	native.set('randomUUID', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_string(rand.uuid_v4())
+		uuid := secure_random_uuid_v4() or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
+		return ctx.js_string(uuid)
 	}))
 	native.set('generateKey', ctx.js_function(fn [ctx] (args []Value) Value {
 		public_key, private_key := ed25519.generate_key() or {

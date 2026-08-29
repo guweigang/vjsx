@@ -40,17 +40,17 @@ struct FetchCoreConfigState {
 @[heap]
 struct FetchCurlTask {
 mut:
-	process           CurlProcess
-	headers_path      string
-	body_path         string
-	output_path       string
-	request_body_path string
-	resolve           Value
-	reject            Value
-	settled           bool
-	cleaned           bool
-	cancelled         bool
-	cancel_polls      int
+	process      CurlProcess
+	temp_dir     string
+	headers_path string
+	body_path    string
+	output_path  string
+	resolve      Value
+	reject       Value
+	settled      bool
+	cleaned      bool
+	cancelled    bool
+	cancel_polls int
 }
 
 fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
@@ -82,12 +82,17 @@ fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
 	}
 }
 
-fn fetch_curl_paths() (string, string, string) {
-	stamp := '${os.getpid()}-${time.now().unix_micro()}'
-	headers_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.headers')
-	body_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.body')
-	output_path := os.join_path(os.temp_dir(), 'vjsx-fetch-${stamp}.output')
-	return headers_path, body_path, output_path
+fn fetch_curl_paths() !(string, string, string, string) {
+	temp_dir := os.join_path(os.temp_dir(), 'vjsx-fetch-${secure_random_hex(16)!}')
+	os.mkdir(temp_dir)!
+	os.chmod(temp_dir, 0o700) or {
+		os.rmdir(temp_dir) or {}
+		return err
+	}
+	headers_path := os.join_path(temp_dir, 'response.headers')
+	body_path := os.join_path(temp_dir, 'response.body')
+	output_path := os.join_path(temp_dir, 'curl.output')
+	return temp_dir, headers_path, body_path, output_path
 }
 
 fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path string, request_body_path string) []string {
@@ -200,11 +205,8 @@ fn fetch_curl_task_cleanup(mut task FetchCurlTask) {
 		return
 	}
 	task.cleaned = true
-	os.rm(task.headers_path) or {}
-	os.rm(task.body_path) or {}
-	os.rm(task.output_path) or {}
-	if task.request_body_path != '' {
-		os.rm(task.request_body_path) or {}
+	if task.temp_dir != '' {
+		os.rmdir_all(task.temp_dir) or {}
 	}
 }
 
@@ -300,30 +302,31 @@ fn fetch_curl_task_schedule(ctx Context, mut task FetchCurlTask) {
 }
 
 fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, resolve Value, reject Value) !Value {
-	headers_path, body_path, output_path := fetch_curl_paths()
-	request_body_path := if request.body_is_binary { output_path + '.request' } else { '' }
+	temp_dir, headers_path, body_path, output_path := fetch_curl_paths()!
+	request_body_path := if request.body_is_binary {
+		os.join_path(temp_dir, 'request.body')
+	} else {
+		''
+	}
 	if request_body_path != '' {
-		os.write_file_array(request_body_path, request.body.bytes())!
-		os.chmod(request_body_path, 0o600)!
+		fs_write_bytes(request_body_path, request.body.bytes(), 0o600, true) or {
+			os.rmdir_all(temp_dir) or {}
+			return err
+		}
 	}
 	args := fetch_curl_args(request, headers_path, body_path, request_body_path)
 	process := start_curl_process(curl_path, args, output_path) or {
-		os.rm(headers_path) or {}
-		os.rm(body_path) or {}
-		os.rm(output_path) or {}
-		if request_body_path != '' {
-			os.rm(request_body_path) or {}
-		}
+		os.rmdir_all(temp_dir) or {}
 		return err
 	}
 	mut task := &FetchCurlTask{
-		process:           process
-		headers_path:      headers_path
-		body_path:         body_path
-		output_path:       output_path
-		request_body_path: request_body_path
-		resolve:           resolve.dup_value()
-		reject:            reject.dup_value()
+		process:      process
+		temp_dir:     temp_dir
+		headers_path: headers_path
+		body_path:    body_path
+		output_path:  output_path
+		resolve:      resolve.dup_value()
+		reject:       reject.dup_value()
 	}
 	cancel := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
 		if task.cancelled || task.cleaned {
