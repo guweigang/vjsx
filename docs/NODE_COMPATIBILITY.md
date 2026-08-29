@@ -61,9 +61,12 @@ The current behavior intentionally follows the existing vjsx filesystem host:
 
 - `readFile()` resolves to a Buffer-compatible `Uint8Array` by default and to
   a string for the `utf8`/`utf-8` encoding.
-- `writeFile()` preserves string, Buffer, TypedArray, and ArrayBuffer bytes.
-  The `{ flag: "wx", mode }` form uses atomic exclusive creation and applies
-  the requested creation mode.
+- `writeFile()` and `writeFileSync()` preserve string, Buffer, TypedArray, and
+  ArrayBuffer bytes. `readFileSync()` follows the same Buffer-by-default and
+  UTF-8 encoding behavior as `readFile()`.
+- The `w`, `w+`, `wx`, `xw`, `wx+`, and `xw+` write flags are supported.
+  Exclusive variants use atomic creation and never degrade to truncating
+  writes. Other flags are rejected.
 - `mkdir()` creates missing parent directories.
 - `rm(path, recursive)` accepts a boolean recursive flag rather than Node's
   complete options object.
@@ -82,6 +85,14 @@ against the current working directory before configured roots. Consequently,
 the filesystem modules to untrusted code without an additional host-level
 policy boundary.
 
+## Raw DEFLATE API
+
+`zlib` and `node:zlib` export `deflateRawSync()`. Compression is delegated to
+V's `compress.deflate.compress_raw()` and the result is returned as a Buffer.
+The default options and `{ level: 9 }` are accepted for the deterministic ZIP
+use case. V's current stable raw-DEFLATE API does not expose tunable compression
+levels, so other explicit levels are rejected rather than silently ignored.
+
 ## Ed25519 Crypto API
 
 The crypto module exports:
@@ -95,6 +106,9 @@ The crypto module exports:
 - `randomUUID()`
 - `sign()`
 - `verify()`
+
+`randomUUID()` obtains its 128 random bits from V's `crypto.rand` operating
+system entropy source before applying the RFC 9562 version and variant bits.
 
 ### Import, sign, and verify
 

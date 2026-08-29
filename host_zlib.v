@@ -37,6 +37,33 @@ fn zlib_input_bytes(ctx &Context, value Value) ![]u8 {
 	return error('data must be an ArrayBuffer or TypedArray')
 }
 
+fn zlib_validate_options(value Value) ! {
+	if value.is_undefined() || value.is_null() {
+		return
+	}
+	if !value.is_object() {
+		return error('options must be an object')
+	}
+	level_value := value.get('level')
+	defer {
+		level_value.free()
+	}
+	if level_value.is_undefined() || level_value.is_null() {
+		return
+	}
+	if !level_value.is_number() {
+		return error('options.level must be a number')
+	}
+	raw_level := level_value.to_f64()
+	level := int(raw_level)
+	if raw_level != f64(level) {
+		return error('options.level must be an integer')
+	}
+	if level !in [-1, 9] {
+		return error('V compress.deflate currently supports only the default level or level 9 compatibility mode')
+	}
+}
+
 // Install the synchronous raw DEFLATE subset used by deterministic ZIP writers.
 pub fn (ctx &Context) install_zlib_module() {
 	deflate_raw_sync := ctx.js_function(fn [ctx] (args []Value) Value {
@@ -46,18 +73,15 @@ pub fn (ctx &Context) install_zlib_module() {
 		bytes := zlib_input_bytes(ctx, args[0]) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
+		if args.len > 1 {
+			zlib_validate_options(args[1]) or {
+				return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+			}
+		}
 		compressed := deflate.compress_raw(bytes) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
 		}
-		array_buffer := ctx.js_array_buffer(compressed)
-		defer {
-			array_buffer.free()
-		}
-		uint8_array := ctx.js_global('Uint8Array')
-		defer {
-			uint8_array.free()
-		}
-		return uint8_array.new(array_buffer)
+		return fs_bytes_value(ctx, compressed)
 	})
 	for module_name in ['zlib', 'node:zlib'] {
 		mut zlib_mod := ctx.js_module(module_name)

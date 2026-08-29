@@ -45,6 +45,18 @@ function compareBytes(left, right) {
   return left.length === right.length ? 0 : left.length < right.length ? -1 : 1;
 }
 
+function checkedUnsignedWrite(target, value, offset, width, maximum) {
+  const number = Number(value);
+  const index = Number(offset);
+  if (!Number.isInteger(index) || index < 0 || index + width > target.length) {
+    throw new RangeError(`The value of "offset" is out of range. It must be >= 0 and <= ${Math.max(0, target.length - width)}.`);
+  }
+  if (!Number.isInteger(number) || number < 0 || number > maximum) {
+    throw new RangeError(`The value of "value" is out of range. It must be >= 0 and <= ${maximum}.`);
+  }
+  return [number, index];
+}
+
 function decorate(bytes) {
   if (bytes.__vjs_buffer) return bytes;
   Object.defineProperty(bytes, "__vjs_buffer", { value: true });
@@ -61,15 +73,16 @@ function decorate(bytes) {
     } },
     compare: { value(other) { return compareBytes(this, other); } },
     writeUInt16LE: { value(value, offset = 0) {
-      const number = Number(value) >>> 0;
-      this[offset] = number & 0xff; this[offset + 1] = (number >>> 8) & 0xff;
-      return offset + 2;
+	      const [number, index] = checkedUnsignedWrite(this, value, offset, 2, 0xffff);
+	      this[index] = number & 0xff; this[index + 1] = (number >>> 8) & 0xff;
+	      return index + 2;
     } },
     writeUInt32LE: { value(value, offset = 0) {
-      const number = Number(value) >>> 0;
-      this[offset] = number & 0xff; this[offset + 1] = (number >>> 8) & 0xff;
-      this[offset + 2] = (number >>> 16) & 0xff; this[offset + 3] = (number >>> 24) & 0xff;
-      return offset + 4;
+	      const [number, index] = checkedUnsignedWrite(this, value, offset, 4, 0xffffffff);
+	      const unsigned = number >>> 0;
+	      this[index] = unsigned & 0xff; this[index + 1] = (unsigned >>> 8) & 0xff;
+	      this[index + 2] = (unsigned >>> 16) & 0xff; this[index + 3] = (unsigned >>> 24) & 0xff;
+	      return index + 4;
     } },
   });
   return bytes;

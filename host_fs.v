@@ -85,6 +85,65 @@ fn string_option(value Value, key string, default_value string) !string {
 	return option.str()
 }
 
+fn fs_read_encoding(value Value) !string {
+	if value.is_undefined() || value.is_null() {
+		return ''
+	}
+	mut encoding := ''
+	if value.is_string() {
+		encoding = value.str().to_lower()
+	} else if value.is_object() {
+		option := value.get('encoding')
+		defer {
+			option.free()
+		}
+		if option.is_undefined() || option.is_null() {
+			return ''
+		}
+		if !option.is_string() {
+			return error('options.encoding must be a string')
+		}
+		encoding = option.str().to_lower()
+	} else {
+		return error('encoding options must be a string or object')
+	}
+	if encoding !in ['utf8', 'utf-8'] {
+		return error('unsupported file encoding: ${encoding}')
+	}
+	return encoding
+}
+
+fn fs_write_options(value Value) !(string, int) {
+	if value.is_undefined() || value.is_null() {
+		return 'w', 0o666
+	}
+	if value.is_string() {
+		encoding := value.str().to_lower()
+		if encoding !in ['utf8', 'utf-8'] {
+			return error('unsupported file encoding: ${encoding}')
+		}
+		return 'w', 0o666
+	}
+	if !value.is_object() {
+		return error('writeFile options must be a string or object')
+	}
+	flag := string_option(value, 'flag', 'w')!
+	if flag !in ['w', 'w+', 'wx', 'xw', 'wx+', 'xw+'] {
+		return error('unsupported writeFile flag: ${flag}')
+	}
+	mode_value := value.get('mode')
+	defer {
+		mode_value.free()
+	}
+	if mode_value.is_undefined() || mode_value.is_null() {
+		return flag, 0o666
+	}
+	if !mode_value.is_number() {
+		return error('options.mode must be a number')
+	}
+	return flag, mode_value.to_int()
+}
+
 fn temp_prefix_target(prefix string, roots []string) string {
 	if os.is_abs_path(prefix) {
 		return prefix
@@ -132,20 +191,37 @@ fn fs_bytes_value(ctx &Context, bytes []u8) Value {
 	}
 }
 
-fn fs_write_exclusive(path string, bytes []u8, mode int) ! {
+fn fs_write_bytes(path string, bytes []u8, mode int, exclusive bool) ! {
 	fd := $if windows {
-		C._wopen(path.to_wide(), C._O_WRONLY | C._O_CREAT | C._O_EXCL | C._O_BINARY, mode)
+		mut flags := C._O_WRONLY | C._O_CREAT | C._O_TRUNC | C._O_BINARY
+		if exclusive {
+			flags |= C._O_EXCL
+		}
+		C._wopen(path.to_wide(), flags, mode)
 	} $else {
-		C.open(&char(path.str), C.O_WRONLY | C.O_CREAT | C.O_EXCL, mode)
+		mut flags := C.O_WRONLY | C.O_CREAT | C.O_TRUNC
+		if exclusive {
+			flags |= C.O_EXCL
+		}
+		C.open(&char(path.str), flags, mode)
 	}
 	if fd < 0 {
-		return error('exclusive file creation failed: ${path}')
+		message := if exclusive {
+			'exclusive file creation failed: ${path}'
+		} else {
+			'file creation failed: ${path}'
+		}
+		return error(message)
 	}
+	mut complete := false
 	defer {
 		$if windows {
 			C._close(fd)
 		} $else {
 			C.close(fd)
+		}
+		if exclusive && !complete {
+			os.rm(path) or {}
 		}
 	}
 	mut offset := 0
@@ -161,6 +237,7 @@ fn fs_write_exclusive(path string, bytes []u8, mode int) ! {
 		}
 		offset += written
 	}
+	complete = true
 }
 
 fn fs_value_to_bytes(value Value) ![]u8 {
@@ -317,8 +394,18 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 					}
 					[]u8{}
 				}
-				if args.len > 1 && args[1].is_string()
-					&& args[1].str().to_lower() in ['utf8', 'utf-8'] {
+				encoding := if args.len > 1 {
+					fs_read_encoding(args[1]) or {
+						read_err = ctx.js_error(message: err.msg(), name: 'TypeError')
+						unsafe {
+							goto reject
+						}
+						''
+					}
+				} else {
+					''
+				}
+				if encoding != '' {
 					return promise.resolve(bytes.bytestr())
 				}
 				return promise.resolve(fs_bytes_value(ctx, bytes))
@@ -350,29 +437,21 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		target := write_target_path(path, roots)
-		flag := if args.len > 2 { string_option(args[2], 'flag', 'w') or { 'w' } } else { 'w' }
-		mode := if args.len > 2 && args[2].is_object() {
-			mode_value := args[2].get('mode')
-			defer {
-				mode_value.free()
+		flag, mode := if args.len > 2 {
+			fs_write_options(args[2]) or {
+				write_err = ctx.js_error(message: err.msg(), name: 'TypeError')
+				unsafe {
+					goto reject
+				}
+				'w', 0o666
 			}
-			if mode_value.is_number() { mode_value.to_int() } else { 0o666 }
 		} else {
-			0o666
+			'w', 0o666
 		}
-		if flag == 'wx' {
-			fs_write_exclusive(target, data, mode) or {
-				write_err = ctx.js_error(message: err.msg())
-				unsafe {
-					goto reject
-				}
-			}
-		} else {
-			os.write_file_array(target, data) or {
-				write_err = ctx.js_error(message: err.msg())
-				unsafe {
-					goto reject
-				}
+		fs_write_bytes(target, data, mode, flag.contains('x')) or {
+			write_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
 			}
 		}
 		return promise.resolve(ctx.js_undefined())
@@ -589,8 +668,18 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		target := resolve_existing_path(args[0].str(), roots) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'Error'))
 		}
-		text := os.read_file(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
-		return ctx.js_string(text)
+		bytes := os.read_bytes(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
+		encoding := if args.len > 1 {
+			fs_read_encoding(args[1]) or {
+				return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+			}
+		} else {
+			''
+		}
+		if encoding != '' {
+			return ctx.js_string(bytes.bytestr())
+		}
+		return fs_bytes_value(ctx, bytes)
 	})
 	write_file_sync := ctx.js_function(fn [ctx, roots] (args []Value) Value {
 		if args.len < 2 {
@@ -600,7 +689,21 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			))
 		}
 		target := write_target_path(args[0].str(), roots)
-		os.write_file(target, args[1].str()) or {
+		data := if args[1].is_string() {
+			args[1].str().bytes()
+		} else {
+			fs_value_to_bytes(args[1]) or {
+				return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+			}
+		}
+		flag, mode := if args.len > 2 {
+			fs_write_options(args[2]) or {
+				return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
+			}
+		} else {
+			'w', 0o666
+		}
+		fs_write_bytes(target, data, mode, flag.contains('x')) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
 		}
 		return ctx.js_undefined()

@@ -8,12 +8,12 @@ const nested = path.join(tmpDir, "nested");
 
 fs.mkdirSync(nested, { recursive: true });
 fs.writeFileSync(source, "sync text");
-console.log(fs.readFileSync(source));
+console.log(fs.readFileSync(source).toString("utf8"));
 console.log(String(fs.existsSync(source)));
 console.log(String(fs.statSync(source).isFile()));
 fs.copyFileSync(source, copied);
 fs.chmodSync(copied, 0o644);
 console.log(fs.readdirSync(tmpDir).sort().join(","));
-console.log(fs.readFileSync(copied));
+console.log(fs.readFileSync(copied).toString("utf8"));
 fs.rmSync(tmpDir, { recursive: true, force: true });
 console.log(String(fs.existsSync(tmpDir)));

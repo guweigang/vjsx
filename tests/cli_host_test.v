@@ -158,6 +158,13 @@ fn test_cli_host_fs_sync_runtime_features() {
 	assert output.output.trim_space() == 'sync text\ntrue\ntrue\ncopied.txt,nested,source.txt\nsync text\nfalse'
 }
 
+fn test_cli_host_binary_compat_runtime_features() {
+	output :=
+		os.execute('${cli_test_support.command(false)} --module ./tests/host_binary_compat_runtime.mjs')
+	assert output.exit_code == 0
+	assert output.output.trim_space() == 'true\nTypeError\nRangeError\n0,255,1,128\nstring\nexclusive-rejected\nTypeError\ntrue:2,254,3,129\ntrue'
+}
+
 fn test_cli_host_os_runtime_features() {
 	output := os.execute('${cli_test_support.command(false)} --module ./tests/host_os_runtime.mjs')
 	assert output.exit_code == 0
