@@ -28,37 +28,31 @@ fn sha512_hash(data []u8) []u8 {
 	return sha512.sum512(data)
 }
 
-fn pbkdf2_sha256_hash(password []u8, salt []u8, iterations int, key_length int) []u8 {
-	return pbkdf2.key(password, salt, iterations, key_length, sha256.new()) or { panic(err) }
+fn pbkdf2_sha256_hash(password []u8, salt []u8, iterations int, key_length int) ![]u8 {
+	return pbkdf2.key(password, salt, iterations, key_length, sha256.new())
 }
 
-fn pbkdf2_sha384_hash(password []u8, salt []u8, iterations int, key_length int) []u8 {
-	return pbkdf2.key(password, salt, iterations, key_length, sha512.new384()) or { panic(err) }
+fn pbkdf2_sha384_hash(password []u8, salt []u8, iterations int, key_length int) ![]u8 {
+	return pbkdf2.key(password, salt, iterations, key_length, sha512.new384())
 }
 
-fn pbkdf2_sha512_hash(password []u8, salt []u8, iterations int, key_length int) []u8 {
-	return pbkdf2.key(password, salt, iterations, key_length, sha512.new()) or { panic(err) }
+fn pbkdf2_sha512_hash(password []u8, salt []u8, iterations int, key_length int) ![]u8 {
+	return pbkdf2.key(password, salt, iterations, key_length, sha512.new())
 }
 
-fn ecdsa_nid_from_curve_name(name string) ecdsa.Nid {
-	match name {
-		'P-256' {
-			return .prime256v1
-		}
-		'P-384' {
-			return .secp384r1
-		}
-		'P-521' {
-			return .secp521r1
-		}
-		else { panic('unsupported ECDSA named curve: ${name}') }
+fn ecdsa_nid_from_curve_name(name string) !ecdsa.Nid {
+	return match name {
+		'P-256' { ecdsa.Nid.prime256v1 }
+		'P-384' { ecdsa.Nid.secp384r1 }
+		'P-521' { ecdsa.Nid.secp521r1 }
+		else { error('unsupported ECDSA named curve: ${name}') }
 	}
 }
 
-fn ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
-	match name {
+fn ecdsa_signer_opts_from_hash_name(name string) !ecdsa.SignerOpts {
+	return match name {
 		'SHA-1' {
-			return ecdsa.SignerOpts{
+			ecdsa.SignerOpts{
 				hash_config: .with_custom_hash
 				allow_custom_hash: true
 				allow_smaller_size: true
@@ -66,7 +60,7 @@ fn ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
 			}
 		}
 		'SHA-256' {
-			return ecdsa.SignerOpts{
+			ecdsa.SignerOpts{
 				hash_config: .with_custom_hash
 				allow_custom_hash: true
 				allow_smaller_size: true
@@ -74,7 +68,7 @@ fn ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
 			}
 		}
 		'SHA-384' {
-			return ecdsa.SignerOpts{
+			ecdsa.SignerOpts{
 				hash_config: .with_custom_hash
 				allow_custom_hash: true
 				allow_smaller_size: true
@@ -82,16 +76,14 @@ fn ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
 			}
 		}
 		'SHA-512' {
-			return ecdsa.SignerOpts{
+			ecdsa.SignerOpts{
 				hash_config: .with_custom_hash
 				allow_custom_hash: true
 				allow_smaller_size: true
 				custom_hash: sha512.new()
 			}
 		}
-		else {
-			panic('unsupported ECDSA hash: ${name}')
-		}
+		else { error('unsupported ECDSA hash: ${name}') }
 	}
 }
 
@@ -101,7 +93,7 @@ fn crypto_boot(ctx &Context, boot Value) {
 		return ctx.js_string(rand.uuid_v4())
 	}))
 	obj.set('rand_bytes', ctx.js_function(fn [ctx] (args []Value) Value {
-		bytes := rand.bytes(args[0].to_int()) or { panic(err) }
+		bytes := rand.bytes(args[0].to_int()) or { return ctx.js_throw(err.msg()) }
 		return ctx.js_array_buffer(bytes)
 	}))
 
@@ -142,7 +134,7 @@ fn crypto_boot(ctx &Context, boot Value) {
 		return ctx.js_bool(hmac.equal(args[0].to_bytes(), args[1].to_bytes()))
 	}))
 	obj.set('ed25519_generate_key', ctx.js_function(fn [ctx] (args []Value) Value {
-		publickey, privatekey := ed25519.generate_key() or { panic(err) }
+		publickey, privatekey := ed25519.generate_key() or { return ctx.js_throw(err.msg()) }
 		pair := ctx.js_object()
 		pair.set('publicKey', ctx.js_array_buffer(publickey))
 		pair.set('privateKey', ctx.js_array_buffer(privatekey))
@@ -154,7 +146,9 @@ fn crypto_boot(ctx &Context, boot Value) {
 	}))
 	obj.set('ed25519_sign', ctx.js_function(fn [ctx] (args []Value) Value {
 		privatekey := ed25519.PrivateKey(args[0].to_bytes())
-		signature := ed25519.sign(privatekey, args[1].to_bytes()) or { panic(err) }
+		signature := ed25519.sign(privatekey, args[1].to_bytes()) or {
+			return ctx.js_throw(err.msg())
+		}
 		return ctx.js_array_buffer(signature)
 	}))
 	obj.set('ed25519_verify', ctx.js_function(fn [ctx] (args []Value) Value {
@@ -165,40 +159,55 @@ fn crypto_boot(ctx &Context, boot Value) {
 		return ctx.js_bool(valid)
 	}))
 	obj.set('aes_cbc_encrypt', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
+		block := aes.new_cipher(args[0].to_bytes()) or { return ctx.js_throw(err.msg()) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.encrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_cbc_decrypt', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
+		block := aes.new_cipher(args[0].to_bytes()) or { return ctx.js_throw(err.msg()) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.decrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_ctr_xor', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
+		block := aes.new_cipher(args[0].to_bytes()) or { return ctx.js_throw(err.msg()) }
 		mut stream := cipher.new_ctr(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		stream.xor_key_stream(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('pbkdf2_sha256', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha256_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
+		bytes := pbkdf2_sha256_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()) or { return ctx.js_throw(err.msg()) }
+		return ctx.js_array_buffer(bytes)
 	}))
 	obj.set('pbkdf2_sha384', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha384_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
+		bytes := pbkdf2_sha384_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()) or { return ctx.js_throw(err.msg()) }
+		return ctx.js_array_buffer(bytes)
 	}))
 	obj.set('pbkdf2_sha512', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha512_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
+		bytes := pbkdf2_sha512_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()) or { return ctx.js_throw(err.msg()) }
+		return ctx.js_array_buffer(bytes)
 	}))
 	obj.set('ecdsa_generate_key', ctx.js_function(fn [ctx] (args []Value) Value {
-		nid := ecdsa_nid_from_curve_name(args[0].to_string())
-		publickey, privatekey := ecdsa.generate_key(nid: nid) or { panic(err) }
-		pub_bytes := publickey.bytes() or { panic(err) }
-		priv_bytes := privatekey.bytes() or { panic(err) }
+		nid := ecdsa_nid_from_curve_name(args[0].to_string()) or {
+			return ctx.js_throw(err.msg())
+		}
+		publickey, privatekey := ecdsa.generate_key(nid: nid) or {
+			return ctx.js_throw(err.msg())
+		}
+		pub_bytes := publickey.bytes() or {
+			publickey.free()
+			privatekey.free()
+			return ctx.js_throw(err.msg())
+		}
+		priv_bytes := privatekey.bytes() or {
+			publickey.free()
+			privatekey.free()
+			return ctx.js_throw(err.msg())
+		}
 		pair := ctx.js_object()
 		pair.set('publicKey', ctx.js_array_buffer(pub_bytes))
 		pair.set('privateKey', ctx.js_array_buffer(priv_bytes))
@@ -207,25 +216,49 @@ fn crypto_boot(ctx &Context, boot Value) {
 		return pair
 	}))
 	obj.set('ecdsa_public_from_private', ctx.js_function(fn [ctx] (args []Value) Value {
-		nid := ecdsa_nid_from_curve_name(args[1].to_string())
-		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or { panic(err) }
-		publickey := privatekey.public_key() or { panic(err) }
-		pub_bytes := publickey.bytes() or { panic(err) }
+		nid := ecdsa_nid_from_curve_name(args[1].to_string()) or {
+			return ctx.js_throw(err.msg())
+		}
+		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or {
+			return ctx.js_throw(err.msg())
+		}
+		publickey := privatekey.public_key() or {
+			privatekey.free()
+			return ctx.js_throw(err.msg())
+		}
+		pub_bytes := publickey.bytes() or {
+			publickey.free()
+			privatekey.free()
+			return ctx.js_throw(err.msg())
+		}
 		publickey.free()
 		privatekey.free()
 		return ctx.js_array_buffer(pub_bytes)
 	}))
 	obj.set('ecdsa_sign', ctx.js_function(fn [ctx] (args []Value) Value {
-		nid := ecdsa_nid_from_curve_name(args[2].to_string())
-		opt := ecdsa_signer_opts_from_hash_name(args[3].to_string())
-		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or { panic(err) }
-		signature := privatekey.sign(args[1].to_bytes(), opt) or { panic(err) }
+		nid := ecdsa_nid_from_curve_name(args[2].to_string()) or {
+			return ctx.js_throw(err.msg())
+		}
+		opt := ecdsa_signer_opts_from_hash_name(args[3].to_string()) or {
+			return ctx.js_throw(err.msg())
+		}
+		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or {
+			return ctx.js_throw(err.msg())
+		}
+		signature := privatekey.sign(args[1].to_bytes(), opt) or {
+			privatekey.free()
+			return ctx.js_throw(err.msg())
+		}
 		privatekey.free()
 		return ctx.js_array_buffer(signature)
 	}))
 	obj.set('ecdsa_verify_with_private', ctx.js_function(fn [ctx] (args []Value) Value {
-		nid := ecdsa_nid_from_curve_name(args[3].to_string())
-		opt := ecdsa_signer_opts_from_hash_name(args[4].to_string())
+		nid := ecdsa_nid_from_curve_name(args[3].to_string()) or {
+			return ctx.js_bool(false)
+		}
+		opt := ecdsa_signer_opts_from_hash_name(args[4].to_string()) or {
+			return ctx.js_bool(false)
+		}
 		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or {
 			return ctx.js_bool(false)
 		}
