@@ -32,6 +32,10 @@ Hosting documentation:
   limits, lifecycle, lanes, observations, capability hardening, and migration.
 - [Runtime Contract](docs/RUNTIME_CONTRACT.md) for ownership and engine/host
   boundaries.
+- [Security Policy](SECURITY.md) for the threat model, capability presets, and
+  trusted-artifact boundary.
+- [v0.1 API Stability](docs/API_STABILITY.md) for supported and provisional
+  surfaces.
 
 ## Install
 
@@ -248,7 +252,7 @@ parser_class := parser_module.get('Parser')!
 
 Retain the returned `ScriptModule` (and any constructed JS objects) to reuse
 the initialized module in a long-lived context. Bytecode artifacts are checked
-for vjsx format/runtime, QuickJS ABI, checksum, and runtime profile before
+for container format, artifact ABI, QuickJS ABI, checksum, and runtime profile before
 deserialization. QuickJS bytecode is not safe for hostile input, so only load
 artifacts produced by a trusted build. `--entry-only` does not bundle imports;
 it is intended for self-contained files.
@@ -280,7 +284,9 @@ result := app.call_export('main')!
 
 Keep the returned `ScriptModule` alive to preserve module-level objects and
 state across calls. `.vjsx` loading validates the container format, checksum,
-vjsx version, QuickJS ABI, and runtime profile before evaluating its entry.
+artifact ABI, QuickJS ABI, and runtime profile before evaluating its entry. The
+product patch version is informational and does not invalidate compatible
+artifacts.
 Only statically reachable dependencies are included; dynamic dependency names
 that cannot be determined during the build are not supported by this first
 bundle format. As with `.qbc`, load only trusted artifacts.
@@ -465,32 +471,10 @@ An interrupted session returns `RuntimeInterruptedError`, reports its reason via
 For Node-style hosts, that teardown also closes tracked `sqlite` / `mysql`
 connections that were left open by JS code.
 
-If you also want TypeScript/module-aware file loading from the same session,
-use `runtimejs.new_script_runtime_session(...)` or
-`runtimejs.new_node_runtime_session(...)`. Those session helpers install the
-runtime bridge so embedders can call higher-level methods like:
-
-- `session.run(path)`
-- `session.run_script(path)`
-- `session.run_module(path)`
-- `session.load_module(path)`
-- `session.import_module(path)`
-- `session.import_module_with_host(path, host_api)`
-- `session.load_plugin(path, hooks)`
-- `session.load_plugin_with_host(path, hooks, host_api)`
-- `session.call_module_export(path, export_name, ...)`
-- `session.call_module_export_with_host(path, export_name, host_api, ...)`
-- `session.call_module_method(path, export_name, method_name, ...)`
-- `session.call_module_method_with_host(path, export_name, method_name, host_api, ...)`
-- `session.call_default_export_method(path, method_name, ...)`
-- `session.call_default_export_method_with_host(path, method_name, host_api, ...)`
-
-For embedded host use, the recommended abstraction ladder is now:
-
-- `vjsx.RuntimeSession`: core lifecycle and loading
-- `runtimejs.ExtensionSession`: default embedder-facing session
-- `runtimejs.ExtensionHandle`: one loaded extension instance with lifecycle
-  hooks plus regular export calls
+For embedded host use, start with `runtimejs.ExtensionSession`, then retain an
+`ExtensionHandle` for each loaded extension. `vjsx.RuntimeSession` and direct
+`_with_host` helpers remain lower-level infrastructure for hosts that need
+custom composition; they are not peer recommended entrypoints.
 
 That path is documented in [`docs/EMBEDDING.md`](docs/EMBEDDING.md), together
 with:
@@ -680,6 +664,8 @@ Useful presets:
 - `vjsx.node_compat_minimal(fs_roots, process_args)`
 - `web.browser_host_full()`
 - `web.browser_host_minimal()`
+- `vjsx.host_policy_safe()` for deny-by-default extension hosting
+- `vjsx.host_policy_trusted()` for explicit historical full access
 
 Higher-level runtime entrypoints:
 
@@ -699,6 +685,11 @@ CLI runtime profiles:
 - `./vjsx --runtime node ...`
 - `./vjsx --runtime script ...`
 - `./vjsx --runtime browser --module ...`
+
+The runtime configuration policy covers environment reads/writes,
+subprocess/shell execution, filesystem read/write roots, network hosts, and
+process mutation/exit. `fs_roots` remains path resolution only; use
+`HostPolicy.fs_read_roots` and `fs_write_roots` for access boundaries.
 
 The CLI defaults to `--runtime node` for backwards compatibility.
 `browser` is intentionally a pure browser-style host profile and currently

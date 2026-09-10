@@ -7,9 +7,9 @@ import time
 @[params]
 pub struct FetchGlobalsConfig {
 pub:
-	read_timeout        i64  = 30 * time.second
-	write_timeout       i64  = 30 * time.second
-	max_retries         int  = 5
+	read_timeout        i64 = 30 * time.second
+	write_timeout       i64 = 30 * time.second
+	max_retries         int = 5
 	curl_proxy_fallback bool = true
 	curl_path           string
 }
@@ -25,6 +25,7 @@ struct FetchCoreRequest {
 	write_timeout       i64
 	max_retries         int
 	curl_proxy_fallback bool
+	allow_redirect      bool
 }
 
 struct FetchCoreResult {
@@ -35,6 +36,7 @@ struct FetchCoreResult {
 @[heap]
 struct FetchCoreConfigState {
 	config FetchGlobalsConfig
+	policy HostPolicy
 }
 
 @[heap]
@@ -57,25 +59,30 @@ fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
 	mut resp := http.Response{}
 	if request.boundary == '' {
 		resp = http.fetch(
-			url:           request.url
-			method:        request.method
-			header:        request.header
-			data:          request.body
-			read_timeout:  request.read_timeout
+			url: request.url
+			method: request.method
+			header: request.header
+			data: request.body
+			read_timeout: request.read_timeout
 			write_timeout: request.write_timeout
-			max_retries:   0
-		) or { return FetchCoreResult{
-			message: err.msg()
-		} }
+			max_retries: 0
+			allow_redirect: request.allow_redirect
+		) or {
+			return FetchCoreResult{
+				message: err.msg()
+			}
+		}
 	} else {
 		form, files := http.parse_multipart_form(request.body, '----formdata-' + request.boundary)
 		resp = http.post_multipart_form(request.url,
-			form:   form
+			form: form
 			header: request.header
-			files:  files
-		) or { return FetchCoreResult{
-			message: err.msg()
-		} }
+			files: files
+		) or {
+			return FetchCoreResult{
+				message: err.msg()
+			}
+		}
 	}
 	return FetchCoreResult{
 		response: resp
@@ -101,9 +108,6 @@ fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path stri
 		'-sS',
 		'--connect-timeout',
 		'5',
-		'-L',
-		'--max-redirs',
-		'16',
 		'--max-time',
 		'${fetch_core_deadline_seconds(request)}',
 		'-D',
@@ -113,6 +117,11 @@ fn fetch_curl_args(request FetchCoreRequest, headers_path string, body_path stri
 		'-X',
 		request.method.str(),
 	]
+	if request.allow_redirect {
+		args << '-L'
+		args << '--max-redirs'
+		args << '16'
+	}
 	if os.getenv('NODE_TLS_REJECT_UNAUTHORIZED') == '0' || os.getenv('VJS_FETCH_INSECURE') == '1' {
 		args << '-k'
 	}
@@ -176,10 +185,10 @@ fn fetch_parse_curl_response(headers_text string, body_text string) !http.Respon
 	}
 	return http.Response{
 		http_version: parts[0].all_after('/')
-		status_code:  parts[1].int()
-		status_msg:   status_msg
-		header:       header
-		body:         body_text
+		status_code: parts[1].int()
+		status_msg: status_msg
+		header: header
+		body: body_text
 	}
 }
 
@@ -320,13 +329,13 @@ fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, res
 		return err
 	}
 	mut task := &FetchCurlTask{
-		process:      process
-		temp_dir:     temp_dir
+		process: process
+		temp_dir: temp_dir
 		headers_path: headers_path
-		body_path:    body_path
-		output_path:  output_path
-		resolve:      resolve.dup_value()
-		reject:       reject.dup_value()
+		body_path: body_path
+		output_path: output_path
+		resolve: resolve.dup_value()
+		reject: reject.dup_value()
 	}
 	cancel := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
 		if task.cancelled || task.cleaned {
@@ -336,7 +345,7 @@ fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, res
 		task.process.terminate(false)
 		fetch_curl_task_settle(ctx, mut task, ctx.js_error(
 			message: 'This operation was aborted'
-			name:    'AbortError'
+			name: 'AbortError'
 		), true)
 		return ctx.js_bool(true)
 	})
@@ -468,7 +477,7 @@ fn fetch_encoding_boot(ctx &Context, boot Value) {
 	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
 }
 
-fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Value) Value {
+fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, this Value, args []Value) Value {
 	ctx := this.ctx
 	noop_cancel := ctx.js_function(fn [ctx] (args []Value) Value {
 		return ctx.js_bool(false)
@@ -486,6 +495,13 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Va
 		return noop_cancel
 	}
 	url := args[0].str()
+	host_policy_allows_url(policy, url) or {
+		error := ctx.js_error(message: err.msg(), name: 'Error')
+		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+		call_result.free()
+		error.free()
+		return noop_cancel
+	}
 	opts := if args.len > 1 { args[1].dup_value() } else { ctx.js_object() }
 	defer {
 		opts.free()
@@ -532,7 +548,9 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Va
 	request_method := http.Method.from(method.str().to_lower()) or { http.Method.get }
 	mut body := ''
 	mut body_is_binary := false
-	if raw_body.instanceof('ArrayBuffer') || fetch_is_typed_array_bool(this, [raw_body]) {
+	if raw_body.instanceof('ArrayBuffer') || fetch_is_typed_array_bool(this, [
+		raw_body,
+	]) {
 		bytes := host_decode_text_bytes(this, raw_body) or {
 			error := ctx.js_error(message: err.msg(), name: 'TypeError')
 			call_result := ctx.call(reject, error) or { ctx.js_undefined() }
@@ -546,16 +564,17 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Va
 		body = raw_body.str()
 	}
 	request := FetchCoreRequest{
-		url:                 url
-		method:              request_method
-		header:              hd
-		body:                body
-		body_is_binary:      body_is_binary
-		boundary:            if boundary.is_undefined() { '' } else { boundary.str() }
-		read_timeout:        fetch_config.read_timeout
-		write_timeout:       fetch_config.write_timeout
-		max_retries:         fetch_config.max_retries
+		url: url
+		method: request_method
+		header: hd
+		body: body
+		body_is_binary: body_is_binary
+		boundary: if boundary.is_undefined() { '' } else { boundary.str() }
+		read_timeout: fetch_config.read_timeout
+		write_timeout: fetch_config.write_timeout
+		max_retries: fetch_config.max_retries
 		curl_proxy_fallback: fetch_config.curl_proxy_fallback
+		allow_redirect: policy.network_hosts.len == 0
 	}
 	if request.curl_proxy_fallback && request.boundary == '' {
 		curl_path := if fetch_config.curl_path != '' {
@@ -590,23 +609,29 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, this Value, args []Va
 	return noop_cancel
 }
 
-fn fetch_boot(ctx &Context, boot Value, config FetchGlobalsConfig) {
+fn fetch_boot(ctx &Context, boot Value, config FetchGlobalsConfig, policy HostPolicy) {
 	state := &FetchCoreConfigState{
 		config: config
+		policy: policy
 	}
 	boot.set('core_fetch', ctx.js_function_this(fn [state] (this Value, args []Value) Value {
-		return fetch_core_with_config(state.config, this, args)
+		return fetch_core_with_config(state.config, state.policy, this, args)
 	}))
 }
 
 // Install the native fetch transport into an existing runtime bootstrap.
 pub fn install_fetch_core_boot(ctx &Context, boot Value, config FetchGlobalsConfig) {
-	fetch_boot(ctx, boot, config)
+	fetch_boot(ctx, boot, config, host_policy_trusted())
 }
 
 pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
+	ctx.install_fetch_globals_policy(config, host_policy_trusted())
+}
+
+// Install fetch with an explicit network capability boundary.
+pub fn (ctx &Context) install_fetch_globals_policy(config FetchGlobalsConfig, policy HostPolicy) {
 	glob, boot := fetch_get_bootstrap(ctx)
-	install_fetch_core_boot(ctx, boot, config)
+	fetch_boot(ctx, boot, config, policy)
 	fetch_util_boot(ctx, boot)
 	fetch_encoding_boot(ctx, boot)
 	ctx.eval_runtime_file('web/js/util.js', type_module) or { panic(err) }

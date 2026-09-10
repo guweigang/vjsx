@@ -7,21 +7,22 @@ fn test_bundle_links_static_modules_and_returns_entry_namespace() {
 	}
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/demo/dep.mjs'
+			name: 'vjsx-bundle/demo/dep.mjs'
 			source: 'export const answer = 40;'
 		},
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/demo/main.mjs'
+			name: 'vjsx-bundle/demo/main.mjs'
 			source: 'import { answer } from "./dep.mjs"; export const result = answer + 2;'
 		},
 	],
-		app_name:        'demo'
-		entry:           'vjsx-bundle/demo/main.mjs'
+		app_name: 'demo'
+		entry: 'vjsx-bundle/demo/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	info := vjsx.bundle_info(bundle) or { panic(err) }
 	assert info.app_name == 'demo'
 	assert info.module_count == 2
+	assert info.runtime_abi == vjsx.artifact_abi
 
 	mut runtime := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{})
 	defer {
@@ -45,12 +46,12 @@ fn test_bundle_rejects_profile_mismatch_before_loading_modules() {
 	}
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/demo/main.mjs'
+			name: 'vjsx-bundle/demo/main.mjs'
 			source: 'export const value = 1;'
 		},
 	],
-		app_name:        'demo'
-		entry:           'vjsx-bundle/demo/main.mjs'
+		app_name: 'demo'
+		entry: 'vjsx-bundle/demo/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut runtime := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{})
@@ -68,12 +69,12 @@ fn test_bundle_module_state_is_initialized_once_and_reused() {
 	mut compiler := vjsx.new_runtime_session()
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/state/main.mjs'
+			name: 'vjsx-bundle/state/main.mjs'
 			source: 'let count = 0; export function next() { return ++count; }'
 		},
 	],
-		app_name:        'state'
-		entry:           'vjsx-bundle/state/main.mjs'
+		app_name: 'state'
+		entry: 'vjsx-bundle/state/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()
@@ -105,12 +106,12 @@ fn test_bundle_rejects_corruption_and_unknown_format() {
 	}
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/check/main.mjs'
+			name: 'vjsx-bundle/check/main.mjs'
 			source: 'export const ok = true;'
 		},
 	],
-		app_name:        'check'
-		entry:           'vjsx-bundle/check/main.mjs'
+		app_name: 'check'
+		entry: 'vjsx-bundle/check/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 

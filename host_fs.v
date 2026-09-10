@@ -4,6 +4,7 @@ import os
 import time
 
 #include <fcntl.h>
+
 $if windows {
 	#include <io.h>
 } $else {
@@ -11,6 +12,7 @@ $if windows {
 }
 
 fn C._write(int, voidptr, int) int
+
 fn C._close(int) int
 
 fn candidate_paths(path string, roots []string) []string {
@@ -26,6 +28,47 @@ fn candidate_paths(path string, roots []string) []string {
 	return candidates
 }
 
+fn fs_path_within_roots(path string, roots []string) bool {
+	if roots.len == 0 {
+		return true
+	}
+	resolved := fs_canonical_policy_path(path)
+	normalized := resolved.replace('\\', '/').trim_right('/')
+	for root in roots {
+		root_path := if os.exists(root) { os.real_path(root) } else { os.abs_path(root) }
+		normalized_root := root_path.replace('\\', '/').trim_right('/')
+		if normalized == normalized_root || normalized.starts_with(normalized_root + '/') {
+			return true
+		}
+	}
+	return false
+}
+
+fn fs_canonical_policy_path(path string) string {
+	mut cursor := os.abs_path(path)
+	mut missing := []string{}
+	for !os.exists(cursor) {
+		parent := os.dir(cursor)
+		if parent == cursor {
+			break
+		}
+		missing << os.base(cursor)
+		cursor = parent
+	}
+	mut resolved := if os.exists(cursor) { os.real_path(cursor) } else { cursor }
+	for i := missing.len - 1; i >= 0; i-- {
+		resolved = os.join_path(resolved, missing[i])
+	}
+	return resolved
+}
+
+fn readable_candidate_paths(path string, roots []string, policy HostPolicy) []string {
+	if !policy.allow_fs_read {
+		return []string{}
+	}
+	return candidate_paths(path, roots).filter(fs_path_within_roots(it, policy.fs_read_roots))
+}
+
 fn write_target_path(path string, roots []string) string {
 	if os.is_abs_path(path) {
 		return path
@@ -36,8 +79,25 @@ fn write_target_path(path string, roots []string) string {
 	return path
 }
 
-fn resolve_existing_path(path string, roots []string) !string {
-	for candidate in candidate_paths(path, roots) {
+fn writable_target_path(path string, roots []string, policy HostPolicy) !string {
+	if !policy.allow_fs_write {
+		return error('filesystem write access is disabled')
+	}
+	mut target := write_target_path(path, roots)
+	if !os.is_abs_path(path) && roots.len == 0 && policy.fs_write_roots.len > 0 {
+		target = os.join_path(policy.fs_write_roots[0], path)
+	}
+	if !fs_path_within_roots(target, policy.fs_write_roots) {
+		return error('filesystem write path is not allowed: ${path}')
+	}
+	return target
+}
+
+fn resolve_existing_path(path string, roots []string, policy HostPolicy) !string {
+	if !policy.allow_fs_read {
+		return error('filesystem read access is disabled')
+	}
+	for candidate in readable_candidate_paths(path, roots, policy) {
 		if os.exists(candidate) {
 			return candidate
 		}
@@ -144,14 +204,18 @@ fn fs_write_options(value Value) !(string, int) {
 	return flag, mode_value.to_int()
 }
 
-fn temp_prefix_target(prefix string, roots []string) string {
+fn temp_prefix_target(prefix string, roots []string, policy HostPolicy) !string {
 	if os.is_abs_path(prefix) {
 		return prefix
 	}
 	if prefix.contains(os.path_separator.str()) || prefix.contains('/') || prefix.contains('\\') {
-		return write_target_path(prefix, roots)
+		return writable_target_path(prefix, roots, policy)
 	}
-	return os.join_path(os.temp_dir(), prefix)
+	target := os.join_path(os.temp_dir(), prefix)
+	if !policy.allow_fs_write || !fs_path_within_roots(target, policy.fs_write_roots) {
+		return error('filesystem write path is not allowed: ${prefix}')
+	}
+	return target
 }
 
 fn stat_object(ctx &Context, st os.Stat, path string) Value {
@@ -227,11 +291,7 @@ fn fs_write_bytes(path string, bytes []u8, mode int, exclusive bool) ! {
 	mut offset := 0
 	for offset < bytes.len {
 		data_ptr := unsafe { &u8(bytes.data) + offset }
-		written := $if windows {
-			C._write(fd, data_ptr, bytes.len - offset)
-		} $else {
-			int(C.write(fd, data_ptr, usize(bytes.len - offset)))
-		}
+		written := $if windows { C._write(fd, data_ptr, bytes.len - offset) } $else { int(C.write(fd, data_ptr, usize(bytes.len - offset))) }
 		if written <= 0 {
 			return error('failed to write file: ${path}')
 		}
@@ -308,7 +368,7 @@ fn fs_emit_finish(ctx &Context, stream Value) ! {
 }
 
 fn fs_create_write_stream(ctx &Context, roots []string, path string) !Value {
-	target := write_target_path(path, roots)
+	target := writable_target_path(path, roots, ctx.capability_policy())!
 	os.write_file(target, '')!
 	stream := ctx.js_object()
 	finish_listeners := ctx.js_array()
@@ -316,7 +376,7 @@ fn fs_create_write_stream(ctx &Context, roots []string, path string) !Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		if args[0].str() != 'finish' {
@@ -373,6 +433,12 @@ fn fs_create_write_stream(ctx &Context, roots []string, path string) !Value {
 // Install small `fs`/`node:fs` host modules with file and directory helpers,
 // plus the promise-only `fs/promises` aliases used by modern Node packages.
 pub fn (ctx &Context) install_fs_module(roots []string) {
+	ctx.install_fs_module_policy(roots, host_policy_trusted())
+}
+
+// Install filesystem builtins with explicit read/write grants and roots.
+pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy) {
+	ctx.set_host_policy(policy)
 	mut fs := ctx.js_module('fs')
 	read_file := ctx.js_function(fn [ctx, roots] (args []Value) Value {
 		mut read_err := ctx.js_undefined()
@@ -384,7 +450,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		candidates := candidate_paths(path, roots)
+		candidates := readable_candidate_paths(path, roots, ctx.capability_policy())
 		for candidate in candidates {
 			if os.exists(candidate) {
 				bytes := os.read_bytes(candidate) or {
@@ -436,7 +502,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 				[]u8{}
 			}
 		}
-		target := write_target_path(path, roots)
+		target := writable_target_path(path, roots, ctx.capability_policy()) or {
+			write_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		flag, mode := if args.len > 2 {
 			fs_write_options(args[2]) or {
 				write_err = ctx.js_error(message: err.msg(), name: 'TypeError')
@@ -468,7 +540,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		for candidate in candidate_paths(path, roots) {
+		for candidate in readable_candidate_paths(path, roots, ctx.capability_policy()) {
 			if os.exists(candidate) {
 				return promise.resolve(true)
 			}
@@ -487,7 +559,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		target := write_target_path(path, roots)
+		target := writable_target_path(path, roots, ctx.capability_policy()) or {
+			mkdir_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		os.mkdir_all(target) or {
 			mkdir_err = ctx.js_error(message: err.msg())
 			unsafe {
@@ -521,7 +599,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		candidates := candidate_paths(path, roots)
+		candidates := readable_candidate_paths(path, roots, ctx.capability_policy())
 		for candidate in candidates {
 			if os.exists(candidate) && os.is_dir(candidate) {
 				entries := os.ls(candidate) or {
@@ -553,7 +631,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		}
 		path := args[0].str()
 		recursive := if args.len > 1 { args[1].to_bool() } else { false }
-		target := write_target_path(path, roots)
+		target := writable_target_path(path, roots, ctx.capability_policy()) or {
+			rm_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		if recursive {
 			os.rmdir_all(target) or {
 				rm_err = ctx.js_error(message: err.msg())
@@ -583,7 +667,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		for candidate in candidate_paths(path, roots) {
+		for candidate in readable_candidate_paths(path, roots, ctx.capability_policy()) {
 			if os.exists(candidate) {
 				st := os.stat(candidate) or {
 					stat_err = ctx.js_error(message: err.msg())
@@ -604,7 +688,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return promise.reject(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
-		for candidate in candidate_paths(args[0].str(), roots) {
+		for candidate in readable_candidate_paths(args[0].str(), roots, ctx.capability_policy()) {
 			st := os.lstat(candidate) or { continue }
 			return promise.resolve(stat_object(ctx, st, candidate))
 		}
@@ -615,10 +699,12 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			return promise.reject(ctx.js_error(
 				message: 'path and mode are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
-		target := write_target_path(args[0].str(), roots)
+		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
+			return promise.reject(ctx.js_error(message: err.msg()))
+		}
 		mode := if args[1].is_number() { args[1].to_int() } else { args[1].str().int() }
 		os.chmod(target, mode) or { return promise.reject(ctx.js_error(message: err.msg())) }
 		return promise.resolve(ctx.js_undefined())
@@ -629,7 +715,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			copy_err = ctx.js_error(
 				message: 'source and destination are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			)
 			unsafe {
 				goto reject
@@ -638,7 +724,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		src := args[0].str()
 		dst := args[1].str()
 		mut src_target := ''
-		for candidate in candidate_paths(src, roots) {
+		for candidate in readable_candidate_paths(src, roots, ctx.capability_policy()) {
 			if os.exists(candidate) {
 				src_target = candidate
 				break
@@ -650,7 +736,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 				goto reject
 			}
 		}
-		dst_target := write_target_path(dst, roots)
+		dst_target := writable_target_path(dst, roots, ctx.capability_policy()) or {
+			copy_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		os.cp(src_target, dst_target) or {
 			copy_err = ctx.js_error(message: err.msg())
 			unsafe {
@@ -665,7 +757,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
-		target := resolve_existing_path(args[0].str(), roots) or {
+		target := resolve_existing_path(args[0].str(), roots, ctx.capability_policy()) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'Error'))
 		}
 		bytes := os.read_bytes(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
@@ -685,10 +777,12 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'path and data are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
-		target := write_target_path(args[0].str(), roots)
+		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		data := if args[1].is_string() {
 			args[1].str().bytes()
 		} else {
@@ -712,7 +806,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return ctx.js_bool(false)
 		}
-		for candidate in candidate_paths(args[0].str(), roots) {
+		for candidate in readable_candidate_paths(args[0].str(), roots, ctx.capability_policy()) {
 			if os.exists(candidate) {
 				return ctx.js_bool(true)
 			}
@@ -730,7 +824,9 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		} else {
 			false
 		}
-		target := write_target_path(args[0].str(), roots)
+		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		if recursive {
 			os.mkdir_all(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
 		} else {
@@ -742,7 +838,9 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'prefix is required', name: 'TypeError'))
 		}
-		base_prefix := temp_prefix_target(args[0].str(), roots)
+		base_prefix := temp_prefix_target(args[0].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		target := '${base_prefix}${os.getpid()}-${time.now().unix_micro()}'
 		os.mkdir_all(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
 		return ctx.js_string(target)
@@ -751,7 +849,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
-		target := resolve_existing_path(args[0].str(), roots) or {
+		target := resolve_existing_path(args[0].str(), roots, ctx.capability_policy()) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'Error'))
 		}
 		entries := os.ls(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
@@ -779,7 +877,9 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		} else {
 			false
 		}
-		target := write_target_path(args[0].str(), roots)
+		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		if recursive {
 			os.rmdir_all(target) or {
 				if force && !os.exists(target) {
@@ -801,7 +901,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
-		target := resolve_existing_path(args[0].str(), roots) or {
+		target := resolve_existing_path(args[0].str(), roots, ctx.capability_policy()) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'Error'))
 		}
 		st := os.stat(target) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
@@ -811,13 +911,15 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'source and destination are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
-		src := resolve_existing_path(args[0].str(), roots) or {
+		src := resolve_existing_path(args[0].str(), roots, ctx.capability_policy()) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'Error'))
 		}
-		dst := write_target_path(args[1].str(), roots)
+		dst := writable_target_path(args[1].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		os.cp(src, dst) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
 		return ctx.js_undefined()
 	})
@@ -825,10 +927,12 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'path and mode are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
-		target := write_target_path(args[0].str(), roots)
+		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
 		mode := if args[1].is_number() { args[1].to_int() } else { args[1].str().int() }
 		os.chmod(target, mode) or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
 		return ctx.js_undefined()
@@ -848,7 +952,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		if args.len < 2 {
 			rename_err = ctx.js_error(
 				message: 'source and destination are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			)
 			unsafe {
 				goto reject
@@ -857,7 +961,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 		src := args[0].str()
 		dst := args[1].str()
 		mut src_target := ''
-		for candidate in candidate_paths(src, roots) {
+		for candidate in readable_candidate_paths(src, roots, ctx.capability_policy()) {
 			if os.exists(candidate) {
 				src_target = candidate
 				break
@@ -869,7 +973,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 				goto reject
 			}
 		}
-		dst_target := write_target_path(dst, roots)
+		dst_target := writable_target_path(dst, roots, ctx.capability_policy()) or {
+			rename_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		os.mv(src_target, dst_target) or {
 			rename_err = ctx.js_error(message: err.msg())
 			unsafe {
@@ -890,7 +1000,7 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		candidates := candidate_paths(path, roots)
+		candidates := readable_candidate_paths(path, roots, ctx.capability_policy())
 		for candidate in candidates {
 			if os.exists(candidate) {
 				text := os.read_file(candidate) or {
@@ -917,7 +1027,13 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 			}
 		}
 		path := args[0].str()
-		target := write_target_path(path, roots)
+		target := writable_target_path(path, roots, ctx.capability_policy()) or {
+			write_err = ctx.js_error(message: err.msg())
+			unsafe {
+				goto reject
+			}
+			''
+		}
 		data := args[1].json_stringify()
 		os.write_file(target, data) or {
 			write_err = ctx.js_error(message: err.msg())
@@ -981,18 +1097,18 @@ pub fn (ctx &Context) install_fs_module(roots []string) {
 	fs.export_default(default_obj)
 	fs.create()
 	mut node_fs := ctx.js_module('node:fs')
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
-		'chmod', 'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync',
-		'mkdtempSync', 'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync',
-		'createWriteStream', 'rename', 'readJson', 'writeJson'] {
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat', 'chmod',
+		'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync',
+		'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream',
+		'rename', 'readJson', 'writeJson'] {
 		node_fs.export(name, fs.get(name))
 	}
 	node_fs.export_default(default_obj)
 	node_fs.create()
 
 	mut promises_obj := ctx.js_object()
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
-		'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat', 'chmod',
+		'copyFile', 'rename', 'readJson', 'writeJson'] {
 		promises_obj.set(name, fs.get(name))
 	}
 	for module_name in ['fs/promises', 'node:fs/promises'] {

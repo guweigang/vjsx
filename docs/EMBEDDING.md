@@ -35,17 +35,7 @@ hook names, see:
 
 ## Recommended Layers
 
-### 1. `vjsx.RuntimeSession`
-
-Use this when you need:
-
-- explicit runtime/context ownership
-- module loading
-- direct export calls
-
-This is the core lifecycle object.
-
-### 2. `runtimejs.ExtensionSession`
+### 1. `runtimejs.ExtensionSession`
 
 Use this as the default embedder entrypoint.
 
@@ -57,7 +47,7 @@ It combines:
 
 For most hosts, this should be the primary abstraction.
 
-### 3. `runtimejs.ExtensionHandle`
+### 2. `runtimejs.ExtensionHandle`
 
 Use this when one JS/TS file should behave like one extension instance.
 
@@ -69,13 +59,18 @@ It combines:
 
 If your host has a plugin model, this is usually the object you want to keep.
 
+### 3. `vjsx.RuntimeSession` (lower level)
+
+Use this infrastructure directly only when you need custom runtime/context
+ownership or module composition beyond the extension facade.
+
 ## Recommended Stopping Point
 
 If you want to avoid over-design, stop here:
 
-- `RuntimeSession` for lifecycle
 - `ExtensionSession` for embedding
 - `ExtensionHandle` for loaded extensions
+- `RuntimeSession` only for lower-level control
 
 That gives you a clear mental model without turning `vjsx` into a full plugin
 platform framework.
@@ -435,12 +430,19 @@ the host process.
 The policy presets deliberately separate secure policy construction from
 backwards compatibility:
 
-- `HostPolicy{}` and `host_policy_safe()` deny `process.env` writes and shell
-  execution.
-- `host_policy_trusted()` enables both capabilities.
+- `HostPolicy{}` and `host_policy_safe()` deny environment access,
+  filesystem/network access, subprocesses, shell execution, process directory
+  changes, and process exit.
+- `host_policy_trusted()` explicitly enables the historical full surface.
 - `NodeRuntimeConfig{}`, `NodeCompatConfig{}`, and the legacy `HostConfig{}`
   retain the trusted policy by default so existing embedders keep their prior
   behavior. New extension hosts should override that default explicitly.
+
+`ScriptRuntimeConfig{}` also carries the same policy. Its legacy
+`allow_env_write` field remains as a one-way restriction for compatibility.
+Partial `HostPolicy{...}` literals are deny-by-default; derive from
+`host_policy_trusted()` when migrating a trusted host that only removes one
+grant.
 
 The `node`/`script` runtime profile identifies the installed JavaScript API and
 bytecode compatibility contract; it is not a security boundary. `HostPolicy`

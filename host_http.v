@@ -17,7 +17,7 @@ fn http_request_object(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		if args[0].str() != 'error' {
@@ -48,7 +48,7 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 		if args.len == 0 || !args[0].is_object() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		dest := args[0]
@@ -57,7 +57,7 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 			path_value.free()
 			return ctx.js_throw(ctx.js_error(
 				message: 'unsupported write stream destination'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		target := path_value.str()
@@ -83,17 +83,21 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 	return obj
 }
 
-fn install_http_like_module(ctx &Context, name string) {
+fn install_http_like_module(ctx &Context, name string, policy HostPolicy) {
 	mut http_mod := ctx.js_module(name)
-	get_fn := ctx.js_function(fn [ctx] (args []Value) Value {
+	get_fn := ctx.js_function(fn [ctx, policy] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'url is required', name: 'TypeError'))
 		}
 		url := args[0].str()
 		request := http_request_object(ctx)
+		host_policy_allows_url(policy, url) or {
+			request.set('_vjsxPendingError', ctx.js_error(message: err.msg()))
+			return request
+		}
 		response := http.fetch(
-			method:         .get
-			url:            url
+			method: .get
+			url: url
 			allow_redirect: false
 		) or {
 			request.set('_vjsxPendingError', ctx.js_error(message: err.msg()))
@@ -121,9 +125,17 @@ fn install_http_like_module(ctx &Context, name string) {
 }
 
 pub fn (ctx &Context) install_http_module() {
-	install_http_like_module(ctx, 'http')
+	install_http_like_module(ctx, 'http', host_policy_trusted())
 }
 
 pub fn (ctx &Context) install_https_module() {
-	install_http_like_module(ctx, 'https')
+	install_http_like_module(ctx, 'https', host_policy_trusted())
+}
+
+pub fn (ctx &Context) install_http_module_policy(policy HostPolicy) {
+	install_http_like_module(ctx, 'http', policy)
+}
+
+pub fn (ctx &Context) install_https_module_policy(policy HostPolicy) {
+	install_http_like_module(ctx, 'https', policy)
 }

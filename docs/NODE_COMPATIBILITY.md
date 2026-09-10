@@ -83,7 +83,14 @@ configured roots. Absolute paths are used as-is, and reads try a relative path
 against the current working directory before configured roots. Consequently,
 `fs_roots` is a resolution mechanism, not a filesystem sandbox. Do not expose
 the filesystem modules to untrusted code without an additional host-level
-policy boundary.
+policy boundary. For access boundaries, enable `HostPolicy.allow_fs_read` and/or
+`allow_fs_write` and set `fs_read_roots`/`fs_write_roots`. See `SECURITY.md` for
+canonicalization, symlink-race, and OS-sandbox limitations.
+
+The direct `sqlite` compatibility module is omitted when bounded filesystem
+roots are active because the driver does not enforce per-operation policy. The
+same rule applies to `mysql` when a network hostname allowlist is active; use a
+host-owned database API for bounded database access.
 
 ## Raw DEFLATE API
 

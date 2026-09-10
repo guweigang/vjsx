@@ -979,29 +979,32 @@ fn test_extension_session_applies_safe_node_host_policy() {
 		extension.close()
 	}
 	value := extension.context().eval('
-		import { execSync } from "child_process";
 		try {
 			process.env["${key}"] = "blocked";
 		} catch (_err) {}
 		const envResult = String(process.env["${key}"] === undefined);
-		let shellResult = "ran";
-		try {
-			execSync("printf should-not-run");
-		} catch (err) {
-			shellResult = String(err.message);
-		}
+		let chdirResult = "allowed";
+		let exitResult = "allowed";
+		try { process.chdir("/"); } catch (err) { chdirResult = String(err.message); }
+		try { process.exit(0); } catch (err) { exitResult = String(err.message); }
 		globalThis.__extensionPolicy = [
 			envResult,
-			shellResult
+			typeof process.env.PATH,
+			chdirResult,
+			exitResult
 		].join("|");
-	', vjsx.type_module) or { panic(err) }
+	') or { panic(err) }
 	value.free()
 	extension.context().end()
 	result := extension.context().eval('globalThis.__extensionPolicy') or { panic(err) }
 	defer {
 		result.free()
 	}
-	assert result.to_string().starts_with('true|shell execution is disabled')
+	assert result.to_string() == 'true|undefined|process.chdir is disabled|process.exit is disabled'
+	assert !extension.context().has_runtime_module('child_process')
+	assert !extension.context().has_runtime_module('fs')
+	assert !extension.context().has_runtime_module('http')
+	assert extension.context().capability_policy() == vjsx.host_policy_safe()
 }
 
 fn test_extension_session_bound_plugin_lifecycle() {
