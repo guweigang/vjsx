@@ -39,7 +39,7 @@ fn runtime_session_bridge_missing_load_module(_ctx &Context, _script_path string
 }
 
 fn runtime_session_resolve_path(path string) !string {
-	resolved := if os.is_abs_path(path) { path } else { os.real_path(path) }
+	resolved := os.real_path(path)
 	if !os.exists(resolved) {
 		return error('script not found: ${resolved}')
 	}

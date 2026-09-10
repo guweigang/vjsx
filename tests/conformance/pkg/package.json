@@ -1,0 +1,8 @@
+{
+  "name": "vjsx-conformance-pkg",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs",
+    "./feature": "./feature.mjs"
+  }
+}
