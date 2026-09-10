@@ -52,7 +52,7 @@ mut:
 
 pub fn new_session_lane(session vjsx.RuntimeSession, config SessionLaneConfig) &SessionLane {
 	return &SessionLane{
-		config:  config
+		config: config
 		session: session
 	}
 }
@@ -72,8 +72,8 @@ fn (lane &SessionLane) reserve_waiter() ! {
 		state.guard.unlock()
 	}
 	decision := decide_session_lane_admission(SessionLaneLoad{
-		queued:   state.queued
-		running:  state.running
+		queued: state.queued
+		running: state.running
 		draining: state.draining
 	}, lane.config)
 	match decision {
@@ -122,9 +122,7 @@ fn (lane &SessionLane) acquire_turn() !i64 {
 			state.guard.unlock()
 			return time.ticks() - started
 		}
-		if session_lane_admission_timed_out(u64(time.ticks() - started),
-			lane.config.admission_wait_ms)
-		{
+		if session_lane_admission_timed_out(u64(time.ticks() - started), lane.config.admission_wait_ms) {
 			lane.cancel_waiter(true)
 			return error('session lane admission timed out')
 		}
@@ -148,8 +146,8 @@ pub fn (lane &SessionLane) run_turn(options vjsx.RuntimeSessionTurnOptions, acti
 	queue_wait_ms := lane.acquire_turn()!
 	completed_before := lane.session.lifecycle_snapshot().completed_turns
 	result := lane.session.run_turn(vjsx.RuntimeSessionTurnOptions{
-		kind:          options.kind
-		timeout_ms:    options.timeout_ms
+		kind: options.kind
+		timeout_ms: options.timeout_ms
 		queue_wait_ms: queue_wait_ms
 	}, action) or {
 		completed := lane.session.lifecycle_snapshot().completed_turns > completed_before
@@ -173,14 +171,14 @@ pub fn (lane &SessionLane) snapshot() SessionLaneSnapshot {
 	mut state := lane.state
 	state.guard.lock()
 	snapshot := SessionLaneSnapshot{
-		queued:            state.queued
-		running:           state.running
-		draining:          state.draining
-		completed:         state.completed
-		rejected_full:     state.rejected_full
-		rejected_timeout:  state.rejected_timeout
+		queued: state.queued
+		running: state.running
+		draining: state.draining
+		completed: state.completed
+		rejected_full: state.rejected_full
+		rejected_timeout: state.rejected_timeout
 		rejected_draining: state.rejected_draining
-		session:           lane.session.lifecycle_snapshot()
+		session: lane.session.lifecycle_snapshot()
 	}
 	state.guard.unlock()
 	return snapshot
@@ -196,6 +194,37 @@ pub fn (lane &SessionLane) debug_snapshot() vjsx.RuntimeSessionDebugSnapshot {
 
 pub fn (lane &SessionLane) observations() []vjsx.RuntimeSessionObservation {
 	return lane.session.observations()
+}
+
+// Start a Promise-backed host operation while holding the session's ownership
+// gate. Give worker threads only operation.completion and operation.cancel.
+pub fn (mut lane SessionLane) start_host_async_operation(options vjsx.RuntimeHostAsyncOptions) !vjsx.RuntimeHostAsyncOperation {
+	queue_wait_ms := lane.acquire_turn()!
+	operation := lane.session.start_host_async_operation(options) or {
+		lane.release_turn(false)
+		return err
+	}
+	lane.release_turn(true)
+	_ = queue_wait_ms
+	return operation
+}
+
+// Deliver queued host completions and due runtime-owned timers on the lane.
+pub fn (mut lane SessionLane) deliver_wakeup(generation u64) !int {
+	lane.state.turn_gate.lock()
+	delivered := lane.session.deliver_wakeup(generation) or {
+		lane.state.turn_gate.unlock()
+		return err
+	}
+	lane.state.turn_gate.unlock()
+	return delivered
+}
+
+pub fn (mut lane SessionLane) cancel_host_async_operation(id u64, reason string) bool {
+	lane.state.turn_gate.lock()
+	cancelled := lane.session.cancel_host_async_operation(id, reason)
+	lane.state.turn_gate.unlock()
+	return cancelled
 }
 
 // Drain and close the owned session. This waits for the current turn gate.

@@ -3,6 +3,15 @@ import vjsx
 import runtimejs
 
 const runtime_session_test_wake_log_env = 'VJSX_RUNTIME_SESSION_TEST_WAKE_LOG'
+const runtime_session_test_now_env = 'VJSX_RUNTIME_SESSION_TEST_NOW'
+
+fn runtime_session_test_now_from_env() i64 {
+	return os.getenv(runtime_session_test_now_env).i64()
+}
+
+fn runtime_session_test_complete_async(port vjsx.RuntimeHostAsyncCompletionPort, done chan bool) {
+	done <- port.resolve_text('worker-result')
+}
 
 fn runtime_session_test_reset_wakeup_hooks(path string) {
 	os.setenv(runtime_session_test_wake_log_env, path, true)
@@ -47,6 +56,189 @@ fn runtime_session_test_record_wake(req vjsx.RuntimeSessionWakeRequest) {
 
 fn runtime_session_test_record_wake_cancel(req vjsx.RuntimeSessionWakeCancelRequest) {
 	runtime_session_test_append_wakeup_log('cancel:${req.session_id}:${req.generation}:${req.reason}')
+}
+
+fn runtime_session_test_record_async_ready(req vjsx.RuntimeHostAsyncReadyRequest) {
+	runtime_session_test_append_wakeup_log('async:${req.session_id}:${req.operation_id}')
+}
+
+fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
+	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_host_async_ready.log')
+	runtime_session_test_reset_wakeup_hooks(log_path)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_wake_log_env)
+		os.rm(log_path) or {}
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		session_id: 'async-session'
+		async_ready_fn: runtime_session_test_record_async_ready
+	})
+	operation := session.start_host_async_operation(kind: 'worker') or { panic(err) }
+	ctx := session.context()
+	global := ctx.js_global()
+	global.set('__host_async_promise', operation.promise)
+	global.free()
+	operation.promise.free()
+	setup := ctx.eval('__host_async_promise.then(value => globalThis.__host_async_result = value)') or {
+		panic(err)
+	}
+	setup.free()
+	done := chan bool{ cap: 1 }
+	worker := spawn runtime_session_test_complete_async(operation.completion, done)
+	assert <-done
+	worker.wait()
+	assert session.pending_host_async_operation_count() == 1
+	before := ctx.js_global('__host_async_result')
+	assert before.is_undefined()
+	before.free()
+	assert runtime_session_test_read_wakeup_log(log_path) == ['async:async-session:1']
+	assert session.drain_host_async_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	result := ctx.js_global('__host_async_result')
+	assert result.to_string() == 'worker-result'
+	result.free()
+	assert session.pending_host_async_operation_count() == 0
+}
+
+fn test_runtime_host_async_cancel_wins_completion_race() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	operation := session.start_host_async_operation(kind: 'cancel-race') or { panic(err) }
+	ctx := session.context()
+	global := ctx.js_global()
+	global.set('__cancel_promise', operation.promise)
+	global.free()
+	operation.promise.free()
+	setup := ctx.eval('__cancel_promise.catch(error => globalThis.__cancel_name = error.name)') or {
+		panic(err)
+	}
+	setup.free()
+	assert session.cancel_host_async_operation(operation.id, 'cancelled by test')
+	assert operation.cancel.is_cancelled()
+	assert operation.completion.resolve_text('too-late') == false
+	assert session.drain_host_async_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	name := ctx.js_global('__cancel_name')
+	assert name.to_string() == 'AbortError'
+	name.free()
+}
+
+fn test_runtime_host_async_abort_signal_propagates_cancellation() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	ctx.install_event_globals()
+	ctx.install_abort_globals()
+	controller_setup := ctx.eval('globalThis.__async_abort = new AbortController()') or {
+		panic(err)
+	}
+	controller_setup.free()
+	operation := session.start_host_async_operation(kind: 'abort-signal') or { panic(err) }
+	abort_signal := ctx.eval('__async_abort.signal') or { panic(err) }
+	operation.bind_abort_signal(abort_signal) or { panic(err) }
+	abort_signal.free()
+	global := ctx.js_global()
+	global.set('__abort_promise', operation.promise)
+	global.free()
+	operation.promise.free()
+	catch_setup := ctx.eval('__abort_promise.catch(error => globalThis.__abort_message = error.message)') or {
+		panic(err)
+	}
+	catch_setup.free()
+	abort := ctx.eval('__async_abort.abort(new Error("stop-now"))') or { panic(err) }
+	abort.free()
+	assert operation.cancel.is_cancelled()
+	assert operation.completion.resolve_text('late') == false
+	assert session.drain_host_async_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	message := ctx.js_global('__abort_message')
+	assert message.to_string() == 'stop-now'
+	message.free()
+}
+
+fn test_runtime_host_async_timeout_and_close_cancel_tokens() {
+	os.setenv(runtime_session_test_now_env, '1000', true)
+	mut session := vjsx.new_runtime_session()
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn: runtime_session_test_now_from_env
+	})
+	timed := session.start_host_async_operation(kind: 'timeout', timeout_ms: 10) or {
+		panic(err)
+	}
+	timed.promise.free()
+	os.setenv(runtime_session_test_now_env, '1011', true)
+	assert session.drain_host_async_events() or { panic(err) } == 1
+	assert timed.cancel.is_cancelled()
+	assert timed.cancel.reason() == 'host operation timed out'
+	pending := session.start_host_async_operation(kind: 'close') or { panic(err) }
+	pending.promise.free()
+	session.close()
+	assert pending.cancel.is_cancelled()
+	assert pending.completion.resolve_text('late') == false
+	os.unsetenv(runtime_session_test_now_env)
+}
+
+fn test_runtime_host_async_completion_queued_before_close_wins() {
+	mut session := vjsx.new_runtime_session()
+	operation := session.start_host_async_operation(kind: 'complete-before-close') or { panic(err) }
+	operation.promise.free()
+	assert operation.completion.resolve_text('finished')
+	session.close()
+	assert operation.cancel.is_cancelled() == false
+	assert operation.completion.reject('late') == false
+}
+
+fn test_runtime_owned_timer_fires_from_host_wakeup() {
+	os.setenv(runtime_session_test_now_env, '2000', true)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		os.unsetenv(runtime_session_test_now_env)
+		session.close()
+	}
+	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
+		now_fn: runtime_session_test_now_from_env
+		runtime_owned_timers: true
+		session_id: 'owned-timer'
+	})
+	ctx := session.context()
+	ctx.install_timer_globals()
+	setup := ctx.eval('globalThis.__owned_timer = "pending"; setTimeout(() => __owned_timer = "done", 20)') or {
+		panic(err)
+	}
+	setup.free()
+	snapshot := session.debug_snapshot()
+	assert snapshot.runtime_owned_timer_count == 1
+	assert snapshot.next_wakeup_at_ms == 2020
+	os.setenv(runtime_session_test_now_env, '2020', true)
+	assert session.deliver_wakeup(snapshot.wakeup_generation) or { panic(err) } == 1
+	result := ctx.js_global('__owned_timer')
+	assert result.to_string() == 'done'
+	result.free()
+	assert session.debug_snapshot().runtime_owned_timer_count == 0
+}
+
+fn test_runtime_host_stream_mailbox_applies_bounded_backpressure() {
+	mailbox := vjsx.new_runtime_host_stream_mailbox(2)
+	assert mailbox.try_push('one'.bytes())
+	assert mailbox.try_push('two'.bytes())
+	assert mailbox.try_push('three'.bytes()) == false
+	assert mailbox.pending() == 2
+	first := mailbox.drain(1)
+	assert first.len == 1
+	assert first[0].bytes.bytestr() == 'one'
+	assert mailbox.try_push('three'.bytes())
+	rest := mailbox.drain(0)
+	assert rest.len == 2
+	assert rest[0].bytes.bytestr() == 'two'
+	assert rest[1].bytes.bytestr() == 'three'
+	mailbox.close()
+	assert mailbox.try_push('closed'.bytes()) == false
 }
 
 fn runtime_session_test_record_diagnostic(diagnostic vjsx.RuntimeSessionDiagnostic) {

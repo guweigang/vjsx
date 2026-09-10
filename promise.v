@@ -13,14 +13,42 @@ pub enum JSPromiseStateEnum {
 }
 
 fn C.JS_NewPromiseCapability(&C.JSContext, &C.JSValue) C.JSValue
+
 fn C.JS_SetHostPromiseRejectionTracker(&C.JSRuntime, &JSHostPromiseRejectionTracker, voidptr)
+
 fn C.js_std_promise_rejection_tracker(&C.JSContext, JSValueConst, JSValueConst, bool, voidptr)
+
 fn C.JS_PromiseState(&C.JSContext, C.JSValue) JSPromiseStateEnum
+
 fn C.JS_PromiseResult(&C.JSContext, C.JSValue) C.JSValue
 
 // Promise structure.
 pub struct Promise {
 	ctx Context
+}
+
+// PromiseCapability is the low-level host-facing form of a JS Promise. All
+// three values belong to the caller and must only be used on the Context's
+// owning thread. RuntimeSession's async bridge owns and releases capabilities
+// created for host operations.
+pub struct PromiseCapability {
+pub:
+	promise Value
+	resolve Value
+	reject  Value
+}
+
+// Create a Promise together with its resolve/reject functions. This is useful
+// for long-lived host operations whose completion is delivered later on the
+// Context's owning thread.
+pub fn (ctx &Context) js_promise_capability() PromiseCapability {
+	resolving_funcs := [2]C.JSValue{}
+	promise := ctx.c_val(C.JS_NewPromiseCapability(ctx.ref, &resolving_funcs[0]))
+	return PromiseCapability{
+		promise: promise
+		resolve: ctx.c_val(resolving_funcs[0])
+		reject: ctx.c_val(resolving_funcs[1])
+	}
 }
 
 @[manualfree]
