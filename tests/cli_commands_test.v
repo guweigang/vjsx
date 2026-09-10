@@ -1,5 +1,38 @@
+import json2
 import os
 import tests.cli_test_support
+
+struct CliCheckDiagnosticFixture {
+	importer  string
+	specifier string
+	phase     string
+	reason    string
+}
+
+struct CliCheckResultFixture {
+	ok         bool
+	command    string
+	entry      string
+	runtime    string
+	diagnostic CliCheckDiagnosticFixture
+}
+
+struct CliGraphFixture {
+	entry     string
+	cache_key string
+	nodes     []CliGraphNodeFixture
+}
+
+struct CliGraphNodeFixture {
+	path    string
+	kind    string
+	imports []CliGraphEdgeFixture
+}
+
+struct CliGraphEdgeFixture {
+	specifier string
+	phase     string
+}
 
 fn test_cli_help_and_version_commands() {
 	version_output := os.execute('${cli_test_support.command(false)} --version')
@@ -25,6 +58,49 @@ fn test_cli_help_and_version_commands() {
 	assert help_output.output.contains('Runtime profiles:')
 }
 
+fn test_cli_check_json_is_clean_and_does_not_execute_user_code() {
+	output := os.execute('${cli_test_support.command(false)} check --json --module ./tests/ts_graph/main.mts')
+	assert output.exit_code == 0
+	assert !output.output.contains('graph ready')
+	result := json2.decode[CliCheckResultFixture](output.output) or { panic(err) }
+	assert result.ok
+	assert result.command == 'check'
+	assert result.runtime == 'node'
+}
+
+fn test_cli_inspect_json_and_resolution_diagnostic() {
+	root := os.join_path(os.temp_dir(), 'vjsx_cli_inspect_${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	entry := os.join_path(root, 'main.mjs')
+	dep := os.join_path(root, 'dep.mjs')
+	os.write_file(entry, 'import { value } from "./dep.mjs"; import("./lazy.mjs"); export { value };') or {
+		panic(err)
+	}
+	os.write_file(dep, 'export const value = 42;') or { panic(err) }
+	os.write_file(os.join_path(root, 'lazy.mjs'), 'export const lazy = true;') or { panic(err) }
+	inspect := os.execute('${cli_test_support.command(false)} inspect --json ${entry}')
+	assert inspect.exit_code == 0
+	graph := json2.decode[CliGraphFixture](inspect.output) or { panic(err) }
+	assert graph.entry == os.real_path(entry)
+	assert graph.cache_key.len == 64
+	assert graph.nodes.len == 3
+	assert graph.nodes.any(it.imports.any(|edge| edge.specifier == './lazy.mjs'))
+
+	os.write_file(entry, 'import "./missing.mjs";') or { panic(err) }
+	failed := os.execute('${cli_test_support.command(false)} check --json --module ${entry}')
+	assert failed.exit_code != 0
+	result := json2.decode[CliCheckResultFixture](failed.output) or { panic(err) }
+	assert !result.ok
+	assert result.diagnostic.importer == os.real_path(entry)
+	assert result.diagnostic.specifier == './missing.mjs'
+	assert result.diagnostic.phase == 'filesystem'
+	assert result.diagnostic.reason.contains('cannot resolve local module')
+}
+
 fn test_cli_bundle_runs_after_project_sources_are_removed() {
 	root := os.join_path(os.temp_dir(), 'vjsx_cli_bundle_${os.getpid()}')
 	artifact := os.join_path(os.temp_dir(), 'vjsx_cli_bundle_${os.getpid()}.vjsx')
@@ -35,13 +111,10 @@ fn test_cli_bundle_runs_after_project_sources_are_removed() {
 		os.rmdir_all(root) or {}
 		os.rm(artifact) or {}
 	}
-	os.write_file(os.join_path(root, 'main.mts'),
-		'import { message } from "./message.ts"; console.log(message);') or { panic(err) }
-	os.write_file(os.join_path(root, 'message.ts'),
-		'export const message: string = "bundle-without-sources:ok";') or { panic(err) }
+	os.write_file(os.join_path(root, 'main.mts'), 'import { message } from "./message.ts"; console.log(message);') or { panic(err) }
+	os.write_file(os.join_path(root, 'message.ts'), 'export const message: string = "bundle-without-sources:ok";') or { panic(err) }
 
-	compile_output := os.execute('${cli_test_support.command(false)} compile --bundle --runtime node ${os.join_path(root,
-		'main.mts')} -o ${artifact}')
+	compile_output := os.execute('${cli_test_support.command(false)} compile --bundle --runtime node ${os.join_path(root, 'main.mts')} -o ${artifact}')
 	assert compile_output.exit_code == 0
 	assert os.is_file(artifact)
 	os.rmdir_all(root) or { panic(err) }
@@ -61,11 +134,9 @@ fn test_cli_build_creates_native_app_runner_with_embedded_bundle() {
 		os.rmdir_all(root) or {}
 		os.rm(app_path) or {}
 	}
-	os.write_file(os.join_path(root, 'main.mts'),
-		'console.log("native:" + process.argv.slice(2).join(","));') or { panic(err) }
+	os.write_file(os.join_path(root, 'main.mts'), 'console.log("native:" + process.argv.slice(2).join(","));') or { panic(err) }
 	cli_test_support.app_runner()
-	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root,
-		'main.mts')} -o ${app_path}')
+	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root, 'main.mts')} -o ${app_path}')
 	assert build_output.exit_code == 0
 	assert os.is_file(app_path)
 	os.rmdir_all(root) or { panic(err) }
@@ -87,8 +158,7 @@ fn test_cli_native_app_runner_preserves_process_exit_code() {
 	}
 	os.write_file(os.join_path(root, 'main.mjs'), 'process.exitCode = 7;') or { panic(err) }
 	cli_test_support.app_runner()
-	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root,
-		'main.mjs')} -o ${app_path}')
+	build_output := os.execute('${cli_test_support.command(false)} build --runtime node ${os.join_path(root, 'main.mjs')} -o ${app_path}')
 	assert build_output.exit_code == 0
 	run_output := os.execute(app_path)
 	assert run_output.exit_code == 7
@@ -134,16 +204,13 @@ fn test_cli_repair_and_remove_package_graph() {
 	}
 	workspace_root := os.join_path(repair_root, 'packages', 'local-package')
 	os.mkdir_all(workspace_root) or { panic(err) }
-	os.write_file(os.join_path(repair_root, 'package.json'),
-		'{"name":"repair-root","version":"1.0.0","workspaces":["packages/*"],"dependencies":{"local-package":"workspace:*"}}') or {
+	os.write_file(os.join_path(repair_root, 'package.json'), '{"name":"repair-root","version":"1.0.0","workspaces":["packages/*"],"dependencies":{"local-package":"workspace:*"}}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(repair_root, 'package-lock.json'),
-		'{"name":"repair-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"repair-root","version":"1.0.0","dependencies":{"local-package":"workspace:*"}},"node_modules/local-package":{"version":"1.0.0","link":true}}}') or {
+	os.write_file(os.join_path(repair_root, 'package-lock.json'), '{"name":"repair-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"repair-root","version":"1.0.0","dependencies":{"local-package":"workspace:*"}},"node_modules/local-package":{"version":"1.0.0","link":true}}}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(workspace_root, 'package.json'),
-		'{"name":"local-package","version":"1.0.0","type":"module","exports":"./index.js"}') or {
+	os.write_file(os.join_path(workspace_root, 'package.json'), '{"name":"local-package","version":"1.0.0","type":"module","exports":"./index.js"}') or {
 		panic(err)
 	}
 	os.write_file(os.join_path(workspace_root, 'index.js'), 'export const value = 42;') or {
@@ -162,15 +229,12 @@ fn test_cli_repair_and_remove_package_graph() {
 	for name in ['a', 'b', 'c'] {
 		package_root := os.join_path(remove_root, 'node_modules', name)
 		os.mkdir_all(package_root) or { panic(err) }
-		os.write_file(os.join_path(package_root, 'package.json'),
-			'{"name":"${name}","version":"1.0.0"}') or { panic(err) }
+		os.write_file(os.join_path(package_root, 'package.json'), '{"name":"${name}","version":"1.0.0"}') or { panic(err) }
 	}
-	os.write_file(os.join_path(remove_root, 'package.json'),
-		'{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}}') or {
+	os.write_file(os.join_path(remove_root, 'package.json'), '{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(remove_root, 'package-lock.json'),
-		'{"name":"remove-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"1.0.0"}},"node_modules/b":{"version":"1.0.0"},"node_modules/c":{"version":"1.0.0"}}}') or {
+	os.write_file(os.join_path(remove_root, 'package-lock.json'), '{"name":"remove-root","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"remove-root","version":"1.0.0","dependencies":{"a":"1.0.0","c":"1.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"1.0.0"}},"node_modules/b":{"version":"1.0.0"},"node_modules/c":{"version":"1.0.0"}}}') or {
 		panic(err)
 	}
 	remove_output := os.execute('cd ${remove_root} && ${cli_test_support.command(false)} remove a')
@@ -205,26 +269,18 @@ fn test_cli_ls_command_prints_dependency_tree() {
 	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'devonly')) or { panic(err) }
 	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'optionalonly')) or { panic(err) }
 	os.mkdir_all(os.join_path(base_dir, 'node_modules', 'peeronly')) or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'package.json'),
-		'{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}}') or {
+	os.write_file(os.join_path(base_dir, 'package.json'), '{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(base_dir, 'package-lock.json'),
-		'{"name":"ls-smoke","version":"1.2.3","lockfileVersion":3,"requires":true,"packages":{"":{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"2.0.0","c":"3.0.0"}},"node_modules/b":{"version":"2.0.0"},"node_modules/c":{"version":"3.0.0"},"node_modules/devonly":{"version":"4.0.0"},"node_modules/optionalonly":{"version":"5.0.0"},"node_modules/peeronly":{"version":"6.0.0"}}}') or {
+	os.write_file(os.join_path(base_dir, 'package-lock.json'), '{"name":"ls-smoke","version":"1.2.3","lockfileVersion":3,"requires":true,"packages":{"":{"name":"ls-smoke","version":"1.2.3","dependencies":{"a":"1.0.0","missing":"^9.0.0"},"devDependencies":{"devonly":"4.0.0"},"optionalDependencies":{"optionalonly":"5.0.0"},"peerDependencies":{"peeronly":"6.0.0"}},"node_modules/a":{"version":"1.0.0","dependencies":{"b":"2.0.0","c":"3.0.0"}},"node_modules/b":{"version":"2.0.0"},"node_modules/c":{"version":"3.0.0"},"node_modules/devonly":{"version":"4.0.0"},"node_modules/optionalonly":{"version":"5.0.0"},"node_modules/peeronly":{"version":"6.0.0"}}}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(base_dir, 'node_modules', 'a', 'package.json'),
-		'{"name":"a","version":"1.0.0"}') or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'node_modules', 'b', 'package.json'),
-		'{"name":"b","version":"2.0.0"}') or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'node_modules', 'c', 'package.json'),
-		'{"name":"c","version":"3.0.0"}') or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'node_modules', 'devonly', 'package.json'),
-		'{"name":"devonly","version":"4.0.0"}') or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'node_modules', 'optionalonly', 'package.json'),
-		'{"name":"optionalonly","version":"5.0.0"}') or { panic(err) }
-	os.write_file(os.join_path(base_dir, 'node_modules', 'peeronly', 'package.json'),
-		'{"name":"peeronly","version":"6.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'a', 'package.json'), '{"name":"a","version":"1.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'b', 'package.json'), '{"name":"b","version":"2.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'c', 'package.json'), '{"name":"c","version":"3.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'devonly', 'package.json'), '{"name":"devonly","version":"4.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'optionalonly', 'package.json'), '{"name":"optionalonly","version":"5.0.0"}') or { panic(err) }
+	os.write_file(os.join_path(base_dir, 'node_modules', 'peeronly', 'package.json'), '{"name":"peeronly","version":"6.0.0"}') or { panic(err) }
 	all_output := os.execute('cd ${base_dir} && ${cli_test_support.command(false)} ls')
 	assert all_output.exit_code == 0
 	assert all_output.output.contains('ls-smoke@1.2.3 ')
