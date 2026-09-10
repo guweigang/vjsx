@@ -11,7 +11,7 @@ Audit baseline: `main` at `6554fa4`, current package version `0.0.8`.
   completion/cancellation/memory pressure loops.
 - Added a curated JS/TS/package/profile corpus and an explicit support matrix.
 - Added reproducible benchmark instructions without fragile CI latency gates.
-- Pinned the V release used by CI, added release binary/version smoke checks,
+- Pinned the V revision used by CI, added release binary/version smoke checks,
   pinned QuickJS to an immutable commit, smoke-tested packaged archives, and
   generated checksums for all release archives.
 - Documented API stability, migration, security boundaries, platform support,
@@ -31,10 +31,6 @@ Audit baseline: `main` at `6554fa4`, current package version `0.0.8`.
    as supported.
 5. The full matrix and benchmark baseline must pass on release infrastructure;
    local macOS evidence alone is insufficient.
-6. V 0.5.2's experimental V3 type checker crashes while compiling the curl
-   cancellation test. CI therefore selects V's bundled `-old-compiler`
-   compatibility path; 1.0 should not depend on that workaround indefinitely.
-
 ## Version recommendation
 
 Do not tag `1.0.0` yet. Continue the `0.x` line until the blockers above are

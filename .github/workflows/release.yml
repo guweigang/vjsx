@@ -103,9 +103,15 @@ jobs:
           $ErrorActionPreference = "Stop"
           $installRoot = Join-Path $env:RUNNER_TEMP "vlang"
           $vVersion = (Get-Content .v-version -Raw).Trim()
-          git clone --depth 1 --branch $vVersion https://github.com/vlang/v.git $installRoot
+          git init $installRoot
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location $installRoot
+          git remote add origin https://github.com/vlang/v.git
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
+          git fetch --depth 1 origin $vVersion
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
+          git checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
           cmd /c makev.bat -msvc
           $vBuildExitCode = $LASTEXITCODE
           Pop-Location

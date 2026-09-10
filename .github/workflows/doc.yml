@@ -7,13 +7,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout ${{ github.event.repository.name }}
+        uses: actions/checkout@v4
+
       - name: Setup V
         uses: vlang/setup-v@v1.7
         with:
           version-file: .v-version
-
-      - name: Checkout ${{ github.event.repository.name }}
-        uses: actions/checkout@v4
 
       - name: Gen Docs
         run: v doc -f html -m -readme .
