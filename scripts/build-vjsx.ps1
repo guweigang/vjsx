@@ -93,6 +93,10 @@ function Test-VDefineFlag {
   return $false
 }
 
+if (!(Test-VDefineFlag -Flags $flagList -Name "use_openssl")) {
+  $flagList += @("-d", "use_openssl")
+}
+
 function Resolve-QuickjsLib {
   param(
     [string]$SourcePath

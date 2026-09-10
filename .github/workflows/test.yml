@@ -22,18 +22,28 @@ jobs:
           - os: windows-latest
             archive_path: libs/qjs_win_x64.a
     steps:
+      - name: Checkout ${{ github.event.repository.name }}
+        uses: actions/checkout@v4
+
       - name: Setup V
         uses: vlang/setup-v@v1.7
         with:
           version-file: .v-version
 
-      - name: Checkout ${{ github.event.repository.name }}
-        uses: actions/checkout@v4
-
       - name: Prepare Windows x64
         if: matrix.os == 'windows-latest'
         shell: powershell
-        run: '"C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+        run: |
+          & C:\msys64\usr\bin\bash.exe -lc "pacman --noconfirm -S --needed mingw-w64-x86_64-openssl"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Prepare Ubuntu OpenSSL
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
 
       - name: Check bundled archive
         id: archive
@@ -58,18 +68,18 @@ jobs:
 
       - name: Run Tests Linux and Mac with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os != 'windows-latest'
-        run: v -cg -cc clang test .
+        run: v -old-compiler -d use_openssl -cg -cc clang test .
 
       - name: Run Tests Linux and Mac with local quickjs-ng source
         if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
         shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc clang test .
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -old-compiler -d build_quickjs -d use_openssl -cg -cc clang test .
 
       - name: Run Tests Windows with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os == 'windows-latest'
-        run: v -cg -cc gcc test .
+        run: v -old-compiler -d use_openssl -cg -cc gcc test .
 
       - name: Run Tests Windows with local quickjs-ng source
         if: steps.archive.outputs.exists != 'true' && matrix.os == 'windows-latest'
         shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc gcc test .
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -old-compiler -d build_quickjs -d use_openssl -cg -cc gcc test .

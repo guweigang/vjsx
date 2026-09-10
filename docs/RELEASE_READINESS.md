@@ -31,6 +31,9 @@ Audit baseline: `main` at `6554fa4`, current package version `0.0.8`.
    as supported.
 5. The full matrix and benchmark baseline must pass on release infrastructure;
    local macOS evidence alone is insufficient.
+6. V 0.5.2's experimental V3 type checker crashes while compiling the curl
+   cancellation test. CI therefore selects V's bundled `-old-compiler`
+   compatibility path; 1.0 should not depend on that workaround indefinitely.
 
 ## Version recommendation
 

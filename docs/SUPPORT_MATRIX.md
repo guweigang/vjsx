@@ -18,7 +18,9 @@ TypeScript compatibility.
 The CI toolchain is pinned by `.v-version`; quickjs-ng is pinned by the immutable
 commit in `.quickjs-version`. Release smoke checks verify the CLI,
 reported version, runtime profile, script execution, bundle/app packaging and
-the packaged executable.
+the packaged executable. Release builds select V's OpenSSL crypto backend;
+OpenSSL is therefore a source-build dependency for the advertised WebCrypto
+ECDSA subset. Release smoke tests exercise ECDSA sign/verify on every artifact.
 
 ## Runtime profiles
 

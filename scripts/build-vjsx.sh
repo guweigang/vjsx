@@ -60,6 +60,23 @@ if [ -n "${VJS_V_FLAGS:-}" ]; then
   v_args=("${custom_flags[@]}")
 fi
 
+has_use_openssl=0
+if [ "${#v_args[@]}" -gt 0 ]; then
+  for ((i = 0; i < ${#v_args[@]}; i++)); do
+    if [ "${v_args[$i]}" = "-d=use_openssl" ] || [ "${v_args[$i]}" = "-duse_openssl" ]; then
+      has_use_openssl=1
+      break
+    fi
+    if [ "${v_args[$i]}" = "-d" ] && [ "$((i + 1))" -lt "${#v_args[@]}" ] && [ "${v_args[$((i + 1))]}" = "use_openssl" ]; then
+      has_use_openssl=1
+      break
+    fi
+  done
+fi
+if [ "$has_use_openssl" -eq 0 ]; then
+  v_args+=(-d use_openssl)
+fi
+
 has_cc=0
 if [ "${#v_args[@]}" -gt 0 ]; then
   for arg in "${v_args[@]}"; do
