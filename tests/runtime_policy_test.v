@@ -26,6 +26,7 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 	})
 	defer { session.close() }
 	ctx := session.context()
+	assert !ctx.has_runtime_module('sqlite')
 	value := ctx.eval('
 		import fs from "fs";
 		fs.writeFileSync("inside.txt", "ok");
@@ -60,6 +61,7 @@ fn test_network_host_allowlist_and_safe_module_denial() {
 	})
 	defer { network_session.close() }
 	network_ctx := network_session.context()
+	assert !network_ctx.has_runtime_module('mysql')
 	value := network_ctx.eval('
 		import http from "http";
 		http.get("http://denied.example/path", () => {}).on("error", err => {

@@ -54,6 +54,13 @@ corruption, not malicious construction or authenticity. Format, artifact ABI,
 QuickJS ABI, and runtime-profile checks run before deserialization, but callers
 must still authenticate provenance and load only artifacts from trusted builds.
 
+The compatibility database drivers do not implement per-operation policy
+hooks. `sqlite` is therefore omitted when filesystem boundary roots are set,
+and `mysql` is omitted when a network hostname allowlist is set. Expose a
+narrow host-owned database API when bounded access is required. Granting
+subprocess access can also bypass filesystem and network policy through the
+executed program, so treat it as a broader, independent capability.
+
 The artifact ABI is independent of the vjsx product version. Historical format
 1 artifacts whose compatibility field contains `0.0.x` migrate to artifact ABI
 1; other unknown legacy lines and future ABI values are rejected. See

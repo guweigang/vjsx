@@ -108,10 +108,11 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 			allow_exit: config.policy.allow_process_exit
 		})
 	}
-	if config.sqlite && config.policy.allow_fs_read && config.policy.allow_fs_write {
+	if config.sqlite && config.policy.allow_fs_read && config.policy.allow_fs_write
+		&& config.policy.fs_read_roots.len == 0 && config.policy.fs_write_roots.len == 0 {
 		ctx.install_sqlite_module(config.fs_roots)
 	}
-	if config.mysql && config.policy.allow_network {
+	if config.mysql && config.policy.allow_network && config.policy.network_hosts.len == 0 {
 		ctx.install_mysql_module()
 	}
 }

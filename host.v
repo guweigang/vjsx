@@ -28,8 +28,9 @@ pub mut:
 	allow_process_exit  bool
 }
 
-// host_policy_safe denies host-side mutation and shell execution. This is the
-// recommended policy for extensions that are not fully trusted.
+// host_policy_safe denies host I/O, environment access, subprocesses and
+// process mutation. This is the recommended policy for extensions that are not
+// fully trusted.
 pub fn host_policy_safe() HostPolicy {
 	return HostPolicy{}
 }
