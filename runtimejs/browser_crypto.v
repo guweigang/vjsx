@@ -161,21 +161,21 @@ fn cli_browser_crypto_boot(ctx &vjsx.Context, boot vjsx.Value) {
 		return ctx.js_bool(valid)
 	}))
 	obj.set('aes_cbc_encrypt', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.encrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_cbc_decrypt', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.decrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_ctr_xor', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut stream := cipher.new_ctr(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		stream.xor_key_stream(mut out, args[1].to_bytes())
