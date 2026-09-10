@@ -11,14 +11,15 @@ QuickJS owns engine internals:
 - JS heap and garbage collection
 - stack limits and memory limits
 - Promise jobs and microtasks
-- the underlying `qjs:os` timer queue
+- the underlying `qjs:os` timer queue when compatibility timer mode is selected
 - pending job execution through `JS_ExecutePendingJob`
 
 `vjsx` owns session-level platform state:
 
 - `RuntimeSession` lifecycle and idempotent close
 - event-loop facade state
-- timer wakeup hints for host scheduling
+- runtime-owned timer records, or QuickJS timer wakeup hints in compatibility mode
+- Promise capabilities and queued plain-data completions for host async operations
 - diagnostic records and diagnostic handlers
 - profile metadata and installed module registry
 - optional limits for `vjsx` facade state
@@ -31,9 +32,9 @@ The host owns platform scheduling and I/O:
   session-owning lane/thread
 - implementing host I/O such as HTTP, DB, filesystem, sockets, and queues
 
-The important rule is: **do not reimplement QuickJS queues in `vjsx` or the
-host**. Reuse QuickJS for JS jobs and timers; use `RuntimeSession` only to
-express host-facing wakeup and diagnostic state.
+The important rule is: **do not reimplement the QuickJS Promise job queue**.
+Runtime-owned timers are an optional host-driven clock boundary; their callbacks
+still run on the session lane and any resulting Promise work remains in QuickJS.
 
 ## QuickJS FFI Ownership Contract
 
@@ -82,8 +83,10 @@ unsupported platform boundary.
 - `now_fn` provides the time source.
 - `wake_fn` asks the host to schedule a future wakeup.
 - `cancel_wake_fn` cancels a pending host wakeup.
-- `runtime_owned_timers` is metadata for future runtime-owned timer work; it
-  does not mean `vjsx` currently replaces QuickJS timers.
+- `async_ready_fn` tells the host that a worker completion is queued and the
+  session-owning lane should call `deliver_wakeup(0)`.
+- `runtime_owned_timers` selects the session timer state machine. When false,
+  the existing `qjs:os.setTimeout` compatibility path remains active.
 
 `configure_event_loop(...)` also installs the timer wakeup bridge used by the
 JS timer wrapper. Hosts should not call `install_timer_wakeup_bridge()` directly.
@@ -93,8 +96,37 @@ store both `wake_at_ms` and `generation` and ignore stale wakeups whose pair no
 longer matches the latest pending request.
 
 For lane-owned runtimes, the caller thread should not touch the lane-owned
-`RuntimeSession` directly. The host should enqueue work back to the owning lane
-and pump the session there.
+`RuntimeSession` directly. Use `SessionLane.deliver_wakeup(...)`; stale scheduled
+wakeups are ignored by generation.
+
+## Host Async Operation Contract
+
+`start_host_async_operation(...)` creates a caller-owned JS Promise and keeps
+its resolve/reject functions inside the session. Give background code only the
+returned `completion` port and `cancel` token. Neither type contains a
+`JSContext` or `Value`.
+
+The worker may submit text/bytes success, rejection, or cancellation. Submission
+only appends plain V-owned data to a locked queue and invokes `async_ready_fn`.
+The owning session/lane later calls `drain_host_async_events()` or
+`deliver_wakeup(...)`; only that path constructs JS values, invokes the Promise
+capability, frees resolve/reject, and drains Promise jobs.
+
+Completion, explicit cancellation, timeout, and close share a first-terminal
+event gate. Losing completions return `false`. Timeout and close mark the worker
+token cancelled. Close rejects still-pending capabilities with
+`SessionClosedError` before destroying the context, but shutdown does not run
+new user Promise continuations.
+
+`RuntimeHostAsyncOperation.bind_abort_signal(...)` attaches an AbortSignal on
+the owning lane and removes the listener when the Promise settles. The embedded
+`__vjsxCancel` property is an implementation hook, not a general JS API.
+
+For host-to-runtime streaming, `RuntimeHostStreamMailbox` is the minimum bounded
+protocol: `try_push()` accepts a copied frame only while capacity is available,
+and returns `false` to signal backpressure. The lane acknowledges capacity by
+calling `drain()`. Producers must retry or pause after `false`; frames are never
+silently dropped and the mailbox never grows past its configured capacity.
 
 ## Timer Contract
 
@@ -116,12 +148,14 @@ import { setTimeout } from "node:timers/promises";
 await setTimeout(1000, "value", { signal });
 ```
 
-`node:timers/promises` supports `AbortSignal`. It is implemented on top of the
-existing global `setTimeout` / `clearTimeout`, so QuickJS still owns the real
-timer queue.
+`node:timers/promises` supports `AbortSignal` and remains implemented on top of
+global `setTimeout` / `clearTimeout`. In runtime-owned mode those globals create
+session timer records; otherwise QuickJS owns the real timer queue.
 
-Timer wakeup hints are not timers. They are `vjsx` facade state that lets the
-host schedule an efficient lane/session wakeup instead of polling.
+In compatibility mode, timer wakeup hints are not timers. They only let the host
+schedule an efficient lane/session wakeup instead of polling. In runtime-owned
+mode, `deliver_wakeup(generation)` fires due one-shot/interval callbacks on the
+owner lane and reschedules the earliest remaining deadline.
 
 ## Node Builtin Module Contract
 
@@ -277,6 +311,9 @@ Hosts should:
 - keep one clear owner for each `RuntimeSession`
 - call runtime pump APIs only from the owning lane/thread
 - use wakeup `generation` to ignore stale scheduled wakeups
+- pass worker code only async completion ports/cancel tokens, never Context or Value
+- honor `async_ready_fn` by enqueueing `deliver_wakeup(0)` on the owning lane
+- treat a false stream `try_push()` as backpressure and pause/retry production
 - log or emit `RuntimeSessionDiagnostic` through `set_diagnostic_handler`
 - inspect `debug_snapshot()` when reporting session health
 - use `runtime_profile_snapshot(ctx)` to verify installed capabilities
@@ -286,8 +323,9 @@ Hosts should:
 
 Hosts should not:
 
-- maintain a second JS job queue
-- treat timer wakeup hints as the source of timer truth
+- maintain a second JS Promise job queue
+- treat compatibility-mode timer wakeup hints as the source of timer truth
+- call Promise resolve/reject or any QuickJS API from a background thread
 - call lane-owned sessions from arbitrary caller threads
 - use or close the old `RuntimeSession` copy after transferring it to a
   `runtimejs.SessionLane`
