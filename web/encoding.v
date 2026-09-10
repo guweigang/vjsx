@@ -9,7 +9,6 @@ fn encoding_boot(ctx &Context, boot Value) {
 	boot.set('text_encode_into', ctx.js_function_this(vjsx.host_text_encode_into))
 }
 
-
 // Add encoding API to globals (`TextEncoder`, `TextDecoder`).
 // Example:
 // ```v

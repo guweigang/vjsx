@@ -18,9 +18,9 @@ mut:
 // host context object/value.
 pub fn new_bound_script_module(path string, host_api HostValueBuilder, module_handle ScriptModule) BoundScriptModule {
 	return BoundScriptModule{
-		host_api:    host_api
+		host_api: host_api
 		script_path: path
-		module:      module_handle
+		module: module_handle
 	}
 }
 
@@ -74,14 +74,12 @@ pub fn (binding BoundScriptModule) call_export_if_present(name string, args ...A
 
 // Call a method on an exported object with the configured host context.
 pub fn (binding BoundScriptModule) call_export_method(export_name string, method_name string, args ...AnyValue) !Value {
-	return binding.module.call_export_method_with_host(export_name, method_name, binding.host_api,
-		...args)
+	return binding.module.call_export_method_with_host(export_name, method_name, binding.host_api, ...args)
 }
 
 // Call a method on the default export object with the configured host context.
 pub fn (binding BoundScriptModule) call_default_method(method_name string, args ...AnyValue) !Value {
-	return binding.module.call_default_method_with_host(method_name, binding.host_api,
-		...args)
+	return binding.module.call_default_method_with_host(method_name, binding.host_api, ...args)
 }
 
 // Free the underlying module handle. Safe to call more than once.

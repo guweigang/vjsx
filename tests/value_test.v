@@ -35,3 +35,29 @@ fn test_value() {
 	assert val.get('j').await().str() == 'foo'
 	val.free()
 }
+
+fn test_value_call_keeps_object_result_alive_across_repeated_calls() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	object := ctx.eval('({ make(value) { return { value, nested: { ok: true } }; } })') or {
+		panic(err)
+	}
+	defer {
+		object.free()
+	}
+	for i in 0 .. 250 {
+		result := object.call('make', 'value-${i}')
+		field := result.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
+		nested := result.get('nested')
+		ok := nested.get('ok')
+		assert ok.to_bool()
+		ok.free()
+		nested.free()
+		result.free()
+	}
+}

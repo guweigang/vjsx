@@ -100,30 +100,55 @@ pub const type_barrier = C.JS_EVAL_FLAG_BACKTRACE_BARRIER
 pub const type_async = C.JS_EVAL_FLAG_ASYNC
 
 fn C.js_std_init_handlers(&C.JSRuntime)
+
 fn C.js_init_module_std(&C.JSContext, &char) &C.JSModuleDef
+
 fn C.js_init_module_os(&C.JSContext, &char) &C.JSModuleDef
+
 fn C.JS_NewContext(&C.JSRuntime) &C.JSContext
+
 fn C.JS_FreeContext(&C.JSContext)
+
 fn C.js_std_dump_error(&C.JSContext)
+
 fn C.js_free(&C.JSContext, voidptr)
+
 fn C.vjsx_js_eval_out(&C.JSContext, &char, usize, &char, int, &C.JSValue)
+
 fn C.JS_DupContext(&C.JSContext) &C.JSContext
+
 fn C.JS_SetContextOpaque(&C.JSContext, voidptr)
+
 fn C.JS_GetContextOpaque(&C.JSContext) voidptr
+
 fn C.vjsx_js_eval_function_out(&C.JSContext, C.JSValue, &C.JSValue)
+
 fn C.vjsx_js_resolve_module(&C.JSContext, JSValueConst) int
+
 fn C.vjsx_js_std_await_out(&C.JSContext, C.JSValue, &C.JSValue)
+
 fn C.js_std_set_worker_new_context_func(FnNewContext)
+
 fn C.JS_SetModuleLoaderFunc(&C.JSRuntime, &JSModuleNormalizeFunc, &JSModuleLoaderFunc, voidptr)
+
 fn C.vjsx_js_strdup(&C.JSContext, &char) &char
+
 fn C.vjsx_js_module_loader(&C.JSContext, &char, voidptr) &C.JSModuleDef
+
 fn C.js_std_loop(&C.JSContext)
+
 fn C.JS_GetRuntime(&C.JSContext) &C.JSRuntime
+
 fn C.js_std_free_handlers(&C.JSRuntime)
+
 fn C.js_std_add_helpers(&C.JSContext, int, &&char)
+
 fn C.js_load_file(&C.JSContext, &usize, &char) &u8
+
 fn C.js_module_set_import_meta(&C.JSContext, JSValueConst, bool, bool) int
+
 fn C.JS_CallConstructor(&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
+
 fn C.vjsx_js_add_bignum_intrinsics(&C.JSContext)
 
 fn def_set_meta(ctx Context, ref JSValueConst) {
@@ -165,21 +190,20 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	C.js_std_init_handlers(rt.ref)
 	ref := new_context(rt.ref)
 	ctx := &Context{
-		ref:                ref
-		rt:                 rt
+		ref: ref
+		rt: rt
 		host_cleanup_state: &HostCleanupState{
-			cleanups:          []HostCleanup{}
+			cleanups: []HostCleanup{}
 			installed_modules: map[string]bool{}
-			bundle_modules:    map[string][]u8{}
-			bundle_sources:    map[string]string{}
-			bundle_compiled:   map[string][]u8{}
+			bundle_modules: map[string][]u8{}
+			bundle_sources: map[string]string{}
+			bundle_compiled: map[string][]u8{}
 		}
-		asset_root:         config.asset_root
-		runtime_profile:    'bare'
+		asset_root: config.asset_root
+		runtime_profile: 'bare'
 	}
 	C.JS_SetContextOpaque(ref, ctx)
-	C.JS_SetModuleLoaderFunc(rt.ref, &vjsx_runtime_module_normalize, &vjsx_runtime_module_loader,
-		C.NULL)
+	C.JS_SetModuleLoaderFunc(rt.ref, &vjsx_runtime_module_normalize, &vjsx_runtime_module_loader, C.NULL)
 	if config.unhandled_rejection {
 		rt.promise_rejection_tracker()
 	}
@@ -234,10 +258,10 @@ pub fn (ctx &Context) has_exception() bool {
 
 pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 	return ctx.js_eval_core(
-		input:    input.str
-		len:      usize(input.len)
-		fname:    fname.str
-		flag:     flag
+		input: input.str
+		len: usize(input.len)
+		fname: fname.str
+		flag: flag
 		set_meta: fn (ctx Context, ref JSValueConst) {}
 	)!
 }
@@ -280,8 +304,7 @@ pub fn (ctx &Context) eval_module(input string, fname string) !Value {
 pub fn (ctx &Context) compile_module(input string, fname string) ! {
 	ctx.rt.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, input.str, usize(input.len), fname.str,
-		type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(ctx.ref, input.str, usize(input.len), fname.str, type_module | type_compile_only, &ref)
 	value := ctx.c_val(ref)
 	defer {
 		value.free()
@@ -321,10 +344,10 @@ pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta Set
 		return error('${fname} file not found')
 	}
 	val := ctx.js_eval_core(
-		input:    buf
-		len:      buf_len
-		fname:    c_fname
-		flag:     flag
+		input: buf
+		len: buf_len
+		fname: c_fname
+		flag: flag
 		set_meta: set_meta
 	)!
 	C.js_free(ctx.ref, buf)
@@ -367,9 +390,15 @@ pub fn (ctx &Context) eval_function(val Value) Value {
 // Callback this from Context
 pub fn (ctx &Context) call_this(this Value, val Value, args ...AnyValue) !Value {
 	ctx.rt.ensure_executable()!
-	c_args := args.map(ctx.any_to_val(it).ref)
-	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
-	ret := ctx.c_val(C.JS_Call(ctx.ref, val.ref, this.ref, c_args.len, c_val))
+	arg_values := args.map(ctx.owned_any_to_val(it))
+	defer {
+		for arg in arg_values {
+			arg.free()
+		}
+	}
+	c_args := arg_values.map(it.ref)
+	c_args_ptr := if c_args.len == 0 { &JSValueConst(unsafe { nil }) } else { &c_args[0] }
+	ret := ctx.c_val(C.JS_Call(ctx.ref, val.ref, this.ref, c_args.len, c_args_ptr))
 	if ret.is_exception() {
 		return ctx.execution_error()
 	}
@@ -385,11 +414,11 @@ pub fn (ctx &Context) call(val Value, args ...AnyValue) !Value {
 pub fn (ctx &Context) dup_context() &Context {
 	ref := C.JS_DupContext(ctx.ref)
 	return &Context{
-		ref:                ref
-		rt:                 ctx.rt
+		ref: ref
+		rt: ctx.rt
 		host_cleanup_state: ctx.host_cleanup_state
-		asset_root:         ctx.asset_root
-		runtime_profile:    ctx.runtime_profile
+		asset_root: ctx.asset_root
+		runtime_profile: ctx.runtime_profile
 	}
 }
 

@@ -415,6 +415,7 @@ fn main() {
 		vjsx.ContextConfig{},
 		vjsx.NodeRuntimeConfig{
 			process_args: ['inline.js']
+			policy:       vjsx.host_policy_safe()
 		},
 		host_config(),
 		host_api(),
@@ -424,6 +425,27 @@ fn main() {
 	}
 }
 ```
+
+`ExtensionSession` is the recommended path for hosted extensions. Its Node
+runtime configuration carries `HostPolicy` all the way to the `process` and
+`child_process` implementations. Use `vjsx.host_policy_safe()` for extensions
+unless their source and every loaded bytecode artifact are trusted as much as
+the host process.
+
+The policy presets deliberately separate secure policy construction from
+backwards compatibility:
+
+- `HostPolicy{}` and `host_policy_safe()` deny `process.env` writes and shell
+  execution.
+- `host_policy_trusted()` enables both capabilities.
+- `NodeRuntimeConfig{}`, `NodeCompatConfig{}`, and the legacy `HostConfig{}`
+  retain the trusted policy by default so existing embedders keep their prior
+  behavior. New extension hosts should override that default explicitly.
+
+The `node`/`script` runtime profile identifies the installed JavaScript API and
+bytecode compatibility contract; it is not a security boundary. `HostPolicy`
+is the capability policy, and trusted bytecode can still exercise every
+capability enabled by that policy.
 
 ## Loading Extensions
 

@@ -8,7 +8,7 @@ $if !vjsx_mysql ? {
 			if args.len == 0 || !args[0].is_object() {
 				return promise.reject(ctx.js_error(
 					message: 'options object is required'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			host_option := args[0].get('host')
@@ -42,48 +42,48 @@ $if !vjsx_mysql ? {
 			if !host_option.is_undefined() && !host_option.is_null() && !host_option.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.host must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !port_value.is_undefined() && !port_value.is_null() && !port_value.is_number() {
 				return promise.reject(ctx.js_error(
 					message: 'options.port must be a number'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !username_value.is_undefined() && !username_value.is_null() && !username_value.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.username must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !user_value.is_undefined() && !user_value.is_null() && !user_value.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.user must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !password_value.is_undefined() && !password_value.is_null() && !password_value.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.password must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !dbname_value.is_undefined() && !dbname_value.is_null() && !dbname_value.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.dbname must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			if !database_value.is_undefined() && !database_value.is_null() && !database_value.is_string() {
 				return promise.reject(ctx.js_error(
 					message: 'options.database must be a string'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 			return promise.reject(ctx.js_error(
 				message: 'mysql support is not built in; rerun with -d vjsx_mysql'
-				name:    'Error'
+				name: 'Error'
 			))
 		})
 		mysql_mod.export('connect', connect_fn)

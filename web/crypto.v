@@ -42,9 +42,15 @@ fn pbkdf2_sha512_hash(password []u8, salt []u8, iterations int, key_length int) 
 
 fn ecdsa_nid_from_curve_name(name string) ecdsa.Nid {
 	match name {
-		'P-256' { return .prime256v1 }
-		'P-384' { return .secp384r1 }
-		'P-521' { return .secp521r1 }
+		'P-256' {
+			return .prime256v1
+		}
+		'P-384' {
+			return .secp384r1
+		}
+		'P-521' {
+			return .secp521r1
+		}
 		else { panic('unsupported ECDSA named curve: ${name}') }
 	}
 }
@@ -53,34 +59,34 @@ fn ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
 	match name {
 		'SHA-1' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha1.new()
+				custom_hash: sha1.new()
 			}
 		}
 		'SHA-256' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha256.new()
+				custom_hash: sha256.new()
 			}
 		}
 		'SHA-384' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha512.new384()
+				custom_hash: sha512.new384()
 			}
 		}
 		'SHA-512' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha512.new()
+				custom_hash: sha512.new()
 			}
 		}
 		else {
@@ -159,37 +165,34 @@ fn crypto_boot(ctx &Context, boot Value) {
 		return ctx.js_bool(valid)
 	}))
 	obj.set('aes_cbc_encrypt', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.encrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_cbc_decrypt', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut mode := cipher.new_cbc(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		mode.decrypt_blocks(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('aes_ctr_xor', ctx.js_function(fn [ctx] (args []Value) Value {
-		block := aes.new_cipher(args[0].to_bytes())
+		block := aes.new_cipher(args[0].to_bytes()) or { panic(err) }
 		mut stream := cipher.new_ctr(block, args[2].to_bytes())
 		mut out := []u8{len: args[1].byte_len()}
 		stream.xor_key_stream(mut out, args[1].to_bytes())
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('pbkdf2_sha256', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha256_hash(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(pbkdf2_sha256_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('pbkdf2_sha384', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha384_hash(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(pbkdf2_sha384_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('pbkdf2_sha512', ctx.js_function(fn [ctx] (args []Value) Value {
-		return ctx.js_array_buffer(pbkdf2_sha512_hash(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(pbkdf2_sha512_hash(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('ecdsa_generate_key', ctx.js_function(fn [ctx] (args []Value) Value {
 		nid := ecdsa_nid_from_curve_name(args[0].to_string())

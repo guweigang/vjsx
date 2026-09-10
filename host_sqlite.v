@@ -49,7 +49,7 @@ $if vjsx_sqlite ? {
 	fn sqlite_error_value(ctx &Context, message string, name string) Value {
 		return ctx.js_error(
 			message: message
-			name:    name
+			name: name
 		)
 	}
 
@@ -261,7 +261,7 @@ $if vjsx_sqlite ? {
 			return error('options.busyTimeout must be a number')
 		}
 		return HostSqliteOpenConfig{
-			path:         path_value.to_string()
+			path: path_value.to_string()
 			busy_timeout: if busy_value.is_undefined() || busy_value.is_null() {
 				0
 			} else {
@@ -449,8 +449,7 @@ $if vjsx_sqlite ? {
 				}
 				[]vsqlite.Row{}
 			}
-			return promise.resolve(sqlite_exec_result_value(ctx, rows,
-				stmt.conn.db.get_affected_rows_count(), stmt.conn.db.last_insert_rowid()))
+			return promise.resolve(sqlite_exec_result_value(ctx, rows, stmt.conn.db.get_affected_rows_count(), stmt.conn.db.last_insert_rowid()))
 			reject:
 			return promise.reject(exec_err)
 		})
@@ -486,8 +485,7 @@ $if vjsx_sqlite ? {
 					}
 					[]vsqlite.Row{}
 				}
-				result := sqlite_exec_result_value(ctx, rows,
-					stmt.conn.db.get_affected_rows_count(), stmt.conn.db.last_insert_rowid())
+				result := sqlite_exec_result_value(ctx, rows, stmt.conn.db.get_affected_rows_count(), stmt.conn.db.last_insert_rowid())
 				results.set(i, result)
 				result.free()
 			}
@@ -701,8 +699,7 @@ $if vjsx_sqlite ? {
 				}
 				[]vsqlite.Row{}
 			}
-			return promise.resolve(sqlite_exec_result_value(ctx, rows,
-				conn.db.get_affected_rows_count(), conn.db.last_insert_rowid()))
+			return promise.resolve(sqlite_exec_result_value(ctx, rows, conn.db.get_affected_rows_count(), conn.db.last_insert_rowid()))
 			reject:
 			return promise.reject(exec_err)
 		})
@@ -739,8 +736,7 @@ $if vjsx_sqlite ? {
 					}
 					[]vsqlite.Row{}
 				}
-				result := sqlite_exec_result_value(ctx, rows, conn.db.get_affected_rows_count(),
-					conn.db.last_insert_rowid())
+				result := sqlite_exec_result_value(ctx, rows, conn.db.get_affected_rows_count(), conn.db.last_insert_rowid())
 				results.set(i, result)
 				result.free()
 			}
@@ -900,9 +896,9 @@ $if vjsx_sqlite ? {
 				}
 			}
 			mut stmt := &HostSqliteStmt{
-				conn:       conn
+				conn: conn
 				query_text: args[0].to_string()
-				obj_ref:    ctx.js_undefined()
+				obj_ref: ctx.js_undefined()
 			}
 			conn.stmts << stmt
 			return promise.resolve(sqlite_stmt_object(ctx, mut stmt))
@@ -932,10 +928,10 @@ $if vjsx_sqlite ? {
 				conn.cached_stmts.delete(query_text)
 			}
 			mut stmt := &HostSqliteStmt{
-				conn:       conn
+				conn: conn
 				query_text: query_text
-				obj_ref:    ctx.js_undefined()
-				cache_key:  query_text
+				obj_ref: ctx.js_undefined()
+				cache_key: query_text
 			}
 			conn.stmts << stmt
 			stmt_obj := sqlite_stmt_object(ctx, mut stmt)
@@ -982,8 +978,7 @@ $if vjsx_sqlite ? {
 			mut open_err := ctx.js_undefined()
 			promise := ctx.js_promise()
 			if args.len == 0 {
-				open_err = sqlite_error_value(ctx, 'path or options object is required',
-					'TypeError')
+				open_err = sqlite_error_value(ctx, 'path or options object is required', 'TypeError')
 				unsafe {
 					goto reject
 				}
@@ -1017,7 +1012,7 @@ $if vjsx_sqlite ? {
 				db.busy_timeout(config.busy_timeout)
 			}
 			mut conn := &HostSqliteConn{
-				db:   db
+				db: db
 				path: target
 			}
 			ctx.register_host_cleanup(fn [mut conn] () {

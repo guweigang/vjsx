@@ -130,6 +130,7 @@ fn main() {
 		vjsx.ContextConfig{},
 		vjsx.NodeRuntimeConfig{
 			process_args: ['extension.mjs']
+			policy:       vjsx.host_policy_safe()
 		},
 		vjsx.HostApiConfig{},
 		host_api(),

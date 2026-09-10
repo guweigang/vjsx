@@ -52,6 +52,10 @@ fn test_type() {
 
 	arr_buf := ctx.js_array_buffer('foo'.bytes())
 	assert arr_buf.instanceof('ArrayBuffer') == true
+	empty_buf := ctx.js_array_buffer([]u8{})
+	assert empty_buf.instanceof('ArrayBuffer') == true
+	assert empty_buf.byte_len() == 0
+	empty_buf.free()
 
 	any_str := ctx.any_to_val('foo')
 	assert any_str.str() == 'foo'
@@ -60,6 +64,80 @@ fn test_type() {
 		return ctx.js_null()
 	})
 	assert cb.is_function() == true
+}
+
+fn test_call_this_releases_temporary_arguments_on_success_and_exception() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	echo := ctx.eval('(value) => ({ value })') or { panic(err) }
+	thrower := ctx.eval('(value) => { throw new Error(value); }') or { panic(err) }
+	defer {
+		echo.free()
+		thrower.free()
+	}
+	baseline := session.memory_usage()
+	for i in 0 .. 250 {
+		result := ctx.call_this(ctx.js_null(), echo, 'value-${i}') or { panic(err) }
+		field := result.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
+		result.free()
+		ctx.call_this(ctx.js_null(), thrower, 'boom-${i}') or { continue }
+		assert false, 'thrower should fail'
+	}
+	session.runtime().run_gc()
+	after := session.memory_usage()
+	assert after.object_count <= baseline.object_count + 8
+	assert after.string_count <= baseline.string_count + 8
+}
+
+fn test_js_new_class_releases_temporary_arguments() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	class_value := ctx.eval('(class Box { constructor(value) { this.value = value; } })') or {
+		panic(err)
+	}
+	defer {
+		class_value.free()
+	}
+	baseline := session.memory_usage()
+	for i in 0 .. 250 {
+		instance := ctx.js_new_class(class_value, 'value-${i}') or { panic(err) }
+		field := instance.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
+		instance.free()
+	}
+	session.runtime().run_gc()
+	after := session.memory_usage()
+	assert after.object_count <= baseline.object_count + 4
+	assert after.string_count <= baseline.string_count + 4
+}
+
+fn test_json_stringify_releases_temporary_values() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	value := ctx.eval('({ value: "stable" })') or { panic(err) }
+	defer {
+		value.free()
+	}
+	baseline := session.memory_usage()
+	for _ in 0 .. 250 {
+		assert ctx.json_stringify_op(value, ctx.js_null(), '  ') == '{\n  "value": "stable"\n}'
+	}
+	session.runtime().run_gc()
+	after := session.memory_usage()
+	assert after.object_count <= baseline.object_count + 2
+	assert after.string_count <= baseline.string_count + 2
 }
 
 fn test_call_this_captures_thrown_plain_object() {

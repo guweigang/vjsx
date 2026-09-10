@@ -7,6 +7,22 @@ fn test_runtime_version_matches_vmod() {
 	assert vjsx.version == vm.version
 }
 
+fn test_host_policy_presets_are_explicit_and_compatible() {
+	safe := vjsx.HostPolicy{}
+	assert !safe.allow_env_write
+	assert !safe.allow_shell
+	assert vjsx.host_policy_safe() == safe
+
+	trusted := vjsx.host_policy_trusted()
+	assert trusted.allow_env_write
+	assert trusted.allow_shell
+	// Existing high-level configuration literals retain their historical
+	// trusted behavior unless an embedder opts into the safe policy.
+	assert vjsx.NodeCompatConfig{}.policy == trusted
+	assert vjsx.NodeRuntimeConfig{}.policy == trusted
+	assert vjsx.HostConfig{}.policy == trusted
+}
+
 fn test_node_policy_can_disable_process_env_writes() {
 	mut session := vjsx.new_runtime_session()
 	defer {
@@ -15,20 +31,20 @@ fn test_node_policy_can_disable_process_env_writes() {
 	ctx := session.context()
 	key := 'VJSX_POLICY_ENV_${os.getpid()}'
 	ctx.install_node_compat(vjsx.NodeCompatConfig{
-		console:       false
-		timers:        false
-		fs:            false
-		path:          false
-		os:            false
-		http:          false
-		https:         false
-		fetch:         false
+		console: false
+		timers: false
+		fs: false
+		path: false
+		os: false
+		http: false
+		https: false
+		fetch: false
 		child_process: false
-		process:       true
-		sqlite:        false
-		mysql:         false
-		process_args:  ['inline.js']
-		policy:        vjsx.HostPolicy{
+		process: true
+		sqlite: false
+		mysql: false
+		process_args: ['inline.js']
+		policy: vjsx.HostPolicy{
 			allow_env_write: false
 		}
 	})
@@ -46,19 +62,19 @@ fn test_node_policy_can_disable_shell_execution() {
 	}
 	ctx := session.context()
 	ctx.install_node_compat(vjsx.NodeCompatConfig{
-		console:       false
-		timers:        false
-		fs:            false
-		path:          false
-		os:            false
-		http:          false
-		https:         false
-		fetch:         false
+		console: false
+		timers: false
+		fs: false
+		path: false
+		os: false
+		http: false
+		https: false
+		fetch: false
 		child_process: true
-		process:       false
-		sqlite:        false
-		mysql:         false
-		policy:        vjsx.HostPolicy{
+		process: false
+		sqlite: false
+		mysql: false
+		policy: vjsx.HostPolicy{
 			allow_shell: false
 		}
 	})
@@ -70,8 +86,7 @@ fn test_node_policy_can_disable_shell_execution() {
 		} catch (err) {
 			globalThis.__shellPolicy = String(err.message);
 		}
-	',
-		vjsx.type_module) or { panic(err) }
+	', vjsx.type_module) or { panic(err) }
 	global := ctx.js_global()
 	value := global.get('__shellPolicy')
 	assert value.str().contains('shell execution is disabled')

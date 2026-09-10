@@ -21,7 +21,7 @@ pub fn new_script_extension_session(ctx_config vjsx.ContextConfig, runtime_confi
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api
-		session:  session
+		session: session
 	}
 }
 
@@ -32,7 +32,7 @@ pub fn new_node_extension_session(ctx_config vjsx.ContextConfig, runtime_config 
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api
-		session:  session
+		session: session
 	}
 }
 
@@ -101,34 +101,30 @@ pub fn (extension ExtensionSession) load_extension(path string, hooks vjsx.Scrip
 	mut module_binding := extension.import_module(path)!
 	manifest := extension_manifest_from_module(module_binding.path(), module_binding.module_handle())!
 	resolved_hooks := extension_manifest_apply_hooks(manifest, hooks)
-	plugin := extension.session.bind_plugin(module_binding.path(), module_binding.module_handle(),
-		resolved_hooks)!
+	plugin := extension.session.bind_plugin(module_binding.path(), module_binding.module_handle(), resolved_hooks)!
 	return ExtensionHandle{
 		services: manifest.services.clone()
-		module:   module_binding
-		plugin:   vjsx.new_bound_script_plugin(extension.host_api, plugin)
+		module: module_binding
+		plugin: vjsx.new_bound_script_plugin(extension.host_api, plugin)
 	}
 }
 
 // Call a named module export with the embedder host context as the first
 // argument.
 pub fn (extension ExtensionSession) call_module_export(path string, export_name string, args ...vjsx.AnyValue) !vjsx.Value {
-	return extension.session.call_module_export_with_host(path, export_name, extension.host_api,
-		...args)
+	return extension.session.call_module_export_with_host(path, export_name, extension.host_api, ...args)
 }
 
 // Call a method on an exported object with the embedder host context as the
 // first argument.
 pub fn (extension ExtensionSession) call_module_method(path string, export_name string, method_name string, args ...vjsx.AnyValue) !vjsx.Value {
-	return extension.session.call_module_method_with_host(path, export_name, method_name,
-		extension.host_api, ...args)
+	return extension.session.call_module_method_with_host(path, export_name, method_name, extension.host_api, ...args)
 }
 
 // Call a method on the default export object with the embedder host context as
 // the first argument.
 pub fn (extension ExtensionSession) call_default_export_method(path string, method_name string, args ...vjsx.AnyValue) !vjsx.Value {
-	return extension.session.call_default_export_method_with_host(path, method_name, extension.host_api,
-		...args)
+	return extension.session.call_default_export_method_with_host(path, method_name, extension.host_api, ...args)
 }
 
 // Close the managed session. Safe to call more than once.

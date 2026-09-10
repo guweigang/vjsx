@@ -5,22 +5,37 @@ pub type AnyValue = Value | bool | f64 | i64 | int | string | u32 | u64
 
 // Context JS TypeData.
 fn C.JS_NewString(&C.JSContext, &char) C.JSValue
+
 fn C.JS_NewBool(&C.JSContext, int) C.JSValue
+
 fn C.JS_NewInt32(&C.JSContext, int) C.JSValue
+
 fn C.JS_NewInt64(&C.JSContext, i64) C.JSValue
+
 fn C.JS_NewBigUint64(&C.JSContext, u64) C.JSValue
+
 fn C.JS_NewBigInt64(&C.JSContext, i64) C.JSValue
+
 fn C.JS_NewUint32(&C.JSContext, u32) C.JSValue
+
 fn C.JS_NewFloat64(&C.JSContext, f64) C.JSValue
+
 fn C.JS_NewArray(&C.JSContext) C.JSValue
-fn C.JS_NewArrayBufferCopy(&C.JSContext, u8, usize) C.JSValue
+
 fn C.JS_GetGlobalObject(&C.JSContext) C.JSValue
+
 fn C.JS_NewObject(&C.JSContext) C.JSValue
+
 fn C.JS_NewError(&C.JSContext) C.JSValue
+
 fn C.JS_GetException(&C.JSContext) C.JSValue
+
 fn C.JS_Throw(&C.JSContext, C.JSValue) C.JSValue
+
 fn C.JS_ParseJSON(&C.JSContext, &char, usize, &char) C.JSValue
+
 fn C.JS_NewArrayBufferCopy(&C.JSContext, &u8, usize) C.JSValue
+
 fn C.JS_CallConstructor(&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
 
 fn (ctx &Context) c_val(ref C.JSValue) Value {
@@ -30,7 +45,7 @@ fn (ctx &Context) c_val(ref C.JSValue) Value {
 fn (ctx &Context) c_tag(tag int) Value {
 	return ctx.c_val(C.JSValue{
 		tag: tag
-		u:   &C.JSValueUnion{}
+		u: &C.JSValueUnion{}
 	})
 }
 
@@ -86,7 +101,15 @@ pub fn (ctx &Context) js_uninitialized() Value {
 @[manualfree]
 pub fn (ctx &Context) json_stringify_op(val Value, rep Value, ind AnyValue) string {
 	indent := ctx.any_to_val(ind)
+	defer {
+		if ind !is Value {
+			indent.free()
+		}
+	}
 	ref := C.JS_JSONStringify(ctx.ref, val.ref, rep.ref, indent.ref)
+	defer {
+		C.JS_FreeValue(ctx.ref, ref)
+	}
 	ptr := C.JS_ToCString(ctx.ref, ref)
 	ret := if isnil(ptr) {
 		''
@@ -179,6 +202,9 @@ pub fn (ctx &Context) js_big_int(data i64) Value {
 
 // Create JS ArrayBuffer.
 pub fn (ctx &Context) js_array_buffer(data []u8) Value {
+	if data.len == 0 {
+		return ctx.c_val(C.JS_NewArrayBufferCopy(ctx.ref, unsafe { nil }, 0))
+	}
 	return ctx.c_val(C.JS_NewArrayBufferCopy(ctx.ref, &data[0], usize(data.len)))
 }
 
@@ -230,13 +256,28 @@ pub fn (ctx &Context) js_await(val Value) !Value {
 // JS call new class.
 pub fn (ctx &Context) js_new_class(val Value, args ...AnyValue) !Value {
 	ctx.rt.ensure_executable()!
-	c_args := args.map(ctx.any_to_val(it).ref)
-	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
-	ret := ctx.c_val(C.JS_CallConstructor(ctx.ref, val.ref, c_args.len, c_val))
+	arg_values := args.map(ctx.owned_any_to_val(it))
+	defer {
+		for arg in arg_values {
+			arg.free()
+		}
+	}
+	c_args := arg_values.map(it.ref)
+	c_args_ptr := if c_args.len == 0 { &JSValueConst(unsafe { nil }) } else { &c_args[0] }
+	ret := ctx.c_val(C.JS_CallConstructor(ctx.ref, val.ref, c_args.len, c_args_ptr))
 	if ret.is_exception() {
 		return ctx.execution_error()
 	}
 	return ret
+}
+
+// Convert any value into a newly owned JS value suitable for a temporary
+// QuickJS argument vector. Callers must free the returned value.
+fn (ctx &Context) owned_any_to_val(val AnyValue) Value {
+	if val is Value {
+		return val.dup_value()
+	}
+	return ctx.any_to_val(val)
 }
 
 // Convert any to value.

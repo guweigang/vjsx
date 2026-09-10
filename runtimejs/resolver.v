@@ -52,8 +52,7 @@ fn resolve_package_root_entry(ctx &vjsx.Context, package_root string, subpath st
 	if os.exists(package_json_path) {
 		entry := package_entry(ctx, package_json_path, subpath) or { '' }
 		if entry != '' {
-			resolved := resolve_local_module(os.join_path(package_root, '_entry.js'),
-				'./' + entry) or { '' }
+			resolved := resolve_local_module(os.join_path(package_root, '_entry.js'), './' + entry) or { '' }
 			if resolved != '' {
 				return resolved
 			}
@@ -171,7 +170,7 @@ fn rewrite_module_specifiers(input string, rewrites []ModuleRewrite) string {
 	mut output := input
 	for rewrite in rewrites {
 		output = output.replace('"${rewrite.from}"', '"${rewrite.to}"')
-		output = output.replace('\'${rewrite.from}\'', '\'${rewrite.to}\'')
+		output = output.replace("'${rewrite.from}'", "'${rewrite.to}'")
 	}
 	return output
 }
