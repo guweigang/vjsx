@@ -9,7 +9,7 @@ pub type RuntimeSessionLoadModuleFn = fn (&Context, string, string) !Value
 @[params]
 pub struct RuntimeSessionBridge {
 pub:
-	run         RuntimeSessionRunFn        = runtime_session_bridge_missing_run
+	run         RuntimeSessionRunFn = runtime_session_bridge_missing_run
 	load_module RuntimeSessionLoadModuleFn = runtime_session_bridge_missing_load_module
 }
 
@@ -22,11 +22,12 @@ pub struct RuntimeSession {
 mut:
 	closed            bool
 	bridge            RuntimeSessionBridge
-	event_loop_state  &RuntimeSessionEventLoopState   = new_runtime_session_event_loop_state()
-	diagnostic_state  &RuntimeSessionDiagnosticState  = new_runtime_session_diagnostic_state()
-	limit_state       &RuntimeSessionLimitState       = new_runtime_session_limit_state()
-	lifecycle_state   &RuntimeSessionLifecycleState   = new_runtime_session_lifecycle_state()
+	event_loop_state  &RuntimeSessionEventLoopState = new_runtime_session_event_loop_state()
+	diagnostic_state  &RuntimeSessionDiagnosticState = new_runtime_session_diagnostic_state()
+	limit_state       &RuntimeSessionLimitState = new_runtime_session_limit_state()
+	lifecycle_state   &RuntimeSessionLifecycleState = new_runtime_session_lifecycle_state()
 	observation_state &RuntimeSessionObservationState = new_runtime_session_observation_state()
+	host_async_state  &RuntimeHostAsyncState = new_runtime_host_async_state()
 }
 
 fn runtime_session_bridge_missing_run(_ctx &Context, _script_path string, _as_module bool, _temp_root string) !Value {
@@ -64,7 +65,7 @@ pub fn new_runtime_session(config ContextConfig) RuntimeSession {
 	return RuntimeSession{
 		runtime: runtime
 		context: context
-		bridge:  RuntimeSessionBridge{}
+		bridge: RuntimeSessionBridge{}
 	}
 }
 
@@ -144,8 +145,7 @@ pub fn (mut session RuntimeSession) set_runtime_bridge(bridge RuntimeSessionBrid
 // Run a script or module by extension. `.mjs` and `.mts` use module mode.
 pub fn (session RuntimeSession) run(path string) !Value {
 	script_path := runtime_session_resolve_path(path)!
-	return session.bridge.run(session.context, script_path,
-		runtime_session_is_module_path(script_path), '')
+	return session.bridge.run(session.context, script_path, runtime_session_is_module_path(script_path), '')
 }
 
 // Run a file in script mode.
@@ -170,9 +170,9 @@ pub fn (session RuntimeSession) load_module(path string) !Value {
 pub fn (session RuntimeSession) import_module(path string) !ScriptModule {
 	exports := session.load_module(path)!
 	return ScriptModule{
-		ctx:     session.context
+		ctx: session.context
 		exports: exports
-		state:   &ScriptModuleState{}
+		state: &ScriptModuleState{}
 	}
 }
 
@@ -182,9 +182,9 @@ pub fn (session RuntimeSession) import_module_with_host(path string, host_api Ho
 	script_path := runtime_session_resolve_path(path)!
 	handle := session.import_module(script_path)!
 	return BoundScriptModule{
-		host_api:    host_api
+		host_api: host_api
 		script_path: script_path
-		module:      handle
+		module: handle
 	}
 }
 
@@ -287,6 +287,7 @@ pub fn (mut session RuntimeSession) close() {
 		return
 	}
 	session.mark_closing()
+	session.close_host_async_operations()
 	session.close_event_loop()
 	session.context.free()
 	session.runtime.free()

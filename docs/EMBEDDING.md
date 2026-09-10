@@ -514,6 +514,44 @@ It is useful when:
 It is not required for a healthy first embedding design. If plain
 `call_export(...)` and `call_export_method(...)` are enough, keep using those.
 
+## Long-Lived Async Host Work
+
+For I/O that outlives one JS call, start a session-owned operation while on the
+owner lane:
+
+```v
+operation := lane.start_host_async_operation(vjsx.RuntimeHostAsyncOptions{
+	kind:       'search'
+	timeout_ms: 5_000
+})!
+
+// Return or attach operation.promise while still on the lane. A worker receives
+// only these two plain-V handles:
+completion := operation.completion
+cancel := operation.cancel
+```
+
+The worker periodically checks `cancel.is_cancelled()` and finishes with
+`completion.resolve_text(...)`, `resolve_bytes(...)`, `reject(...)`, or
+`cancel(...)`. It must never receive or use the lane's `Context` or a `Value`.
+Configure `async_ready_fn` to enqueue a host task that calls
+`lane.deliver_wakeup(0)`. Scheduled timer wakeups should pass their generation to
+the same method so stale callbacks are harmless.
+
+If JS supplied an AbortSignal, call `operation.bind_abort_signal(signal)` before
+transferring the Promise. Timeout, AbortSignal, worker completion, and session
+close are deterministic races: the first terminal event wins and later submits
+return `false`.
+
+For streaming producers, put frames through a
+`new_runtime_host_stream_mailbox(capacity)`. Stop reading the upstream source
+when `try_push()` returns false; resume only after the lane drains frames. This
+keeps memory bounded without requiring a fetch or child-process rewrite.
+
+Set `runtime_owned_timers: true` when the host can deliver scheduled wakeups to
+the lane. Existing embedders may leave it false and retain the QuickJS timer
+path unchanged.
+
 ## Practical Guidance
 
 Prefer:

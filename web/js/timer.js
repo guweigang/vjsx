@@ -39,6 +39,10 @@ function cancelWakeup(id) {
 }
 
 globalThis.setTimeout = (cb, delay, ...args) => {
+  const hook = runtimeTimerWakeup();
+  if (hook?.runtimeOwned === true && typeof hook.createOwned === "function") {
+    return { __vjsxOwnedTimer: hook.createOwned(() => cb(...args), normalizeDelay(delay), false) };
+  }
   const wakeupId = nextRuntimeTimerWakeupId++;
   const timer = os.setTimeout(() => {
     timeoutWakeupIds.delete(timer);
@@ -51,6 +55,10 @@ globalThis.setTimeout = (cb, delay, ...args) => {
 };
 
 globalThis.clearTimeout = (timer) => {
+  if (timer !== null && typeof timer === "object" && timer.__vjsxOwnedTimer !== undefined) {
+    const hook = runtimeTimerWakeup();
+    return hook?.cancelOwned?.(timer.__vjsxOwnedTimer) ?? false;
+  }
   const wakeupId = timeoutWakeupIds.get(timer);
   if (wakeupId !== undefined) {
     timeoutWakeupIds.delete(timer);
@@ -61,6 +69,10 @@ globalThis.clearTimeout = (timer) => {
 
 const timers = new Map();
 globalThis.setInterval = (cb, interval, ...args) => {
+  const hook = runtimeTimerWakeup();
+  if (hook?.runtimeOwned === true && typeof hook.createOwned === "function") {
+    return { __vjsxOwnedTimer: hook.createOwned(() => cb(...args), normalizeDelay(interval), true) };
+  }
   const timer = {};
   const state = { enabled: true };
   timers.set(timer, state);
@@ -83,6 +95,10 @@ globalThis.setInterval = (cb, interval, ...args) => {
 };
 
 globalThis.clearInterval = (timer) => {
+  if (timer !== null && typeof timer === "object" && timer.__vjsxOwnedTimer !== undefined) {
+    const hook = runtimeTimerWakeup();
+    return hook?.cancelOwned?.(timer.__vjsxOwnedTimer) ?? false;
+  }
   const state = timers.get(timer);
   if (state === undefined) {
     return false;

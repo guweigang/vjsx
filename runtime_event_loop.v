@@ -43,8 +43,9 @@ pub:
 @[params]
 pub struct RuntimeSessionScheduler {
 pub:
-	schedule_wakeup RuntimeSessionWakeFn       = runtime_session_default_wake
-	cancel_wakeup   RuntimeSessionCancelWakeFn = runtime_session_default_cancel_wake
+	schedule_wakeup      RuntimeSessionWakeFn = runtime_session_default_wake
+	cancel_wakeup        RuntimeSessionCancelWakeFn = runtime_session_default_cancel_wake
+	schedule_async_ready RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
 }
 
 // RuntimeSessionEventLoopConfig defines the host/runtime boundary for event
@@ -57,9 +58,10 @@ pub:
 @[params]
 pub struct RuntimeSessionEventLoopConfig {
 pub:
-	now_fn               RuntimeSessionNowFn        = runtime_session_default_now
-	wake_fn              RuntimeSessionWakeFn       = runtime_session_default_wake
+	now_fn               RuntimeSessionNowFn = runtime_session_default_now
+	wake_fn              RuntimeSessionWakeFn = runtime_session_default_wake
 	cancel_wake_fn       RuntimeSessionCancelWakeFn = runtime_session_default_cancel_wake
+	async_ready_fn       RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
 	runtime_owned_timers bool
 	session_id           string
 }
@@ -71,7 +73,17 @@ mut:
 	next_wakeup_at_ms  i64 = -1
 	wakeup_generation  u64
 	timer_wakeup_hints map[string]i64
+	owned_timers       map[u64]RuntimeOwnedTimer
+	next_timer_id      u64 = 1
 	closed             bool
+}
+
+struct RuntimeOwnedTimer {
+	id          u64
+	due_at_ms   i64
+	interval_ms int
+	repeating   bool
+	callback    Value
 }
 
 pub struct RuntimeSessionDebugSnapshot {
@@ -85,6 +97,8 @@ pub:
 	next_wakeup_at_ms                i64 = -1
 	wakeup_generation                u64
 	timer_wakeup_hint_count          int
+	runtime_owned_timer_count        int
+	pending_host_async_count         int
 	next_timer_wakeup_at_ms          i64 = -1
 	async_error_count                int
 	last_error_message               string
@@ -102,8 +116,9 @@ pub:
 
 fn new_runtime_session_event_loop_state() &RuntimeSessionEventLoopState {
 	return &RuntimeSessionEventLoopState{
-		config:             RuntimeSessionEventLoopConfig{}
+		config: RuntimeSessionEventLoopConfig{}
 		timer_wakeup_hints: map[string]i64{}
+		owned_timers: map[u64]RuntimeOwnedTimer{}
 	}
 }
 
@@ -123,7 +138,14 @@ pub fn (mut session RuntimeSession) configure_event_loop(config RuntimeSessionEv
 		return
 	}
 	mut state := session.event_loop_state
+	if state.config.runtime_owned_timers && !config.runtime_owned_timers {
+		for _, timer in state.owned_timers {
+			timer.callback.free()
+		}
+		state.owned_timers = map[u64]RuntimeOwnedTimer{}
+	}
 	state.config = config
+	session.configure_host_async_ready(config.session_id, config.async_ready_fn)
 	session.install_timer_wakeup_bridge()
 }
 
@@ -135,11 +157,12 @@ pub fn (mut session RuntimeSession) set_scheduler(scheduler RuntimeSessionSchedu
 	}
 	current := session.event_loop_state.config
 	session.configure_event_loop(RuntimeSessionEventLoopConfig{
-		now_fn:               current.now_fn
-		wake_fn:              scheduler.schedule_wakeup
-		cancel_wake_fn:       scheduler.cancel_wakeup
+		now_fn: current.now_fn
+		wake_fn: scheduler.schedule_wakeup
+		cancel_wake_fn: scheduler.cancel_wakeup
+		async_ready_fn: scheduler.schedule_async_ready
 		runtime_owned_timers: current.runtime_owned_timers
-		session_id:           current.session_id
+		session_id: current.session_id
 	})
 }
 
@@ -163,6 +186,7 @@ pub fn (session RuntimeSession) needs_wakeup() bool {
 		return false
 	}
 	return session.has_ready_task() || session.has_pending_wakeup()
+		|| session.pending_host_async_event_count() > 0
 }
 
 // Report the next wakeup time requested by the session.
@@ -202,7 +226,7 @@ pub fn (mut session RuntimeSession) request_wakeup_at(wake_at_ms i64, reason str
 		session_id: state.config.session_id
 		wake_at_ms: wake_at_ms
 		generation: state.wakeup_generation
-		reason:     reason
+		reason: reason
 	})
 }
 
@@ -229,6 +253,18 @@ fn (mut session RuntimeSession) reschedule_timer_wakeup(reason string) {
 			next_wakeup_at_ms = wake_at_ms
 		}
 	}
+	for _, timer in state.owned_timers {
+		if !has_next || timer.due_at_ms < next_wakeup_at_ms {
+			has_next = true
+			next_wakeup_at_ms = timer.due_at_ms
+		}
+	}
+	if async_deadline := session.next_host_async_deadline() {
+		if !has_next || async_deadline < next_wakeup_at_ms {
+			has_next = true
+			next_wakeup_at_ms = async_deadline
+		}
+	}
 	if !has_next {
 		session.clear_wakeup_request()
 		return
@@ -237,6 +273,10 @@ fn (mut session RuntimeSession) reschedule_timer_wakeup(reason string) {
 		return
 	}
 	session.request_wakeup_at(next_wakeup_at_ms, reason)
+}
+
+fn (mut session RuntimeSession) reschedule_host_async_wakeup(reason string) {
+	session.reschedule_timer_wakeup(reason)
 }
 
 // Record a QuickJS-backed timer wakeup hint and notify the host about the
@@ -253,8 +293,7 @@ pub fn (mut session RuntimeSession) request_timer_wakeup_after(timer_id string, 
 		if max_hints > 0 && state.timer_wakeup_hints.len >= max_hints {
 			mut limit_state := session.limit_state
 			limit_state.rejected_timer_wakeup_hints++
-			session.record_runtime_error('timer_wakeup_hint_limit',
-				'timer wakeup hint limit reached')
+			session.record_runtime_error('timer_wakeup_hint_limit', 'timer wakeup hint limit reached')
 			return -1
 		}
 	}
@@ -306,12 +345,130 @@ pub fn (mut session RuntimeSession) install_timer_wakeup_bridge() {
 		session.clear_timer_wakeup(timer_id)
 		return ctx.js_bool(true)
 	})
+	owned_create_fn := ctx.js_function(fn [mut session, ctx] (args []Value) Value {
+		if args.len < 3 || !args[0].is_function() || !session.runtime_owns_timers() {
+			return ctx.js_int(0)
+		}
+		id := session.create_runtime_timer(args[0], args[1].to_int(), args[2].to_bool())
+		return ctx.js_int(int(id))
+	})
+	owned_cancel_fn := ctx.js_function(fn [mut session, ctx] (args []Value) Value {
+		if args.len == 0 {
+			return ctx.js_bool(false)
+		}
+		return ctx.js_bool(session.cancel_runtime_timer(u64(args[0].to_int())))
+	})
 	bridge.set('schedule', schedule_fn)
 	bridge.set('cancel', cancel_fn)
+	bridge.set('runtimeOwned', session.runtime_owns_timers())
+	bridge.set('createOwned', owned_create_fn)
+	bridge.set('cancelOwned', owned_cancel_fn)
 	global.set('__vjsxRuntimeTimerWakeup', bridge)
 	schedule_fn.free()
 	cancel_fn.free()
+	owned_create_fn.free()
+	owned_cancel_fn.free()
 	bridge.free()
+}
+
+fn (mut session RuntimeSession) create_runtime_timer(callback Value, delay_ms int, repeating bool) u64 {
+	if session.closed || session.event_loop_state.closed || !session.runtime_owns_timers() {
+		return 0
+	}
+	normalized_delay := if delay_ms < 0 { 0 } else { delay_ms }
+	mut state := session.event_loop_state
+	id := state.next_timer_id
+	state.next_timer_id++
+	state.owned_timers[id] = RuntimeOwnedTimer{
+		id: id
+		due_at_ms: session.now_ms() + i64(normalized_delay)
+		interval_ms: normalized_delay
+		repeating: repeating
+		callback: callback.dup_value()
+	}
+	session.reschedule_timer_wakeup('runtime-timer')
+	return id
+}
+
+// Cancel a runtime-owned timer. Legacy QuickJS timer handles continue through
+// the qjs:os compatibility path in web/js/timer.js.
+pub fn (mut session RuntimeSession) cancel_runtime_timer(id u64) bool {
+	if id == 0 || session.closed || session.event_loop_state.closed {
+		return false
+	}
+	mut state := session.event_loop_state
+	timer := state.owned_timers[id] or { return false }
+	state.owned_timers.delete(id)
+	timer.callback.free()
+	session.reschedule_timer_wakeup('runtime-timer-cancelled')
+	return true
+}
+
+fn (mut session RuntimeSession) fire_due_runtime_timers() !int {
+	if !session.runtime_owns_timers() {
+		return 0
+	}
+	mut fired := 0
+	for {
+		now := session.now_ms()
+		mut due_id := u64(0)
+		mut due_at := i64(0)
+		for id, candidate in session.event_loop_state.owned_timers {
+			if candidate.due_at_ms <= now && (due_id == 0 || candidate.due_at_ms < due_at) {
+				due_id = id
+				due_at = candidate.due_at_ms
+			}
+		}
+		if due_id == 0 {
+			break
+		}
+		mut state := session.event_loop_state
+		timer := state.owned_timers[due_id] or { continue }
+		callback := timer.callback.dup_value()
+		if timer.repeating {
+			step := if timer.interval_ms <= 0 { 1 } else { timer.interval_ms }
+			mut next_due := timer.due_at_ms + i64(step)
+			if next_due <= now {
+				next_due = now + i64(step)
+			}
+			state.owned_timers[due_id] = RuntimeOwnedTimer{
+				...timer
+				due_at_ms: next_due
+			}
+		} else {
+			state.owned_timers.delete(due_id)
+			timer.callback.free()
+		}
+		call_result := session.context.call(callback) or {
+			callback.free()
+			session.cancel_runtime_timer(due_id)
+			session.record_runtime_error('runtime_timer', err.msg())
+			return err
+		}
+		call_result.free()
+		callback.free()
+		fired++
+	}
+	return fired
+}
+
+// Deliver one host wakeup on the owning lane. Stale generations are ignored.
+// The return value counts host completions and timer callbacks settled.
+pub fn (mut session RuntimeSession) deliver_wakeup(generation u64) !int {
+	if session.closed || session.event_loop_state.closed {
+		return 0
+	}
+	mut state := session.event_loop_state
+	if state.has_pending_wakeup && generation != 0 && generation != state.wakeup_generation {
+		return 0
+	}
+	state.has_pending_wakeup = false
+	state.next_wakeup_at_ms = -1
+	mut delivered := session.fire_due_runtime_timers()!
+	delivered += session.drain_host_async_events()!
+	session.drain_ready_tasks()!
+	session.reschedule_timer_wakeup('event-loop')
+	return delivered
 }
 
 // Report whether the session already has ready work in the QuickJS job queue.
@@ -334,6 +491,12 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 			next_timer_wakeup_at_ms = wake_at_ms
 		}
 	}
+	for _, timer in state.owned_timers {
+		if !has_next_timer || timer.due_at_ms < next_timer_wakeup_at_ms {
+			has_next_timer = true
+			next_timer_wakeup_at_ms = timer.due_at_ms
+		}
+	}
 	next_wakeup_at_ms := if !session.closed && !state.closed && state.has_pending_wakeup {
 		state.next_wakeup_at_ms
 	} else {
@@ -349,56 +512,66 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 		session.memory_usage()
 	}
 	return RuntimeSessionDebugSnapshot{
-		session_id:                       state.config.session_id
-		closed:                           session.closed || state.closed
-		runtime_owned_timers:             state.config.runtime_owned_timers
-		has_ready_task:                   has_ready
-		has_pending_wakeup:               has_pending
-		needs_wakeup:                     has_ready || has_pending
-		next_wakeup_at_ms:                next_wakeup_at_ms
-		wakeup_generation:                if has_pending { state.wakeup_generation } else { u64(0) }
-		timer_wakeup_hint_count:          if session.closed || state.closed {
+		session_id: state.config.session_id
+		closed: session.closed || state.closed
+		runtime_owned_timers: state.config.runtime_owned_timers
+		has_ready_task: has_ready
+		has_pending_wakeup: has_pending
+		needs_wakeup: has_ready || has_pending || session.pending_host_async_event_count() > 0
+		next_wakeup_at_ms: next_wakeup_at_ms
+		wakeup_generation: if has_pending { state.wakeup_generation } else { u64(0) }
+		timer_wakeup_hint_count: if session.closed || state.closed {
 			0
 		} else {
 			state.timer_wakeup_hints.len
 		}
-		next_timer_wakeup_at_ms:          if session.closed || state.closed || !has_next_timer {
+		runtime_owned_timer_count: if session.closed || state.closed {
+			0
+		} else {
+			state.owned_timers.len
+		}
+		pending_host_async_count: if session.closed || state.closed {
+			0
+		} else {
+			session.pending_host_async_operation_count()
+		}
+		next_timer_wakeup_at_ms: if session.closed || state.closed || !has_next_timer {
 			i64(-1)
 		} else {
 			next_timer_wakeup_at_ms
 		}
-		async_error_count:                if session.closed || state.closed {
+		async_error_count: if session.closed || state.closed {
 			0
 		} else {
 			session.diagnostic_error_count()
 		}
-		last_error_message:               if session.closed || state.closed {
+		last_error_message: if session.closed || state.closed {
 			''
 		} else {
 			last_error.message
 		}
-		dropped_diagnostic_count:         if session.closed || state.closed {
+		dropped_diagnostic_count: if session.closed || state.closed {
 			0
 		} else {
 			session.dropped_diagnostic_count()
 		}
-		timer_wakeup_hint_limit:          session.limit_state.config.max_timer_wakeup_hints
+		timer_wakeup_hint_limit: session.limit_state.config.max_timer_wakeup_hints
 		rejected_timer_wakeup_hint_count: if session.closed || state.closed {
 			0
 		} else {
 			session.rejected_timer_wakeup_hint_count()
 		}
-		phase:                            lifecycle.phase
-		in_flight_turns:                  lifecycle.in_flight_turns
-		completed_turns:                  lifecycle.completed_turns
-		rejected_turns:                   lifecycle.rejected_turns
-		observation_count:                if session.closed || state.closed {
+		phase: lifecycle.phase
+		in_flight_turns: lifecycle.in_flight_turns
+		completed_turns: lifecycle.completed_turns
+		rejected_turns: lifecycle.rejected_turns
+		observation_count: if session.closed || state.closed {
 			0
 		} else {
 			session.observation_count()
 		}
-		dropped_observation_count:        session.dropped_observation_count()
-		memory:                           memory
+		dropped_observation_count: session.dropped_observation_count()
+		memory: memory
 	}
 }
 
@@ -409,7 +582,7 @@ pub fn (mut session RuntimeSession) clear_wakeup_request() {
 		state.config.cancel_wake_fn(RuntimeSessionWakeCancelRequest{
 			session_id: state.config.session_id
 			generation: state.wakeup_generation
-			reason:     'cleared'
+			reason: 'cleared'
 		})
 	}
 	state.has_pending_wakeup = false
@@ -423,6 +596,10 @@ pub fn (mut session RuntimeSession) close_event_loop() {
 		return
 	}
 	session.clear_wakeup_request()
+	for _, timer in state.owned_timers {
+		timer.callback.free()
+	}
+	state.owned_timers = map[u64]RuntimeOwnedTimer{}
 	state.timer_wakeup_hints = map[string]i64{}
 	state.closed = true
 	if !session.closed {
