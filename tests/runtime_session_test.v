@@ -969,6 +969,41 @@ fn test_extension_session_installs_host_api_and_binds_calls() {
 	assert default_method.to_string() == 'host-app:ext-b:log'
 }
 
+fn test_extension_session_applies_safe_node_host_policy() {
+	key := 'VJSX_EXTENSION_POLICY_${os.getpid()}'
+	mut extension := runtimejs.new_node_extension_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
+		process_args: ['inline.js']
+		policy: vjsx.host_policy_safe()
+	}, vjsx.HostApiConfig{}, runtime_session_test_host_api())
+	defer {
+		extension.close()
+	}
+	value := extension.context().eval('
+		import { execSync } from "child_process";
+		try {
+			process.env["${key}"] = "blocked";
+		} catch (_err) {}
+		const envResult = String(process.env["${key}"] === undefined);
+		let shellResult = "ran";
+		try {
+			execSync("printf should-not-run");
+		} catch (err) {
+			shellResult = String(err.message);
+		}
+		globalThis.__extensionPolicy = [
+			envResult,
+			shellResult
+		].join("|");
+	', vjsx.type_module) or { panic(err) }
+	value.free()
+	extension.context().end()
+	result := extension.context().eval('globalThis.__extensionPolicy') or { panic(err) }
+	defer {
+		result.free()
+	}
+	assert result.to_string().starts_with('true|shell execution is disabled')
+}
+
 fn test_extension_session_bound_plugin_lifecycle() {
 	host_api := runtime_session_test_host_api()
 	host_config := runtime_session_test_host_config()

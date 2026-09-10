@@ -19,10 +19,10 @@ pub:
 	// They used to be installed accidentally through NodeCompatConfig defaults.
 	sqlite          bool
 	mysql           bool
-	allow_env_write bool               = true
+	allow_env_write bool = true
 	fetch_config    FetchGlobalsConfig = FetchGlobalsConfig{}
-	log_fn          HostLogFn          = default_host_log
-	error_fn        HostLogFn          = default_host_error
+	log_fn          HostLogFn = default_host_log
+	error_fn        HostLogFn = default_host_error
 }
 
 // NodeRuntimeConfig describes a fuller Node-like runtime profile.
@@ -32,37 +32,41 @@ pub:
 	fs_roots     []string
 	process_args []string
 	asset_root   string
-	fetch        bool               = true
+	fetch        bool = true
 	fetch_config FetchGlobalsConfig = FetchGlobalsConfig{}
-	log_fn       HostLogFn          = default_host_log
-	error_fn     HostLogFn          = default_host_error
+	// The trusted default preserves the historical Node runtime contract.
+	// Extension hosts should explicitly pass host_policy_safe() unless the
+	// loaded code is trusted as much as the embedder.
+	policy   HostPolicy = host_policy_trusted()
+	log_fn   HostLogFn = default_host_log
+	error_fn HostLogFn = default_host_error
 }
 
 // Install a lightweight script runtime profile.
 pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 	ctx.install_node_compat(NodeCompatConfig{
-		crypto:        false
-		zlib:          false
-		fs:            false
-		http:          false
-		https:         false
-		fetch:         config.fetch
+		crypto: false
+		zlib: false
+		fs: false
+		http: false
+		https: false
+		fetch: config.fetch
 		child_process: false
-		path:          config.path
-		os:            config.os
-		process:       config.process
-		sqlite:        config.sqlite
-		mysql:         config.mysql
-		runtime:       runtime_globals_minimal()
-		fs_roots:      config.fs_roots
-		process_args:  config.process_args
-		asset_root:    config.asset_root
-		fetch_config:  config.fetch_config
-		policy:        HostPolicy{
+		path: config.path
+		os: config.os
+		process: config.process
+		sqlite: config.sqlite
+		mysql: config.mysql
+		runtime: runtime_globals_minimal()
+		fs_roots: config.fs_roots
+		process_args: config.process_args
+		asset_root: config.asset_root
+		fetch_config: config.fetch_config
+		policy: HostPolicy{
 			allow_env_write: config.allow_env_write
 		}
-		log_fn:        config.log_fn
-		error_fn:      config.error_fn
+		log_fn: config.log_fn
+		error_fn: config.error_fn
 	})
 	ctx.set_runtime_profile('script')
 }
@@ -70,14 +74,15 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 // Install a fuller Node-like runtime profile.
 pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
 	ctx.install_node_compat(NodeCompatConfig{
-		runtime:      runtime_globals_full()
-		fetch:        config.fetch
-		fs_roots:     config.fs_roots
+		runtime: runtime_globals_full()
+		fetch: config.fetch
+		fs_roots: config.fs_roots
 		process_args: config.process_args
-		asset_root:   config.asset_root
+		asset_root: config.asset_root
 		fetch_config: config.fetch_config
-		log_fn:       config.log_fn
-		error_fn:     config.error_fn
+		policy: config.policy
+		log_fn: config.log_fn
+		error_fn: config.error_fn
 	})
 	ctx.set_runtime_profile('node')
 }
