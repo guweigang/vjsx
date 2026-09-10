@@ -11,7 +11,7 @@ else
   quickjs_dir_explicit=0
 fi
 quickjs_repo=${QUICKJS_REPO:-https://github.com/quickjs-ng/quickjs}
-quickjs_ref=${QUICKJS_REF:-v0.15.1}
+quickjs_ref=${QUICKJS_REF:-$(tr -d '[:space:]' < "$repo_root/.quickjs-version")}
 
 is_quickjs_ng_checkout() {
   [ -f "$1/quickjs.c" ] &&
@@ -24,6 +24,10 @@ quickjs_checkout_matches_ref() {
     return 1
   fi
   if [ "$quickjs_ref" = "master" ] || [ "$quickjs_ref" = "main" ]; then
+    return 0
+  fi
+  current_commit=$(git -C "$1" rev-parse HEAD 2>/dev/null || true)
+  if [ "$current_commit" = "$quickjs_ref" ]; then
     return 0
   fi
   current_ref=$(git -C "$1" describe --tags --exact-match 2>/dev/null || true)
@@ -41,7 +45,10 @@ fi
 
 if ! is_quickjs_ng_checkout "$quickjs_dir"; then
   rm -rf "$quickjs_dir"
-  git clone --depth 1 --branch "$quickjs_ref" "$quickjs_repo" "$quickjs_dir"
+  git init -q "$quickjs_dir"
+  git -C "$quickjs_dir" remote add origin "$quickjs_repo"
+  git -C "$quickjs_dir" fetch --depth 1 origin "$quickjs_ref"
+  git -C "$quickjs_dir" checkout -q --detach FETCH_HEAD
 fi
 
 if ! is_quickjs_ng_checkout "$quickjs_dir"; then

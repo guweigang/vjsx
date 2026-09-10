@@ -70,6 +70,14 @@ The artifact ABI is independent of the vjsx product version. Historical format
 1; other unknown legacy lines and future ABI values are rejected. See
 [`docs/API_STABILITY.md`](docs/API_STABILITY.md).
 
+Package tar extraction accepts regular files and directories only. It validates
+the archive before writing, including header checksums, octal sizes, entry
+bounds, termination and absolute/traversal paths on Unix and Windows. Links and
+special device entries are never materialized. Package integrity metadata is
+checked when a supported `sha512-` value is present; release archives publish
+SHA-256 checksums. These checks do not replace signed provenance or an OS
+sandbox.
+
 ## Reporting
 
 Report suspected vulnerabilities privately to the repository maintainers. Do

@@ -92,9 +92,9 @@ jobs:
 
       - name: Setup V
         if: matrix.shell == 'bash'
-        uses: vlang/setup-v@v1.4
+        uses: vlang/setup-v@v1.7
         with:
-          check-latest: true
+          version-file: .v-version
 
       - name: Build V with MSVC
         if: matrix.shell == 'powershell'
@@ -102,7 +102,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $installRoot = Join-Path $env:RUNNER_TEMP "vlang"
-          git clone --depth 1 https://github.com/vlang/v.git $installRoot
+          $vVersion = (Get-Content .v-version -Raw).Trim()
+          git clone --depth 1 --branch $vVersion https://github.com/vlang/v.git $installRoot
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Push-Location $installRoot
           cmd /c makev.bat -msvc
@@ -210,6 +211,7 @@ jobs:
             fi
           fi
           ./dist/${{ matrix.binary }} check-runtime --runtime node
+          test "$(./dist/${{ matrix.binary }} --version)" = "vjsx ${{ needs.metadata.outputs.version }}"
           ./dist/${{ matrix.binary }} ./tests/test.js
           ./dist/${{ matrix.binary }} build --runner ./dist/vjsx-app-runner ./tests/test.js -o ./dist/vjsx-smoke-app
           ./dist/vjsx-smoke-app
@@ -220,6 +222,7 @@ jobs:
         shell: powershell
         run: |
           .\dist\${{ matrix.binary }} check-runtime --runtime node
+          if ((.\dist\${{ matrix.binary }} --version).Trim() -ne "vjsx ${{ needs.metadata.outputs.version }}") { throw "binary version does not match v.mod" }
           .\dist\${{ matrix.binary }} .\tests\test.js
           .\dist\${{ matrix.binary }} build --runner .\dist\vjsx-app-runner.exe .\tests\test.js -o .\dist\vjsx-smoke-app.exe
           .\dist\vjsx-smoke-app.exe
@@ -245,6 +248,25 @@ jobs:
           Copy-Item "README.md" "release\${{ matrix.artifact }}\"
           Compress-Archive -Path "release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}" -Force
 
+      - name: Smoke packaged Unix archive
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          mkdir -p packaged-smoke
+          tar -xzf "${{ matrix.archive }}" -C packaged-smoke
+          test "$(packaged-smoke/${{ matrix.artifact }}/${{ matrix.binary }} --version)" = "vjsx ${{ needs.metadata.outputs.version }}"
+          packaged-smoke/${{ matrix.artifact }}/${{ matrix.binary }} check-runtime --runtime node
+
+      - name: Smoke packaged Windows archive
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          Expand-Archive -Path "${{ matrix.archive }}" -DestinationPath "packaged-smoke" -Force
+          $packagedBinary = "packaged-smoke\${{ matrix.artifact }}\${{ matrix.binary }}"
+          if ((& $packagedBinary --version).Trim() -ne "vjsx ${{ needs.metadata.outputs.version }}") { throw "packaged binary version does not match v.mod" }
+          & $packagedBinary check-runtime --runtime node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -265,6 +287,13 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} + | sort -k2 > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 5
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -278,4 +307,5 @@ jobs:
           files: |
             release-artifacts/**/*.tar.gz
             release-artifacts/**/*.zip
+            release-artifacts/SHA256SUMS
           fail_on_unmatched_files: true
