@@ -37,7 +37,7 @@ fn test_cli_host_sqlite_statement_helper() {
 	output :=
 		os.execute('${cli_test_support.command(true)} --module ./tests/host_sqlite_statement_runtime.mjs')
 	assert output.exit_code == 0
-	assert output.output.trim_space() == 'sqlite\ntrue\nsqlite\ntrue\nsqlite.Connection{path: /Users/guweigang/Source/vjsx/tests/.host_sqlite_statement_runtime.db, closed: false, inTransaction: false}\nsqlite.Statement{kind: exec, closed: false, sql: insert into users(name) values (?)}\ntrue\ninsert into users(name) values (?)\nexec\nquery\nfalse\n1\n1\n2\n2\n3\n1:alice,2:bob\n1:alice\ntrue\n3\nnull\nalice,bob|bob,carol\ntrue\ntrue\nfalse\ntrue'
+	assert output.output.trim_space() == 'sqlite\ntrue\nsqlite\ntrue\nsqlite.Connection{path: ${db_path}, closed: false, inTransaction: false}\nsqlite.Statement{kind: exec, closed: false, sql: insert into users(name) values (?)}\ntrue\ninsert into users(name) values (?)\nexec\nquery\nfalse\n1\n1\n2\n2\n3\n1:alice,2:bob\n1:alice\ntrue\n3\nnull\nalice,bob|bob,carol\ntrue\ntrue\nfalse\ntrue'
 	assert !os.exists(db_path)
 }
 

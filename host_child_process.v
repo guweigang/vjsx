@@ -14,7 +14,7 @@ mut:
 	env       map[string]string
 	env_set   bool
 	stdio     ChildProcessStdioMode = .pipe
-	encoding  string                = 'utf8'
+	encoding  string = 'utf8'
 	shell     string
 	use_shell bool
 }
@@ -203,9 +203,9 @@ fn child_process_fork_invocation(args []Value) !ChildProcessForkInvocation {
 	}
 	mut invocation := ChildProcessForkInvocation{
 		module_path: args[0].str()
-		options:     ChildProcessSyncOptions{}
-		exec_path:   ''
-		exec_argv:   []string{}
+		options: ChildProcessSyncOptions{}
+		exec_path: ''
+		exec_argv: []string{}
 	}
 	mut options_index := -1
 	if args.len > 1 && !args[1].is_undefined() && !args[1].is_null() {
@@ -286,7 +286,7 @@ fn child_process_clone_callback(value Value) Value {
 
 fn child_process_call_this(ctx &Context, this Value, callback Value, args []Value) !Value {
 	c_args := args.map(it.dup_value().ref)
-	c_val := if c_args.len == 0 { unsafe { nil } } else { &c_args[0] }
+	c_val := if c_args.len == 0 { &JSValueConst(unsafe { nil }) } else { &c_args[0] }
 	ret := ctx.c_val(C.JS_Call(ctx.ref, callback.ref, this.ref, c_args.len, c_val))
 	if ret.is_exception() {
 		return ctx.execution_error()
@@ -362,7 +362,7 @@ fn child_process_event_emitter(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		listeners := child_process_event_bucket(ctx, this, args[0].str())
@@ -378,7 +378,7 @@ fn child_process_event_emitter(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		listeners := child_process_event_bucket(ctx, this, args[0].str())
@@ -504,7 +504,7 @@ fn child_process_stream_object(ctx &Context) Value {
 		if args.len == 0 || !args[0].is_object() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		end_destination := if args.len > 1 {
@@ -534,7 +534,7 @@ fn child_process_stream_object(ctx &Context) Value {
 			pipe_dests.free()
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		mut next_dests := ctx.js_array()
@@ -596,7 +596,7 @@ fn child_process_finish_piped_stream(ctx &Context, stream Value) {
 		should_end := end_value.to_bool()
 		end_value.free()
 		dest := entry.get('dest')
-		if should_end && dest.is_object() && dest.has('_vjsxFinishListeners') {
+		if should_end && dest.is_object() {
 			fs_emit_finish(ctx, dest) or {}
 		}
 		dest.free()
@@ -1086,7 +1086,7 @@ fn child_process_run(command string, args []string, options ChildProcessSyncOpti
 	}
 	return ChildProcessRunResult{
 		status: status
-		pid:    pid
+		pid: pid
 		stdout: stdout
 		stderr: stderr
 	}
@@ -1281,6 +1281,10 @@ fn child_process_spawn_live(ctx &Context, command string, args []string, options
 }
 
 fn child_process_default_fork_exec_path() !string {
+	running_executable := os.executable()
+	if running_executable != '' && os.is_executable(running_executable) {
+		return running_executable
+	}
 	repo_root := os.getenv('VJS_REPO_ROOT')
 	if repo_root != '' {
 		candidate := os.join_path(repo_root, 'vjsx')
@@ -1297,8 +1301,7 @@ fn child_process_fork_command(invocation ChildProcessForkInvocation, roots []str
 	} else {
 		child_process_default_fork_exec_path()!
 	}
-	module_path := child_process_resolve_module_path(invocation.module_path,
-		invocation.options.cwd, roots)
+	module_path := child_process_resolve_module_path(invocation.module_path, invocation.options.cwd, roots)
 	mut argv := []string{}
 	argv << invocation.exec_argv
 	argv << module_path
@@ -1344,7 +1347,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			} else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'args must be an array or options object'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 		}
@@ -1375,8 +1378,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			ChildProcessSyncOptions{}
 		}
 		shell_command, shell_args := child_process_shell_command(command, options.shell)
-		result := child_process_run(shell_command, shell_args,
-			child_process_without_shell(options), roots) or {
+		result := child_process_run(shell_command, shell_args, child_process_without_shell(options), roots) or {
 			return ctx.js_throw(ctx.js_error(message: err.msg()))
 		}
 		if result.status != 0 {
@@ -1408,7 +1410,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			} else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'args must be an array or options object'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 		}
@@ -1443,19 +1445,16 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
 		if invocation.options.use_shell && !allow_shell {
-			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
-				invocation.callback, 'shell execution is disabled')
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv, invocation.callback, 'shell execution is disabled')
 			child_process_schedule(ctx, child)
 			return child
 		}
 		result := child_process_run(command, invocation.argv, invocation.options, roots) or {
-			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
-				invocation.callback, err.msg())
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv, invocation.callback, err.msg())
 			child_process_schedule(ctx, child)
 			return child
 		}
-		child := child_process_async_result_object(ctx, command, invocation.argv, result,
-			invocation.options, invocation.callback)
+		child := child_process_async_result_object(ctx, command, invocation.argv, result, invocation.options, invocation.callback)
 		child_process_schedule(ctx, child)
 		return child
 	})
@@ -1464,8 +1463,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			return ctx.js_throw(ctx.js_error(message: 'command is required', name: 'TypeError'))
 		}
 		if !allow_shell {
-			child := child_process_async_spawn_error_object(ctx, '', []string{},
-				ctx.js_undefined(), 'shell execution is disabled')
+			child := child_process_async_spawn_error_object(ctx, '', []string{}, ctx.js_undefined(), 'shell execution is disabled')
 			child_process_schedule(ctx, child)
 			return child
 		}
@@ -1474,15 +1472,12 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
 		shell_command, shell_args := child_process_shell_command(command, invocation.options.shell)
-		result := child_process_run(shell_command, shell_args,
-			child_process_without_shell(invocation.options), roots) or {
-			child := child_process_async_spawn_error_object(ctx, shell_command, shell_args,
-				invocation.callback, err.msg())
+		result := child_process_run(shell_command, shell_args, child_process_without_shell(invocation.options), roots) or {
+			child := child_process_async_spawn_error_object(ctx, shell_command, shell_args, invocation.callback, err.msg())
 			child_process_schedule(ctx, child)
 			return child
 		}
-		child := child_process_async_result_object(ctx, shell_command, shell_args, result,
-			invocation.options, invocation.callback)
+		child := child_process_async_result_object(ctx, shell_command, shell_args, result, invocation.options, invocation.callback)
 		child_process_schedule(ctx, child)
 		return child
 	})
@@ -1495,14 +1490,12 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
 		if invocation.options.use_shell && !allow_shell {
-			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
-				ctx.js_undefined(), 'shell execution is disabled')
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv, ctx.js_undefined(), 'shell execution is disabled')
 			child_process_schedule(ctx, child)
 			return child
 		}
 		return child_process_spawn_live(ctx, command, invocation.argv, invocation.options, roots) or {
-			child := child_process_async_spawn_error_object(ctx, command, invocation.argv,
-				ctx.js_undefined(), err.msg())
+			child := child_process_async_spawn_error_object(ctx, command, invocation.argv, ctx.js_undefined(), err.msg())
 			child_process_schedule(ctx, child)
 			child
 		}
@@ -1512,14 +1505,12 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			return ctx.js_throw(ctx.js_error(message: err.msg(), name: 'TypeError'))
 		}
 		command, argv, options := child_process_fork_command(invocation, roots) or {
-			child := child_process_async_spawn_error_object(ctx, invocation.module_path,
-				invocation.argv, ctx.js_undefined(), err.msg())
+			child := child_process_async_spawn_error_object(ctx, invocation.module_path, invocation.argv, ctx.js_undefined(), err.msg())
 			child_process_schedule(ctx, child)
 			return child
 		}
 		return child_process_spawn_live(ctx, command, argv, options, roots) or {
-			child := child_process_async_spawn_error_object(ctx, invocation.module_path,
-				invocation.argv, ctx.js_undefined(), err.msg())
+			child := child_process_async_spawn_error_object(ctx, invocation.module_path, invocation.argv, ctx.js_undefined(), err.msg())
 			child_process_schedule(ctx, child)
 			child
 		}

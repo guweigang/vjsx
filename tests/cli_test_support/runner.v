@@ -4,12 +4,13 @@ import os
 import time
 
 const runner_cache_dir = os.join_path(@VMODROOT, '.cache', 'cli-tests')
+const runner_lock_stale_after_seconds = i64(10 * 60)
 
 pub fn command(sqlite bool) string {
 	runner := ensure_runner(sqlite)
 	quickjs_source_path := resolve_quickjs_path()
 	v_cache := os.join_path(runner_cache_dir, 'vcache')
-	inner := 'VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} VJS_REPO_ROOT=${shell_quote(@VMODROOT)} exec ${shell_quote(runner)} "$@"'
+	inner := 'VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} VJS_REPO_ROOT=${shell_quote(@VMODROOT)} exec ${shell_quote(runner)} "\$@"'
 	return 'sh -c ${shell_quote(inner)} --'
 }
 
@@ -20,14 +21,16 @@ pub fn app_runner() string {
 		return runner
 	}
 	lock_dir := runner + '.lock'
+	recover_stale_runner_lock(lock_dir)
 	mut owns_lock := true
 	os.mkdir(lock_dir) or { owns_lock = false }
 	if owns_lock {
+		write_runner_lock_owner(lock_dir)
 		build_app_runner(runner) or {
-			os.rmdir(lock_dir) or {}
+			os.rmdir_all(lock_dir) or {}
 			panic(err)
 		}
-		os.rmdir(lock_dir) or {}
+		os.rmdir_all(lock_dir) or {}
 		return runner
 	}
 	wait_for_runner(runner, lock_dir)
@@ -46,14 +49,16 @@ fn ensure_runner(sqlite bool) string {
 		return runner
 	}
 	lock_dir := runner + '.lock'
+	recover_stale_runner_lock(lock_dir)
 	mut owns_lock := true
 	os.mkdir(lock_dir) or { owns_lock = false }
 	if owns_lock {
+		write_runner_lock_owner(lock_dir)
 		build_runner(runner, sqlite) or {
-			os.rmdir(lock_dir) or {}
+			os.rmdir_all(lock_dir) or {}
 			panic(err)
 		}
-		os.rmdir(lock_dir) or {}
+		os.rmdir_all(lock_dir) or {}
 		return runner
 	}
 	wait_for_runner(runner, lock_dir)
@@ -63,6 +68,40 @@ fn ensure_runner(sqlite bool) string {
 	return runner
 }
 
+fn recover_stale_runner_lock(lock_dir string) {
+	if !os.is_dir(lock_dir) {
+		return
+	}
+	owner_path := os.join_path(lock_dir, 'owner.pid')
+	if os.is_file(owner_path) {
+		owner_pid := os.read_file(owner_path) or { '' }.trim_space().int()
+		if owner_pid > 0 && !runner_lock_owner_is_alive(owner_pid) {
+			os.rmdir_all(lock_dir) or {}
+			return
+		}
+	}
+	age_seconds := time.now().unix() - os.file_last_mod_unix(lock_dir)
+	if age_seconds >= runner_lock_stale_after_seconds {
+		os.rmdir_all(lock_dir) or {}
+	}
+}
+
+fn write_runner_lock_owner(lock_dir string) {
+	os.write_file(os.join_path(lock_dir, 'owner.pid'), os.getpid().str()) or {
+		os.rmdir_all(lock_dir) or {}
+		panic(err)
+	}
+}
+
+fn runner_lock_owner_is_alive(pid int) bool {
+	$if windows {
+		result := os.execute('tasklist /FI "PID eq ${pid}" /NH')
+		return result.exit_code == 0 && result.output.contains(pid.str())
+	} $else {
+		return os.execute('kill -0 ${pid}').exit_code == 0
+	}
+}
+
 fn build_runner(runner string, sqlite bool) ! {
 	partial := '${runner}.${os.getpid()}.tmp'
 	os.rm(partial) or {}
@@ -70,7 +109,7 @@ fn build_runner(runner string, sqlite bool) ! {
 	v_cache := os.join_path(runner_cache_dir, 'vcache')
 	os.mkdir_all(v_cache) or { panic(err) }
 	sqlite_flag := if sqlite { ' -d vjsx_sqlite' } else { '' }
-	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs${sqlite_flag} -o ${shell_quote(partial)} ./cli_runner_bin'
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -d use_openssl${sqlite_flag} -o ${shell_quote(partial)} ./cli_runner_bin'
 	result := os.execute(command)
 	if result.exit_code != 0 {
 		os.rm(partial) or {}
@@ -86,7 +125,7 @@ fn build_app_runner(runner string) ! {
 	quickjs_source_path := resolve_quickjs_path()
 	v_cache := os.join_path(runner_cache_dir, 'vcache-app-runner')
 	os.mkdir_all(v_cache) or { panic(err) }
-	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -o ${shell_quote(partial)} ./app_runner_bin'
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -d use_openssl -o ${shell_quote(partial)} ./app_runner_bin'
 	result := os.execute(command)
 	if result.exit_code != 0 {
 		os.rm(partial) or {}
