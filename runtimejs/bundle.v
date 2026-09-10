@@ -37,6 +37,9 @@ fn sanitize_bundle_app_name(name string) !string {
 
 fn collect_bundle_files(root string, mut files []string) ! {
 	for entry in os.ls(root)! {
+		if entry == '.complete' {
+			continue
+		}
 		path := os.join_path(root, entry)
 		if os.is_dir(path) {
 			collect_bundle_files(path, mut files)!
@@ -69,13 +72,13 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	match options.runtime_profile {
 		'node' {
 			ctx.install_node_runtime(
-				fs_roots:     fs_roots
+				fs_roots: fs_roots
 				process_args: [entry]
 			)
 		}
 		'script' {
 			ctx.install_script_runtime(
-				fs_roots:     fs_roots
+				fs_roots: fs_roots
 				process_args: [entry]
 			)
 		}
@@ -92,12 +95,13 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 		options.app_name
 	})!
 	install_typescript_runtime(ctx)!
-	temp_root := os.join_path(os.temp_dir(),
-		'vjsx-bundle-${os.getpid()}-${time.now().unix_micro()}')
+	temp_root := os.join_path(os.temp_dir(), 'vjsx-bundle-${os.getpid()}-${time.now().unix_micro()}')
 	defer {
 		os.rmdir_all(temp_root) or {}
 	}
-	emitted_entry := build_runtime_module_entry(ctx, entry, true, temp_root)!
+	graph := resolve_module_graph(ctx, entry, options.runtime_profile)!
+	root := prepare_runtime_module_graph(ctx, graph, temp_root, '')!
+	emitted_entry := mirrored_runtime_path(root, entry)
 	mut files := []string{}
 	collect_bundle_files(temp_root, mut files)!
 	files.sort()
@@ -106,7 +110,7 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	for path in files {
 		name := bundle_module_name(app_name, temp_root, path)!
 		modules << vjsx.BundleSourceModule{
-			name:   name
+			name: name
 			source: os.read_file(path)!
 		}
 		if os.real_path(path) == os.real_path(emitted_entry) {
@@ -117,10 +121,10 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 		return error('emitted bundle entry was not found in module graph: ${emitted_entry}')
 	}
 	return ctx.compile_bundle(modules,
-		app_name:        app_name
-		entry:           canonical_entry
+		app_name: app_name
+		entry: canonical_entry
 		runtime_profile: options.runtime_profile
-		strip_source:    options.strip_source
-		strip_debug:     options.strip_debug
+		strip_source: options.strip_source
+		strip_debug: options.strip_debug
 	)
 }
