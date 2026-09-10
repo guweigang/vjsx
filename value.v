@@ -28,25 +28,45 @@ pub type PropKey = Atom | PropertyEnum | int | string
 pub type JSValueConst = C.JSValue
 
 fn C.JS_FreeValue(&C.JSContext, C.JSValue)
+
 fn C.JS_ToCString(&C.JSContext, JSValueConst) &char
+
 fn C.JS_FreeCString(&C.JSContext, &char)
+
 fn C.JS_JSONStringify(&C.JSContext, JSValueConst, JSValueConst, JSValueConst) C.JSValue
+
 fn C.JS_ToBool(&C.JSContext, JSValueConst) bool
+
 fn C.JS_ToInt32(&C.JSContext, &int, JSValueConst)
+
 fn C.JS_ToInt64(&C.JSContext, &i64, JSValueConst)
+
 fn C.JS_ToUint32(&C.JSContext, &u32, JSValueConst)
+
 fn C.JS_ToFloat64(&C.JSContext, &f64, JSValueConst)
+
 fn C.JS_SetPropertyStr(&C.JSContext, JSValueConst, &char, C.JSValue) int
+
 fn C.JS_SetPropertyUint32(&C.JSContext, JSValueConst, u32, C.JSValue) int
+
 fn C.JS_SetProperty(&C.JSContext, JSValueConst, C.JSAtom, C.JSValue) int
+
 fn C.JS_GetPropertyStr(&C.JSContext, JSValueConst, &char) C.JSValue
+
 fn C.JS_GetPropertyUint32(&C.JSContext, JSValueConst, u32) C.JSValue
+
 fn C.JS_GetProperty(&C.JSContext, JSValueConst, C.JSAtom) C.JSValue
+
 fn C.JS_Call(&C.JSContext, JSValueConst, JSValueConst, int, &JSValueConst) C.JSValue
+
 fn C.JS_DupValue(&C.JSContext, JSValueConst) C.JSValue
+
 fn C.JS_GetArrayBuffer(&C.JSContext, &usize, JSValueConst) byteptr
+
 fn C.JS_DeleteProperty(&C.JSContext, JSValueConst, C.JSAtom, int) int
+
 fn C.JS_HasProperty(&C.JSContext, JSValueConst, C.JSAtom) int
+
 fn C.JS_StrictEq(&C.JSContext, JSValueConst, JSValueConst) int
 
 // Duplicate value
@@ -118,12 +138,12 @@ pub fn (v Value) to_error() &JSError {
 		'JavaScript exception'
 	}
 	err := &JSError{
-		name:     name
-		message:  display_message
-		stack:    stack
+		name: name
+		message: display_message
+		stack: stack
 		location: location
 		expected: expected
-		found:    found
+		found: found
 	}
 	return err
 }
@@ -315,12 +335,15 @@ pub fn (v Value) call(key string, args ...AnyValue) Value {
 	if !data.is_function() {
 		return v.ctx.js_error(message: 'Value is not Function')
 	}
-	c_vals := args.map(v.ctx.any_to_val(it).ref)
-	c_val := if c_vals.len == 0 { unsafe { nil } } else { &c_vals[0] }
-	ret := v.ctx.c_val(C.JS_Call(v.ctx.ref, data.ref, v.ref, c_vals.len, c_val))
+	arg_values := args.map(v.ctx.owned_any_to_val(it))
 	defer {
-		ret.free()
+		for arg in arg_values {
+			arg.free()
+		}
 	}
+	c_vals := arg_values.map(it.ref)
+	c_val := if c_vals.len == 0 { &JSValueConst(unsafe { nil }) } else { &c_vals[0] }
+	ret := v.ctx.c_val(C.JS_Call(v.ctx.ref, data.ref, v.ref, c_vals.len, c_val))
 	if ret.is_exception() {
 		return v.ctx.js_string(v.ctx.js_exception().msg())
 	}
