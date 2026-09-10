@@ -81,7 +81,9 @@ fn test_call_this_releases_temporary_arguments_on_success_and_exception() {
 	baseline := session.memory_usage()
 	for i in 0 .. 250 {
 		result := ctx.call_this(ctx.js_null(), echo, 'value-${i}') or { panic(err) }
-		assert result.get('value').to_string() == 'value-${i}'
+		field := result.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
 		result.free()
 		ctx.call_this(ctx.js_null(), thrower, 'boom-${i}') or { continue }
 		assert false, 'thrower should fail'
@@ -107,7 +109,9 @@ fn test_js_new_class_releases_temporary_arguments() {
 	baseline := session.memory_usage()
 	for i in 0 .. 250 {
 		instance := ctx.js_new_class(class_value, 'value-${i}') or { panic(err) }
-		assert instance.get('value').to_string() == 'value-${i}'
+		field := instance.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
 		instance.free()
 	}
 	session.runtime().run_gc()

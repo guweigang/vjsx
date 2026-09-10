@@ -50,8 +50,14 @@ fn test_value_call_keeps_object_result_alive_across_repeated_calls() {
 	}
 	for i in 0 .. 250 {
 		result := object.call('make', 'value-${i}')
-		assert result.get('value').to_string() == 'value-${i}'
-		assert result.get('nested').get('ok').to_bool()
+		field := result.get('value')
+		assert field.to_string() == 'value-${i}'
+		field.free()
+		nested := result.get('nested')
+		ok := nested.get('ok')
+		assert ok.to_bool()
+		ok.free()
+		nested.free()
 		result.free()
 	}
 }
