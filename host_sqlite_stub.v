@@ -9,7 +9,7 @@ $if !vjsx_sqlite ? {
 			promise := ctx.js_promise()
 			return promise.reject(ctx.js_error(
 				message: 'sqlite support is not built in; rerun with -d vjsx_sqlite'
-				name:    'Error'
+				name: 'Error'
 			))
 		})
 		sqlite_mod.export('open', open_fn)

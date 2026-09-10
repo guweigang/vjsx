@@ -42,9 +42,15 @@ fn cli_browser_pbkdf2_sha512(password []u8, salt []u8, iterations int, key_lengt
 
 fn cli_browser_ecdsa_nid_from_curve_name(name string) ecdsa.Nid {
 	match name {
-		'P-256' { return .prime256v1 }
-		'P-384' { return .secp384r1 }
-		'P-521' { return .secp521r1 }
+		'P-256' {
+			return .prime256v1
+		}
+		'P-384' {
+			return .secp384r1
+		}
+		'P-521' {
+			return .secp521r1
+		}
 		else { panic('unsupported ECDSA named curve: ${name}') }
 	}
 }
@@ -53,34 +59,34 @@ fn cli_browser_ecdsa_signer_opts_from_hash_name(name string) ecdsa.SignerOpts {
 	match name {
 		'SHA-1' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha1.new()
+				custom_hash: sha1.new()
 			}
 		}
 		'SHA-256' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha256.new()
+				custom_hash: sha256.new()
 			}
 		}
 		'SHA-384' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha512.new384()
+				custom_hash: sha512.new384()
 			}
 		}
 		'SHA-512' {
 			return ecdsa.SignerOpts{
-				hash_config:        .with_custom_hash
-				allow_custom_hash:  true
+				hash_config: .with_custom_hash
+				allow_custom_hash: true
 				allow_smaller_size: true
-				custom_hash:        sha512.new()
+				custom_hash: sha512.new()
 			}
 		}
 		else {
@@ -115,23 +121,19 @@ fn cli_browser_crypto_boot(ctx &vjsx.Context, boot vjsx.Value) {
 		return ctx.js_array_buffer(sum)
 	}))
 	obj.set('hmac_sha1', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha1_hash,
-			sha1.block_size)
+		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha1_hash, sha1.block_size)
 		return ctx.js_array_buffer(sum)
 	}))
 	obj.set('hmac_sha256', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha256_hash,
-			sha256.block_size)
+		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha256_hash, sha256.block_size)
 		return ctx.js_array_buffer(sum)
 	}))
 	obj.set('hmac_sha384', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha384_hash,
-			sha512.block_size)
+		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha384_hash, sha512.block_size)
 		return ctx.js_array_buffer(sum)
 	}))
 	obj.set('hmac_sha512', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha512_hash,
-			sha512.block_size)
+		sum := hmac.new(args[0].to_bytes(), args[1].to_bytes(), cli_browser_sha512_hash, sha512.block_size)
 		return ctx.js_array_buffer(sum)
 	}))
 	obj.set('timing_safe_equal', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
@@ -182,16 +184,13 @@ fn cli_browser_crypto_boot(ctx &vjsx.Context, boot vjsx.Value) {
 		return ctx.js_array_buffer(out)
 	}))
 	obj.set('pbkdf2_sha256', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		return ctx.js_array_buffer(cli_browser_pbkdf2_sha256(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(cli_browser_pbkdf2_sha256(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('pbkdf2_sha384', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		return ctx.js_array_buffer(cli_browser_pbkdf2_sha384(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(cli_browser_pbkdf2_sha384(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('pbkdf2_sha512', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
-		return ctx.js_array_buffer(cli_browser_pbkdf2_sha512(args[0].to_bytes(), args[1].to_bytes(),
-			args[2].to_int(), args[3].to_int()))
+		return ctx.js_array_buffer(cli_browser_pbkdf2_sha512(args[0].to_bytes(), args[1].to_bytes(), args[2].to_int(), args[3].to_int()))
 	}))
 	obj.set('ecdsa_generate_key', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 		nid := cli_browser_ecdsa_nid_from_curve_name(args[0].to_string())

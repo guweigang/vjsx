@@ -5,7 +5,7 @@ $if vjsx_mysql ? {
 
 	struct HostMySqlConnectConfig {
 		host     string = '127.0.0.1'
-		port     u32    = 3306
+		port     u32 = 3306
 		username string
 		password string
 		dbname   string
@@ -50,7 +50,7 @@ $if vjsx_mysql ? {
 	fn mysql_error_value(ctx &Context, message string, name string) Value {
 		return ctx.js_error(
 			message: message
-			name:    name
+			name: name
 		)
 	}
 
@@ -288,8 +288,8 @@ $if vjsx_mysql ? {
 				[][]HostMySqlParam{}
 			}
 			results := ctx.js_array()
-				for i, params in batches {
-					rows := mysql_query_maps_with_params(mut stmt.conn.db, stmt.query_text, params) or {
+			for i, params in batches {
+				rows := mysql_query_maps_with_params(mut stmt.conn.db, stmt.query_text, params) or {
 					results.free()
 					query_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
@@ -563,7 +563,7 @@ $if vjsx_mysql ? {
 		}
 		return HostMySqlPreparedRows{
 			field_names: columns
-			rows:        rows
+			rows: rows
 		}
 	}
 
@@ -602,9 +602,9 @@ $if vjsx_mysql ? {
 		affected := i64(db.affected_rows())
 		last_id := db.last_id()
 		return HostMySqlExecResult{
-			rows:           []map[string]string{}
-			changes:        affected
-			rows_affected:  affected
+			rows: []map[string]string{}
+			changes: affected
+			rows_affected: affected
 			last_insert_id: last_id
 		}
 	}
@@ -700,11 +700,11 @@ $if vjsx_mysql ? {
 			''
 		}
 		return HostMySqlConnectConfig{
-			host:     if host_option.is_string() { host_option.to_string() } else { '127.0.0.1' }
-			port:     if port_value.is_number() { u32(port_value.to_int()) } else { u32(3306) }
+			host: if host_option.is_string() { host_option.to_string() } else { '127.0.0.1' }
+			port: if port_value.is_number() { u32(port_value.to_int()) } else { u32(3306) }
 			username: username
 			password: if password_value.is_string() { password_value.to_string() } else { '' }
-			dbname:   dbname
+			dbname: dbname
 		}
 	}
 
@@ -821,8 +821,8 @@ $if vjsx_mysql ? {
 				[][]HostMySqlParam{}
 			}
 			results := ctx.js_array()
-				for i, params in batches {
-					rows := mysql_query_maps_with_params(mut conn.db, query_text, params) or {
+			for i, params in batches {
+				rows := mysql_query_maps_with_params(mut conn.db, query_text, params) or {
 					results.free()
 					query_err = mysql_error_value(ctx, err.msg(), 'Error')
 					unsafe {
@@ -1126,9 +1126,9 @@ $if vjsx_mysql ? {
 				}
 			}
 			mut stmt := &HostMySqlStmt{
-				conn:       conn
+				conn: conn
 				query_text: args[0].to_string()
-				obj_ref:    ctx.js_undefined()
+				obj_ref: ctx.js_undefined()
 			}
 			conn.stmts << stmt
 			return promise.resolve(mysql_stmt_object(ctx, mut stmt))
@@ -1158,10 +1158,10 @@ $if vjsx_mysql ? {
 				conn.cached_stmts.delete(query_text)
 			}
 			mut stmt := &HostMySqlStmt{
-				conn:       conn
+				conn: conn
 				query_text: query_text
-				obj_ref:    ctx.js_undefined()
-				cache_key:  query_text
+				obj_ref: ctx.js_undefined()
+				cache_key: query_text
 			}
 			conn.stmts << stmt
 			stmt_obj := mysql_stmt_object(ctx, mut stmt)
@@ -1222,11 +1222,11 @@ $if vjsx_mysql ? {
 				HostMySqlConnectConfig{}
 			}
 			mut db := vmysql.connect(vmysql.Config{
-				host:     config.host
-				port:     config.port
+				host: config.host
+				port: config.port
 				username: config.username
 				password: config.password
-				dbname:   config.dbname
+				dbname: config.dbname
 			}) or {
 				connect_err = mysql_error_value(ctx, err.msg(), 'Error')
 				unsafe {

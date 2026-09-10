@@ -129,8 +129,7 @@ pub fn (extension ExtensionHandle) call_service(name string, args ...vjsx.AnyVal
 	}
 	service := extension.services[index]
 	if service.method_name != '' {
-		return extension.call_export_method(service.export_name, service.method_name,
-			...args)
+		return extension.call_export_method(service.export_name, service.method_name, ...args)
 	}
 	return extension.call_export(service.export_name, ...args)
 }

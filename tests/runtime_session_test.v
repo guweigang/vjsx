@@ -151,7 +151,7 @@ fn test_runtime_session_records_async_job_diagnostics() {
 	}
 	session.set_diagnostic_handler(runtime_session_test_record_diagnostic)
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:     fn () i64 {
+		now_fn: fn () i64 {
 			return 12345
 		}
 		session_id: 'diagnostic-session'
@@ -220,7 +220,7 @@ fn test_runtime_session_timer_wakeup_hints_are_bounded() {
 		max_timer_wakeup_hints: 1
 	})
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:     fn () i64 {
+		now_fn: fn () i64 {
 			return 8000
 		}
 		session_id: 'limit-session'
@@ -248,13 +248,13 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:               fn () i64 {
+		now_fn: fn () i64 {
 			return 4242
 		}
-		wake_fn:              runtime_session_test_record_wake
-		cancel_wake_fn:       runtime_session_test_record_wake_cancel
+		wake_fn: runtime_session_test_record_wake
+		cancel_wake_fn: runtime_session_test_record_wake_cancel
 		runtime_owned_timers: true
-		session_id:           'session-a'
+		session_id: 'session-a'
 	})
 	assert session.runtime_owns_timers() == true
 	assert session.now_ms() == 4242
@@ -304,12 +304,12 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:         fn () i64 {
+		now_fn: fn () i64 {
 			return 1000
 		}
-		wake_fn:        runtime_session_test_record_wake
+		wake_fn: runtime_session_test_record_wake
 		cancel_wake_fn: runtime_session_test_record_wake_cancel
-		session_id:     'timer-session'
+		session_id: 'timer-session'
 	})
 	ctx := session.context()
 	ctx.install_timer_globals()
@@ -351,12 +351,12 @@ fn test_runtime_session_close_clears_event_loop_wakeup_state() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:         fn () i64 {
+		now_fn: fn () i64 {
 			return 5000
 		}
-		wake_fn:        runtime_session_test_record_wake
+		wake_fn: runtime_session_test_record_wake
 		cancel_wake_fn: runtime_session_test_record_wake_cancel
-		session_id:     'closing-session'
+		session_id: 'closing-session'
 	})
 	session.request_timer_wakeup_after('timer-a', 25)
 	assert session.has_pending_wakeup()
@@ -380,11 +380,11 @@ fn test_runtime_session_debug_snapshot_reports_async_state() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn:               fn () i64 {
+		now_fn: fn () i64 {
 			return 7000
 		}
 		runtime_owned_timers: true
-		session_id:           'debug-session'
+		session_id: 'debug-session'
 	})
 	ctx := session.context()
 	value := ctx.eval('Promise.resolve().then(() => {})') or { panic(err) }
@@ -612,20 +612,17 @@ fn test_runtime_session_high_level_run_load_and_call() {
 		default_method.free()
 	}
 	assert default_method.to_string() == 'default:bridge'
-	greet := session.call_module_export('./tests/runtime_session_module_exports.mjs',
-		'greet', 'vjsx') or { panic(err) }
+	greet := session.call_module_export('./tests/runtime_session_module_exports.mjs', 'greet', 'vjsx') or { panic(err) }
 	defer {
 		greet.free()
 	}
 	assert greet.to_string() == 'hello:vjsx'
-	default_method_from_session := session.call_default_export_method('./tests/runtime_session_module_exports.mjs',
-		'format', 'session') or { panic(err) }
+	default_method_from_session := session.call_default_export_method('./tests/runtime_session_module_exports.mjs', 'format', 'session') or { panic(err) }
 	defer {
 		default_method_from_session.free()
 	}
 	assert default_method_from_session.to_string() == 'default:session'
-	value_export := session.call_module_export('./tests/runtime_session_module_exports.mjs',
-		'meaning') or { panic(err) }
+	value_export := session.call_module_export('./tests/runtime_session_module_exports.mjs', 'meaning') or { panic(err) }
 	defer {
 		value_export.free()
 	}
@@ -679,7 +676,7 @@ fn test_runtime_session_plugin_metadata_helpers() {
 		session.close()
 	}
 	mut plugin := session.load_plugin('./tests/runtime_session_plugin.mjs', vjsx.ScriptPluginHooks{
-		name:         'demo-plugin'
+		name: 'demo-plugin'
 		capabilities: ['serve', 'reload']
 	}) or { panic(err) }
 	defer {
@@ -701,10 +698,10 @@ fn test_runtime_session_close_auto_disposes_plugin() {
 
 	mut session := runtimejs.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
-		fs_roots:     [base_dir]
+		fs_roots: [base_dir]
 	})
 	mut plugin := session.load_plugin('./tests/runtime_session_plugin_cleanup.mjs', vjsx.ScriptPluginHooks{
-		name:         'cleanup-plugin'
+		name: 'cleanup-plugin'
 		capabilities: ['cleanup']
 	}) or { panic(err) }
 	activate := plugin.activate(dispose_path) or { panic(err) }
@@ -726,21 +723,21 @@ fn test_runtime_session_close_auto_disposes_plugin() {
 
 fn runtime_session_test_host_api() vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
-		name:  'app'
+		name: 'app'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name:  'name'
+			name: 'name'
 			value: vjsx.host_value('host-app')
 		})
 	}, vjsx.HostObjectField{
-		name:  'logger'
+		name: 'logger'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name:  'prefix'
+			name: 'prefix'
 			value: vjsx.host_value('log')
 		})
 	}, vjsx.HostObjectField{
-		name:  'math'
+		name: 'math'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name:  'add'
+			name: 'add'
 			value: fn (ctx &vjsx.Context) vjsx.Value {
 				return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 					return ctx.js_int(args[0].to_int() + args[1].to_int())
@@ -754,18 +751,18 @@ fn runtime_session_test_host_config() vjsx.HostApiConfig {
 	return vjsx.HostApiConfig{
 		globals: [
 			vjsx.HostGlobalBinding{
-				name:  'appName'
+				name: 'appName'
 				value: vjsx.host_value('embedder')
 			},
 		]
 		modules: [
 			vjsx.HostModuleBinding{
-				name:    'host-tools'
+				name: 'host-tools'
 				install: vjsx.host_module_object(vjsx.HostObjectField{
-					name:  'version'
+					name: 'version'
 					value: vjsx.host_value('v1')
 				}, vjsx.HostObjectField{
-					name:  'ping'
+					name: 'ping'
 					value: fn (ctx &vjsx.Context) vjsx.Value {
 						return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 							return ctx.js_string('pong:' + args[0].str())
@@ -798,33 +795,28 @@ fn test_runtime_session_module_host_call_helpers() {
 		greet_from_handle.free()
 	}
 	assert greet_from_handle.to_string() == 'host-app:job-a:5'
-	run_from_handle := module_handle.call_export_method_with_host('worker', 'run', host_api,
-		'task-b') or { panic(err) }
+	run_from_handle := module_handle.call_export_method_with_host('worker', 'run', host_api, 'task-b') or { panic(err) }
 	defer {
 		run_from_handle.free()
 	}
 	assert run_from_handle.to_string() == 'log:task-b:9'
-	default_from_handle := module_handle.call_default_method_with_host('handle', host_api,
-		'task-c') or { panic(err) }
+	default_from_handle := module_handle.call_default_method_with_host('handle', host_api, 'task-c') or { panic(err) }
 	defer {
 		default_from_handle.free()
 	}
 	assert default_from_handle.to_string() == 'host-app:task-c:log'
 
-	greet := session.call_module_export_with_host('./tests/runtime_session_module_host.mjs',
-		'greet', host_api, 'job-d') or { panic(err) }
+	greet := session.call_module_export_with_host('./tests/runtime_session_module_host.mjs', 'greet', host_api, 'job-d') or { panic(err) }
 	defer {
 		greet.free()
 	}
 	assert greet.to_string() == 'host-app:job-d:5'
-	run := session.call_module_method_with_host('./tests/runtime_session_module_host.mjs',
-		'worker', 'run', host_api, 'task-e') or { panic(err) }
+	run := session.call_module_method_with_host('./tests/runtime_session_module_host.mjs', 'worker', 'run', host_api, 'task-e') or { panic(err) }
 	defer {
 		run.free()
 	}
 	assert run.to_string() == 'log:task-e:9'
-	default_method := session.call_default_export_method_with_host('./tests/runtime_session_module_host.mjs',
-		'handle', host_api, 'task-f') or { panic(err) }
+	default_method := session.call_default_export_method_with_host('./tests/runtime_session_module_host.mjs', 'handle', host_api, 'task-f') or { panic(err) }
 	defer {
 		default_method.free()
 	}
@@ -839,8 +831,7 @@ fn test_runtime_session_bound_module_helper() {
 		session.close()
 	}
 	host_api := runtime_session_test_host_api()
-	mut module_binding := session.import_module_with_host('./tests/runtime_session_module_host.mjs',
-		host_api) or { panic(err) }
+	mut module_binding := session.import_module_with_host('./tests/runtime_session_module_host.mjs', host_api) or { panic(err) }
 	defer {
 		module_binding.close()
 	}
@@ -905,9 +896,8 @@ fn test_runtime_session_bound_plugin_helper() {
 		session.close()
 	}
 	host_api := runtime_session_test_host_api()
-	mut plugin := session.load_plugin_with_host('./tests/runtime_session_plugin_host.mjs',
-		vjsx.ScriptPluginHooks{
-		name:         'bound-plugin'
+	mut plugin := session.load_plugin_with_host('./tests/runtime_session_plugin_host.mjs', vjsx.ScriptPluginHooks{
+		name: 'bound-plugin'
 		capabilities: ['lifecycle']
 	}, host_api) or { panic(err) }
 	defer {
@@ -952,8 +942,7 @@ fn test_extension_session_installs_host_api_and_binds_calls() {
 			ping("ok"),
 			hostTools.ping("default")
 		].join("|");
-	',
-		vjsx.type_module) or { panic(err) }
+	', vjsx.type_module) or { panic(err) }
 	extension.context().end()
 	value.free()
 	value = extension.context().eval('globalThis.__extension_host_result') or { panic(err) }
@@ -973,8 +962,7 @@ fn test_extension_session_installs_host_api_and_binds_calls() {
 		greet.free()
 	}
 	assert greet.to_string() == 'host-app:ext-a:5'
-	default_method := extension.call_default_export_method('./tests/runtime_session_module_host.mjs',
-		'handle', 'ext-b') or { panic(err) }
+	default_method := extension.call_default_export_method('./tests/runtime_session_module_host.mjs', 'handle', 'ext-b') or { panic(err) }
 	defer {
 		default_method.free()
 	}
@@ -991,7 +979,7 @@ fn test_extension_session_bound_plugin_lifecycle() {
 		extension.close()
 	}
 	mut plugin := extension.load_plugin('./tests/runtime_session_plugin_host.mjs', vjsx.ScriptPluginHooks{
-		name:         'extension-plugin'
+		name: 'extension-plugin'
 		capabilities: ['hosted']
 	}) or { panic(err) }
 	defer {
@@ -1004,8 +992,7 @@ fn test_extension_session_bound_plugin_lifecycle() {
 		activate.free()
 	}
 	assert activate.to_string() == 'log:boot:7'
-	handle := extension.call_module_export('./tests/runtime_session_module_host.mjs',
-		'greet', 'ext-c') or { panic(err) }
+	handle := extension.call_module_export('./tests/runtime_session_module_host.mjs', 'greet', 'ext-c') or { panic(err) }
 	defer {
 		handle.free()
 	}
@@ -1020,16 +1007,14 @@ fn test_extension_session_bound_plugin_lifecycle() {
 fn test_extension_session_load_extension_contract() {
 	host_api := runtime_session_test_host_api()
 	host_config := runtime_session_test_host_config()
-	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{},
-		vjsx.NodeRuntimeConfig{
+	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
 	}, host_config, host_api)
 	defer {
 		extension_session.close()
 	}
-	mut extension := extension_session.load_extension('./tests/runtimejs_extension_handle.mjs',
-		vjsx.ScriptPluginHooks{
-		name:         'demo-extension'
+	mut extension := extension_session.load_extension('./tests/runtimejs_extension_handle.mjs', vjsx.ScriptPluginHooks{
+		name: 'demo-extension'
 		capabilities: ['serve', 'handle']
 	}) or { panic(err) }
 	defer {
@@ -1081,8 +1066,7 @@ fn test_extension_session_load_extension_contract() {
 fn test_extension_session_describe_extension_manifest() {
 	host_api := runtime_session_test_host_api()
 	host_config := runtime_session_test_host_config()
-	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{},
-		vjsx.NodeRuntimeConfig{
+	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
 	}, host_config, host_api)
 	defer {
@@ -1107,15 +1091,13 @@ fn test_extension_session_describe_extension_manifest() {
 fn test_extension_session_load_extension_uses_manifest_hooks() {
 	host_api := runtime_session_test_host_api()
 	host_config := runtime_session_test_host_config()
-	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{},
-		vjsx.NodeRuntimeConfig{
+	mut extension_session := runtimejs.new_node_extension_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
 	}, host_config, host_api)
 	defer {
 		extension_session.close()
 	}
-	mut extension := extension_session.load_extension('./tests/runtimejs_extension_manifest.mjs',
-		vjsx.ScriptPluginHooks{}) or { panic(err) }
+	mut extension := extension_session.load_extension('./tests/runtimejs_extension_manifest.mjs', vjsx.ScriptPluginHooks{}) or { panic(err) }
 	defer {
 		extension.close()
 	}
