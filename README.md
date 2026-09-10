@@ -1,5 +1,8 @@
 # VJSX
 
+Module loading, graph inspection, compilation caching, and machine-readable
+diagnostics are documented in [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
+
 <p align="center">
   <img src="assets/vjsx_brand.jpg" alt="VJSX brand" width="720" />
 </p>

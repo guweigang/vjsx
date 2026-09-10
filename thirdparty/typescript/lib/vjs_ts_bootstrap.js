@@ -64,9 +64,12 @@ globalThis.__vjs_transpile_typescript = function(input, fileName, asModule, conf
 	compilerOptions.declaration = false;
 	compilerOptions.declarationMap = false;
 	compilerOptions.emitDeclarationOnly = false;
+	// Keep the original source and mapping in the emitted module. QuickJS does
+	// not consume source maps itself, but hosts and vjsx diagnostics can use the
+	// standard v3 payload to map transformed TypeScript frames.
 	compilerOptions.sourceMap = false;
-	compilerOptions.inlineSourceMap = false;
-	compilerOptions.inlineSources = false;
+	compilerOptions.inlineSourceMap = true;
+	compilerOptions.inlineSources = true;
 	let result;
 	try {
 		result = ts.transpileModule(input, {

@@ -1,5 +1,6 @@
 module main
 
+import json2
 import os
 import vjsx
 import runtimejs
@@ -22,6 +23,22 @@ struct CliOptions {
 	entry_only       bool
 	bundle           bool
 	runner_file      string
+	json_output      bool
+}
+
+struct CliDiagnostic {
+	importer  string
+	specifier string
+	phase     string
+	reason    string
+}
+
+struct CheckJsonResult {
+	ok         bool
+	command    string
+	entry      string
+	runtime    string
+	diagnostic CliDiagnostic
 }
 
 @[noreturn]
@@ -44,6 +61,8 @@ fn help_text() string {
 Usage:
   vjsx [run] [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
   vjsx check [--module|-m] [--runtime|-r <node|script|browser>] <script.js> [args...]
+  vjsx check --json [--module|-m] [--runtime|-r <node|script|browser>] <script.js>
+  vjsx inspect [--json] [--runtime|-r <node|script|browser>] <entry.js>
   vjsx compile --entry-only [--runtime|-r <node|script|browser>] <input.js> -o <output.qbc>
   vjsx compile --bundle [--runtime|-r <node|script|browser>] <entry.js> -o <app.vjsx>
   vjsx build [--runtime|-r <node|script|browser>] [--runner <path>] <entry.js> -o <app>
@@ -69,6 +88,7 @@ Runtime commands:
   check         Load and execute a file, returning a non-zero status on failure.
   check-runtime Verify that the selected runtime profile is complete.
   capabilities Print globals, modules, and host features exposed by a profile.
+  inspect       Resolve and print the static module graph without executing it.
 
 Compile command:
   compile       Compile a file or static project graph to QuickJS bytecode.
@@ -160,10 +180,10 @@ fn parse_env_options() ?CliOptions {
 		fail('browser runtime requires module mode\nuse --module with --runtime browser')
 	}
 	return CliOptions{
-		command:         'run'
-		script_file:     file
-		script_args:     read_env_script_args(args_file)
-		as_module:       validate_script_type(file, as_module)
+		command: 'run'
+		script_file: file
+		script_args: read_env_script_args(args_file)
+		as_module: validate_script_type(file, as_module)
 		runtime_profile: runtime_profile
 	}
 }
@@ -190,8 +210,8 @@ fn parse_args(args []string) CliOptions {
 			command: 'version'
 		}
 	}
-	if rest[0] in ['run', 'check', 'check-runtime', 'capabilities', 'host-capabilities', 'install',
-		'repair', 'ls', 'list', 'remove', 'uninstall', 'compile', 'build'] {
+	if rest[0] in ['run', 'check', 'inspect', 'check-runtime', 'capabilities', 'host-capabilities',
+		'install', 'repair', 'ls', 'list', 'remove', 'uninstall', 'compile', 'build'] {
 		command = rest[0]
 		rest = rest[1..].clone()
 	}
@@ -258,11 +278,11 @@ fn parse_args(args []string) CliOptions {
 			fail('bundle output must use the .vjsx extension')
 		}
 		return CliOptions{
-			command:         command
-			script_file:     input_file
-			output_file:     output_file
-			entry_only:      entry_only
-			bundle:          bundle
+			command: command
+			script_file: input_file
+			output_file: output_file
+			entry_only: entry_only
+			bundle: bundle
 			runtime_profile: runtime_profile
 		}
 	}
@@ -323,10 +343,10 @@ fn parse_args(args []string) CliOptions {
 			fail('missing build output path; use -o <app>')
 		}
 		return CliOptions{
-			command:         command
-			script_file:     input_file
-			output_file:     output_file
-			runner_file:     runner_file
+			command: command
+			script_file: input_file
+			output_file: output_file
+			runner_file: runner_file
 			runtime_profile: runtime_profile
 		}
 	}
@@ -428,14 +448,14 @@ fn parse_args(args []string) CliOptions {
 			i++
 		}
 		return CliOptions{
-			command:          command
-			install_specs:    specs
+			command: command
+			install_specs: specs
 			install_registry: registry
-			install_dev:      install_dev
-			list_depth:       list_depth
-			list_omit:        list_omit
-			list_json:        list_json
-			runtime_profile:  'node'
+			install_dev: install_dev
+			list_depth: list_depth
+			list_omit: list_omit
+			list_json: list_json
+			runtime_profile: 'node'
 		}
 	}
 
@@ -469,7 +489,7 @@ fn parse_args(args []string) CliOptions {
 			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
 		}
 		return CliOptions{
-			command:         command
+			command: command
 			runtime_profile: runtime_profile
 		}
 	}
@@ -477,6 +497,7 @@ fn parse_args(args []string) CliOptions {
 	mut script_file := ''
 	mut script_args := []string{}
 	mut as_module := false
+	mut json_output := false
 	mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
 	mut i := 0
 	for i < rest.len {
@@ -487,6 +508,12 @@ fn parse_args(args []string) CliOptions {
 			continue
 		}
 		match arg {
+			'--json' {
+				if command != 'check' && command != 'inspect' {
+					fail('--json is only valid for check or inspect')
+				}
+				json_output = true
+			}
 			'--module', '-m' {
 				as_module = true
 			}
@@ -516,11 +543,12 @@ fn parse_args(args []string) CliOptions {
 	}
 	if command == 'check-runtime' {
 		return CliOptions{
-			command:         command
+			command: command
 			runtime_profile: runtime_profile
 		}
 	}
-	if runtime_profile == 'browser' && !as_module && !script_file.ends_with('.vjsx') {
+	if runtime_profile == 'browser' && command != 'inspect' && !as_module
+		&& !script_file.ends_with('.vjsx') {
 		fail('browser runtime requires module mode\nuse --module with --runtime browser')
 	}
 	if script_file == '' {
@@ -528,11 +556,12 @@ fn parse_args(args []string) CliOptions {
 	}
 	as_module = validate_script_type(script_file, as_module)
 	return CliOptions{
-		command:         command
-		script_file:     script_file
-		script_args:     script_args
-		as_module:       as_module
+		command: command
+		script_file: script_file
+		script_args: script_args
+		as_module: as_module
 		runtime_profile: runtime_profile
+		json_output: json_output
 	}
 }
 
@@ -555,13 +584,13 @@ fn install_runtime(ctx &vjsx.Context, runtime_profile string, script_dir string,
 	match runtime_profile {
 		'node' {
 			ctx.install_node_runtime(
-				fs_roots:     [script_dir, script_parent, prev_dir]
+				fs_roots: [script_dir, script_parent, prev_dir]
 				process_args: process_args
 			)
 		}
 		'script' {
 			ctx.install_script_runtime(
-				fs_roots:     [script_dir, script_parent, prev_dir]
+				fs_roots: [script_dir, script_parent, prev_dir]
 				process_args: process_args
 			)
 		}
@@ -590,8 +619,7 @@ fn check_runtime(runtime_profile string) !string {
 		return error('globalThis is not available')
 	}
 	if runtime_profile == 'browser' {
-		browser_value := ctx.eval('typeof window === "object" && typeof self === "object" && typeof fetch === "function" && typeof EventTarget === "function"',
-			vjsx.type_global)!
+		browser_value := ctx.eval('typeof window === "object" && typeof self === "object" && typeof fetch === "function" && typeof EventTarget === "function"', vjsx.type_global)!
 		defer {
 			browser_value.free()
 		}
@@ -636,8 +664,7 @@ fn runtime_capabilities(runtime_profile string) !string {
 	mut lines := []string{}
 	lines << 'runtime: ${runtime_profile}'
 	lines << 'globals:'
-	append_capability(mut lines, 'globalThis', runtime_profile_has_expr(ctx,
-		'typeof globalThis === "object"'))
+	append_capability(mut lines, 'globalThis', runtime_profile_has_expr(ctx, 'typeof globalThis === "object"'))
 	append_capability(mut lines, 'AbortController', snapshot.has_abort_controller)
 	append_capability(mut lines, 'AbortSignal', snapshot.has_abort_signal)
 	append_capability(mut lines, 'EventTarget', snapshot.has_event_target)
@@ -647,20 +674,14 @@ fn runtime_capabilities(runtime_profile string) !string {
 	append_capability(mut lines, 'setTimeout', snapshot.has_set_timeout)
 	append_capability(mut lines, 'clearTimeout', snapshot.has_clear_timeout)
 	append_capability(mut lines, 'fetch', snapshot.has_fetch)
-	append_capability(mut lines, 'window', runtime_profile_has_expr(ctx,
-		'typeof window === "object"'))
+	append_capability(mut lines, 'window', runtime_profile_has_expr(ctx, 'typeof window === "object"'))
 	append_capability(mut lines, 'self', runtime_profile_has_expr(ctx, 'typeof self === "object"'))
-	append_capability(mut lines, 'Blob',
-		runtime_profile_has_expr(ctx, 'typeof Blob === "function"'))
-	append_capability(mut lines, 'FormData', runtime_profile_has_expr(ctx,
-		'typeof FormData === "function"'))
-	append_capability(mut lines, 'ReadableStream', runtime_profile_has_expr(ctx,
-		'typeof ReadableStream === "function"'))
-	append_capability(mut lines, 'TextEncoder', runtime_profile_has_expr(ctx,
-		'typeof TextEncoder === "function"'))
+	append_capability(mut lines, 'Blob', runtime_profile_has_expr(ctx, 'typeof Blob === "function"'))
+	append_capability(mut lines, 'FormData', runtime_profile_has_expr(ctx, 'typeof FormData === "function"'))
+	append_capability(mut lines, 'ReadableStream', runtime_profile_has_expr(ctx, 'typeof ReadableStream === "function"'))
+	append_capability(mut lines, 'TextEncoder', runtime_profile_has_expr(ctx, 'typeof TextEncoder === "function"'))
 	append_capability(mut lines, 'Intl', runtime_profile_has_expr(ctx, 'typeof Intl === "object"'))
-	append_capability(mut lines, 'crypto.subtle', runtime_profile_has_expr(ctx,
-		'typeof crypto === "object" && typeof crypto.subtle === "object"'))
+	append_capability(mut lines, 'crypto.subtle', runtime_profile_has_expr(ctx, 'typeof crypto === "object" && typeof crypto.subtle === "object"'))
 	lines << 'modules:'
 	append_capability(mut lines, 'node:timers/promises', snapshot.has_node_timers_promises)
 	append_capability(mut lines, 'node:crypto', snapshot.has_node_crypto_module)
@@ -731,8 +752,7 @@ fn run_script(opts CliOptions) !string {
 		return ''
 	}
 
-	value := runtimejs.run_runtime_entry(ctx, script_path, opts.as_module,
-		script_path + '.vjsbuild') or { fail(err.msg()) }
+	value := runtimejs.run_runtime_entry(ctx, script_path, opts.as_module, '')!
 	defer {
 		value.free()
 	}
@@ -741,6 +761,96 @@ fn run_script(opts CliOptions) !string {
 		return value.to_string()
 	}
 	return ''
+}
+
+fn diagnostic_from_message(message string) CliDiagnostic {
+	prefix := '[module-resolution] importer='
+	if !message.starts_with(prefix) {
+		return CliDiagnostic{
+			phase: 'execution'
+			reason: message
+		}
+	}
+	spec_marker := ' specifier="'
+	phase_marker := '" phase='
+	reason_marker := ' reason='
+	spec_pos := message.index(spec_marker) or { return CliDiagnostic{ phase: 'resolution', reason: message } }
+	phase_pos := message.index_after(phase_marker, spec_pos + spec_marker.len) or {
+		return CliDiagnostic{ phase: 'resolution', reason: message }
+	}
+	reason_pos := message.index_after(reason_marker, phase_pos + phase_marker.len) or {
+		return CliDiagnostic{ phase: 'resolution', reason: message }
+	}
+	return CliDiagnostic{
+		importer: message[prefix.len..spec_pos]
+		specifier: message[spec_pos + spec_marker.len..phase_pos]
+		phase: message[phase_pos + phase_marker.len..reason_pos]
+		reason: message[reason_pos + reason_marker.len..]
+	}
+}
+
+fn check_script_json(opts CliOptions) string {
+	entry := os.real_path(opts.script_file)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	install_runtime(ctx, opts.runtime_profile, os.dir(entry), os.dir(os.dir(entry)), os.getwd(), [
+		'vjsx',
+		'check',
+		entry,
+	])
+	runtimejs.check_runtime_module_graph(ctx, entry, opts.runtime_profile) or {
+		result := CheckJsonResult{
+			ok: false
+			command: 'check'
+			entry: entry
+			runtime: opts.runtime_profile
+			diagnostic: diagnostic_from_message(err.msg())
+		}
+		println(json2.encode(result, escape_unicode: true))
+		exit(1)
+	}
+	return json2.encode(CheckJsonResult{
+		ok: true
+		command: 'check'
+		entry: entry
+		runtime: opts.runtime_profile
+	},
+		escape_unicode: true
+	) + '\n'
+}
+
+fn inspect_module_graph(opts CliOptions) !string {
+	entry := os.real_path(opts.script_file)
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	install_runtime(ctx, opts.runtime_profile, os.dir(entry), os.dir(os.dir(entry)), os.getwd(), [
+		'vjsx',
+		'inspect',
+		entry,
+	])
+	graph := runtimejs.resolve_module_graph(ctx, entry, opts.runtime_profile)!
+	if opts.json_output {
+		return json2.encode(graph, escape_unicode: true) + '\n'
+	}
+	mut lines := [
+		'entry: ${graph.entry}',
+		'runtime: ${graph.runtime_profile}',
+		'cache-key: ${graph.cache_key}',
+		'modules:',
+	]
+	for node in graph.nodes {
+		lines << '  ${node.kind} ${node.path}'
+		for edge in node.imports {
+			lines << '    ${edge.specifier} -> ${edge.resolved} (${edge.phase})'
+		}
+	}
+	return lines.join('\n') + '\n'
 }
 
 fn compile_script(opts CliOptions) !string {
@@ -764,14 +874,14 @@ fn compile_script(opts CliOptions) !string {
 		}
 		app_name := os.file_name(output_path).all_before_last('.')
 		bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
-			app_name:        app_name
+			app_name: app_name
 			runtime_profile: opts.runtime_profile
 		)!
 		os.write_file_array(output_path, bundle)!
 	} else {
 		source := os.read_file(input_path)!
 		bytecode := vjsx.compile_module(source,
-			filename:        input_path
+			filename: input_path
 			runtime_profile: opts.runtime_profile
 		)!
 		os.write_file_array(output_path, bytecode)!
@@ -816,7 +926,7 @@ fn build_app(opts CliOptions) !string {
 	}
 	app_name := os.file_name(output_path).all_before_last('.')
 	bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
-		app_name:        app_name
+		app_name: app_name
 		runtime_profile: opts.runtime_profile
 	)!
 	vjsx.pack_app_executable(runner_path, bundle, output_path)!
@@ -844,7 +954,28 @@ fn main() {
 			capabilities_text(opts.runtime_profile) or { fail(err.msg()) }
 		}
 		'check' {
-			run_script(opts) or { fail(err.msg()) }
+			if opts.json_output {
+				check_script_json(opts)
+			} else {
+				run_script(opts) or { fail(err.msg()) }
+			}
+		}
+		'inspect' {
+			inspect_module_graph(opts) or {
+				if opts.json_output {
+					println(json2.encode(CheckJsonResult{
+						ok: false
+						command: 'inspect'
+						entry: os.real_path(opts.script_file)
+						runtime: opts.runtime_profile
+						diagnostic: diagnostic_from_message(err.msg())
+					},
+						escape_unicode: true
+					))
+					exit(1)
+				}
+				fail(err.msg())
+			}
 		}
 		'compile' {
 			compile_script(opts) or { fail(err.msg()) }
