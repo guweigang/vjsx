@@ -440,6 +440,9 @@ backwards compatibility:
 
 `ScriptRuntimeConfig{}` also carries the same policy. Its legacy
 `allow_env_write` field remains as a one-way restriction for compatibility.
+Partial `HostPolicy{...}` literals are deny-by-default; derive from
+`host_policy_trusted()` when migrating a trusted host that only removes one
+grant.
 
 The `node`/`script` runtime profile identifies the installed JavaScript API and
 bytecode compatibility contract; it is not a security boundary. `HostPolicy`

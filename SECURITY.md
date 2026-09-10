@@ -25,6 +25,10 @@ historical full in-process host surface. `NodeRuntimeConfig{}`,
 that trusted default for source compatibility. New extension hosts should set a
 policy explicitly.
 
+Because the zero value is safe, a partial `HostPolicy{...}` literal denies every
+grant it does not name. To preserve trusted compatibility while removing one
+grant, copy `host_policy_trusted()` into a mutable value and turn that grant off.
+
 ## Filesystem and network boundaries
 
 `HostPolicy.fs_read_roots` and `fs_write_roots` constrain the corresponding
