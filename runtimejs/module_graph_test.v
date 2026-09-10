@@ -90,3 +90,26 @@ fn test_module_graph_resolution_diagnostic_has_context() {
 	}
 	assert false
 }
+
+fn test_module_graph_cycle_is_finite_and_cache_key_is_repeatable() {
+	root := os.join_path(os.temp_dir(), 'vjsx_module_graph_cycle_${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	entry := os.join_path(root, 'a.mjs')
+	os.write_file(entry, 'import { b } from "./b.mjs"; export const a = b + 1;') or {
+		panic(err)
+	}
+	os.write_file(os.join_path(root, 'b.mjs'), 'import { a } from "./a.mjs"; export const b = (a || 0) + 1;') or { panic(err) }
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	first := resolve_module_graph(session.context(), entry, 'node') or { panic(err) }
+	second := resolve_module_graph(session.context(), entry, 'node') or { panic(err) }
+	assert first.nodes.len == 2
+	assert first.cache_key == second.cache_key
+	assert first.nodes.all(it.imports.len == 1)
+}

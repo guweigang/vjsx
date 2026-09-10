@@ -62,11 +62,11 @@ fn install_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry:      normalize_registry(opts.install_registry)!
-		root:          root
-		install_root:  staging_root
-		dev:           opts.install_dev
-		installed:     map[string]bool{}
+		registry: normalize_registry(opts.install_registry)!
+		root: root
+		install_root: staging_root
+		dev: opts.install_dev
+		installed: map[string]bool{}
 		package_names: map[string]bool{}
 	}
 	installer.workspaces = load_workspaces(installer.root)!
@@ -134,10 +134,10 @@ fn repair_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry:      normalize_registry(opts.install_registry)!
-		root:          root
-		install_root:  staging_root
-		installed:     map[string]bool{}
+		registry: normalize_registry(opts.install_registry)!
+		root: root
+		install_root: staging_root
+		installed: map[string]bool{}
 		package_names: map[string]bool{}
 	}
 	installer.workspaces = load_workspaces(root)!
@@ -161,7 +161,7 @@ fn repair_packages(opts CliOptions) !string {
 			return error('package is not present in package-lock.json: ${name}')
 		}
 		installer.install_spec(PackageSpec{
-			name:    name
+			name: name
 			version: lock_pkg.version
 		})!
 	}
@@ -311,8 +311,7 @@ fn list_packages(opts CliOptions) !string {
 		names = sorted_string_map_keys(lockfile.root_dependencies)
 	}
 	if opts.list_omit.len > 0 {
-		names = names.filter(!dependency_type_omitted(root_dependency_type(lockfile, it),
-			opts.list_omit))
+		names = names.filter(!dependency_type_omitted(root_dependency_type(lockfile, it), opts.list_omit))
 	}
 	if opts.list_json {
 		return list_packages_json(root, lockfile, names, opts)
@@ -321,8 +320,7 @@ fn list_packages(opts CliOptions) !string {
 	for index, name in names {
 		requested := lockfile.root_dependencies[name] or { '' }
 		mut visiting := []string{}
-		append_dependency_tree(mut lines, root, lockfile, name, requested, '',
-			index == names.len - 1, effective_depth, mut visiting)
+		append_dependency_tree(mut lines, root, lockfile, name, requested, '', index == names.len - 1, effective_depth, mut visiting)
 	}
 	return lines.join('\n') + '\n'
 }
@@ -346,8 +344,7 @@ fn list_packages_json(root string, lockfile Lockfile, names []string, opts CliOp
 		requested := lockfile.root_dependencies[name] or { '' }
 		mut visiting := []string{}
 		dependency_type := root_dependency_type(lockfile, name)
-		dependencies[name] = json2.Any(package_json_node(root, lockfile, name, requested,
-			effective_depth, parent_label, dependency_type, mut visiting, mut problems))
+		dependencies[name] = json2.Any(package_json_node(root, lockfile, name, requested, effective_depth, parent_label, dependency_type, mut visiting, mut problems))
 	}
 	if dependencies.len > 0 {
 		root_json['dependencies'] = json2.Any(dependencies)
@@ -419,8 +416,7 @@ fn package_json_node(root string, lockfile Lockfile, name string, requested stri
 	child_parent := '${name}@${version}'
 	mut child_deps := map[string]json2.Any{}
 	for child_name in child_names {
-		child_deps[child_name] = json2.Any(package_json_node(root, lockfile, child_name,
-			deps[child_name], next_depth, child_parent, dependency_type, mut visiting, mut problems))
+		child_deps[child_name] = json2.Any(package_json_node(root, lockfile, child_name, deps[child_name], next_depth, child_parent, dependency_type, mut visiting, mut problems))
 	}
 	visiting.delete(visiting.len - 1)
 	if child_deps.len > 0 {
@@ -480,8 +476,7 @@ fn append_dependency_tree(mut lines []string, root string, lockfile Lockfile, na
 	child_names := sorted_string_map_keys(deps)
 	next_depth := if depth_remaining > 0 { depth_remaining - 1 } else { depth_remaining }
 	for index, child_name in child_names {
-		append_dependency_tree(mut lines, root, lockfile, child_name, deps[child_name],
-			child_prefix, index == child_names.len - 1, next_depth, mut visiting)
+		append_dependency_tree(mut lines, root, lockfile, child_name, deps[child_name], child_prefix, index == child_names.len - 1, next_depth, mut visiting)
 	}
 	visiting.delete(visiting.len - 1)
 }
@@ -587,7 +582,7 @@ fn parse_package_spec(input string) !PackageSpec {
 			name := spec[..slash + 1 + at]
 			validate_package_name(name)!
 			return PackageSpec{
-				name:    name
+				name: name
 				version: rest[at + 1..]
 			}
 		}
@@ -601,7 +596,7 @@ fn parse_package_spec(input string) !PackageSpec {
 			name := spec[..at]
 			validate_package_name(name)!
 			return PackageSpec{
-				name:    name
+				name: name
 				version: spec[at + 1..]
 			}
 		}
@@ -652,16 +647,16 @@ fn (mut installer Installer) install_spec(spec PackageSpec) ! {
 	}
 	deps := any_object_optional(version_info, 'dependencies')
 	installer.lock_package(spec.name, LockPackage{
-		version:      version
-		resolved:     tarball
-		integrity:    integrity
+		version: version
+		resolved: tarball
+		integrity: integrity
 		dependencies: any_string_map(deps)
 	})
 	installer.warn_peer_dependencies(spec.name, version_info)
 	for dep_name, dep_range_any in deps {
 		if dep_range_any is string {
 			installer.install_spec(PackageSpec{
-				name:    dep_name
+				name: dep_name
 				version: dep_range_any
 			})!
 		}
@@ -684,16 +679,16 @@ fn (mut installer Installer) install_workspace(spec PackageSpec, workspace Works
 		os.symlink(workspace.path, target)!
 	}
 	installer.lock_package(spec.name, LockPackage{
-		version:      workspace.version
-		resolved:     workspace.path
-		link:         true
+		version: workspace.version
+		resolved: workspace.path
+		link: true
 		dependencies: any_string_map(deps)
 	})
 	installer.warn_peer_dependencies(spec.name, manifest)
 	for dep_name, dep_range_any in deps {
 		if dep_range_any is string {
 			installer.install_spec(PackageSpec{
-				name:    dep_name
+				name: dep_name
 				version: dep_range_any
 			})!
 		}
@@ -716,7 +711,7 @@ fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg L
 		}
 		for dep_name, dep_range in lock_pkg.dependencies {
 			installer.install_spec(PackageSpec{
-				name:    dep_name
+				name: dep_name
 				version: dep_range
 			})!
 		}
@@ -731,7 +726,7 @@ fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg L
 	}
 	for dep_name, dep_range in lock_pkg.dependencies {
 		installer.install_spec(PackageSpec{
-			name:    dep_name
+			name: dep_name
 			version: dep_range
 		})!
 	}
@@ -821,8 +816,7 @@ fn resolve_package_version(metadata json2.Any, requested string) !string {
 	if candidate != '' {
 		return candidate
 	}
-	return error('no compatible version found for ${any_string_field_optional(metadata.as_map(),
-		'name')}@${req}')
+	return error('no compatible version found for ${any_string_field_optional(metadata.as_map(), 'name')}@${req}')
 }
 
 fn best_matching_version(versions map[string]json2.Any, requested string) string {
@@ -935,15 +929,16 @@ fn (mut installer Installer) check_staged_package_entries(requested_names []stri
 		session.close()
 	}
 	ctx := session.context()
-	install_runtime(ctx, 'node', installer.install_root, os.dir(installer.install_root),
-		installer.root, ['vjsx', 'install'])
+	install_runtime(ctx, 'node', installer.install_root, os.dir(installer.install_root), installer.root, [
+		'vjsx',
+		'install',
+	])
 	for name in requested_names {
 		package_root := installer.package_install_path(name)
 		if !os.exists(package_root) {
 			return error('staged package is missing: ${name}')
 		}
-		entry := runtimejs.check_runtime_package_entry(ctx, package_root,
-			package_check_temp_root(installer.install_root, name)) or {
+		entry := runtimejs.check_runtime_package_entry(ctx, package_root, package_check_temp_root(installer.install_root, name)) or {
 			return error('package ${name} is not compatible with the vjsx node host: ${err.msg()}')
 		}
 		if entry == '' {
@@ -1011,9 +1006,9 @@ fn load_workspaces(root string) !map[string]WorkspacePackage {
 				continue
 			}
 			workspaces[name] = WorkspacePackage{
-				name:    name
+				name: name
 				version: any_string_field_optional(pkg_map, 'version')
-				path:    os.real_path(path)
+				path: os.real_path(path)
 			}
 		}
 	}
@@ -1094,13 +1089,13 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 	}
 	lock_path := os.join_path(root, 'package-lock.json')
 	mut lockfile := Lockfile{
-		name:                       name
-		version:                    version
-		root_dependencies:          root_dependencies
-		root_dev_dependencies:      root_dev_dependencies
+		name: name
+		version: version
+		root_dependencies: root_dependencies
+		root_dev_dependencies: root_dev_dependencies
 		root_optional_dependencies: root_optional_dependencies
-		root_peer_dependencies:     root_peer_dependencies
-		packages:                   map[string]LockPackage{}
+		root_peer_dependencies: root_peer_dependencies
+		packages: map[string]LockPackage{}
 	}
 	if !os.exists(lock_path) {
 		return lockfile
@@ -1124,10 +1119,8 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 		if path == '' {
 			lock_dependencies := any_string_map(any_object_optional(pkg_any, 'dependencies'))
 			lock_dev_dependencies := any_string_map(any_object_optional(pkg_any, 'devDependencies'))
-			lock_optional_dependencies := any_string_map(any_object_optional(pkg_any,
-				'optionalDependencies'))
-			lock_peer_dependencies := any_string_map(any_object_optional(pkg_any,
-				'peerDependencies'))
+			lock_optional_dependencies := any_string_map(any_object_optional(pkg_any, 'optionalDependencies'))
+			lock_peer_dependencies := any_string_map(any_object_optional(pkg_any, 'peerDependencies'))
 			if lockfile.root_dependencies.len == 0 {
 				lockfile.root_dependencies = lock_dependencies.clone()
 			}
@@ -1137,8 +1130,7 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 			if lockfile.root_peer_dependencies.len == 0 {
 				lockfile.root_peer_dependencies = lock_peer_dependencies.clone()
 			}
-			merge_dependency_map(mut lockfile.root_dependencies,
-				lockfile.root_optional_dependencies)
+			merge_dependency_map(mut lockfile.root_dependencies, lockfile.root_optional_dependencies)
 			merge_dependency_map(mut lockfile.root_dependencies, lockfile.root_peer_dependencies)
 			if include_dev {
 				if lockfile.root_dev_dependencies.len == 0 {
@@ -1149,10 +1141,10 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 			continue
 		}
 		lockfile.packages[path] = LockPackage{
-			version:      any_string_field_optional(pkg_map, 'version')
-			resolved:     any_string_field_optional(pkg_map, 'resolved')
-			integrity:    any_string_field_optional(pkg_map, 'integrity')
-			link:         any_bool_field_optional(pkg_map, 'link')
+			version: any_string_field_optional(pkg_map, 'version')
+			resolved: any_string_field_optional(pkg_map, 'resolved')
+			integrity: any_string_field_optional(pkg_map, 'integrity')
+			link: any_bool_field_optional(pkg_map, 'link')
 			dependencies: any_string_map(any_object_optional(pkg_any, 'dependencies'))
 		}
 	}
@@ -1190,8 +1182,7 @@ fn write_package_json_dependencies(root string, additions map[string]string, dev
 		deps[name] = version
 	}
 	manifest[field] = json2.Any(string_map_to_any(deps))
-	os.write_file(path,
-		json2.encode(ordered_package_json_manifest(manifest), prettify: true) + '\n')!
+	os.write_file(path, json2.encode(ordered_package_json_manifest(manifest), prettify: true) + '\n')!
 }
 
 fn remove_package_json_dependencies(root string, names []string) ![]string {
@@ -1222,8 +1213,7 @@ fn remove_package_json_dependencies(root string, names []string) ![]string {
 		}
 	}
 	if removed.len > 0 {
-		os.write_file(path, json2.encode(ordered_package_json_manifest(manifest), prettify: true) +
-			'\n')!
+		os.write_file(path, json2.encode(ordered_package_json_manifest(manifest), prettify: true) + '\n')!
 	}
 	return removed
 }
@@ -1366,8 +1356,7 @@ fn package_lock_to_json(lockfile Lockfile) map[string]json2.Any {
 fn prod_dependency_map(lockfile Lockfile) map[string]string {
 	mut deps := map[string]string{}
 	for name, version in lockfile.root_dependencies {
-		if name !in lockfile.root_dev_dependencies && name !in lockfile.root_optional_dependencies
-			&& name !in lockfile.root_peer_dependencies {
+		if name !in lockfile.root_dev_dependencies && name !in lockfile.root_optional_dependencies && name !in lockfile.root_peer_dependencies {
 			deps[name] = version
 		}
 	}
@@ -1387,6 +1376,7 @@ fn verify_integrity(data []u8, integrity string) ! {
 
 fn extract_npm_tarball(archive []u8, target string) ! {
 	raw := gzip.decompress(archive)!
+	validate_npm_tar(raw)!
 	os.mkdir_all(target)!
 	mut offset := 0
 	for offset + 512 <= raw.len {
@@ -1395,7 +1385,7 @@ fn extract_npm_tarball(archive []u8, target string) ! {
 		if tar_header_is_empty(header) {
 			break
 		}
-		size := tar_octal(header[124..136])
+		size := tar_octal(header[124..136])!
 		typeflag := header[156]
 		mut name := tar_string(header[0..100])
 		prefix := tar_string(header[345..500])
@@ -1406,7 +1396,7 @@ fn extract_npm_tarball(archive []u8, target string) ! {
 		if payload_end > raw.len {
 			return error('invalid tar archive: entry exceeds archive size')
 		}
-		rel := npm_tar_rel_path(name)
+		rel := npm_tar_rel_path(name)!
 		if rel != '' {
 			out_path := os.join_path(target, rel)
 			if typeflag == `5` {
@@ -1417,6 +1407,53 @@ fn extract_npm_tarball(archive []u8, target string) ! {
 			}
 		}
 		offset = payload_end + tar_padding(size)
+	}
+}
+
+fn validate_npm_tar(raw []u8) ! {
+	mut offset := 0
+	mut terminated := false
+	for offset + 512 <= raw.len {
+		header := raw[offset..offset + 512]
+		offset += 512
+		if tar_header_is_empty(header) {
+			terminated = true
+			break
+		}
+		validate_tar_checksum(header)!
+		size := tar_octal(header[124..136])!
+		mut name := tar_string(header[0..100])
+		prefix := tar_string(header[345..500])
+		if prefix != '' {
+			name = '${prefix}/${name}'
+		}
+		npm_tar_rel_path(name)!
+		if size > raw.len - offset {
+			return error('invalid tar archive: entry exceeds archive size')
+		}
+		offset += size
+		padding := tar_padding(size)
+		if padding > raw.len - offset {
+			return error('invalid tar archive: truncated entry padding')
+		}
+		offset += padding
+	}
+	if !terminated {
+		return error('invalid tar archive: missing end marker')
+	}
+}
+
+fn validate_tar_checksum(header []u8) ! {
+	if header.len != 512 {
+		return error('invalid tar archive: truncated header')
+	}
+	expected := tar_octal(header[148..156])!
+	mut actual := 0
+	for index, value in header {
+		actual += if index >= 148 && index < 156 { 32 } else { int(value) }
+	}
+	if actual != expected {
+		return error('invalid tar archive: header checksum mismatch')
 	}
 }
 
@@ -1437,12 +1474,25 @@ fn tar_string(bytes []u8) string {
 	return bytes[..end].bytestr()
 }
 
-fn tar_octal(bytes []u8) int {
+fn tar_octal(bytes []u8) !int {
 	mut value := 0
+	mut saw_digit := false
 	for b in bytes {
-		if b >= `0` && b <= `7` {
-			value = value * 8 + int(b - `0`)
+		if b == 0 || b == ` ` {
+			continue
 		}
+		if b < `0` || b > `7` {
+			return error('invalid tar archive: malformed octal field')
+		}
+		digit := int(b - `0`)
+		if value > (max_int - digit) / 8 {
+			return error('invalid tar archive: octal field is too large')
+		}
+		value = value * 8 + digit
+		saw_digit = true
+	}
+	if !saw_digit {
+		return 0
 	}
 	return value
 }
@@ -1455,14 +1505,20 @@ fn tar_padding(size int) int {
 	return 512 - remainder
 }
 
-fn npm_tar_rel_path(name string) string {
+fn npm_tar_rel_path(name string) !string {
 	mut rel := name.replace('\\', '/')
 	if rel.starts_with('package/') {
 		rel = rel['package/'.len..]
 	}
-	if rel == '' || rel.starts_with('/') || rel.contains('../') || rel == '..'
-		|| rel.starts_with('../') {
+	if rel == '' {
 		return ''
+	}
+	if rel.starts_with('/') || rel.contains('\x00') {
+		return error('invalid tar archive path: ${name}')
+	}
+	parts := rel.split('/')
+	if parts.any(it == '..') || (parts.len > 0 && parts[0].contains(':')) {
+		return error('invalid tar archive path: ${name}')
 	}
 	return rel
 }

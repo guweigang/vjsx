@@ -130,3 +130,24 @@ fn test_bundle_rejects_corruption_and_unknown_format() {
 	}
 	assert false
 }
+
+fn test_bundle_parser_rejects_every_truncated_prefix() {
+	mut compiler := vjsx.new_runtime_session()
+	defer {
+		compiler.close()
+	}
+	bundle := compiler.context().compile_bundle([
+		vjsx.BundleSourceModule{
+			name: 'vjsx-bundle/truncation/main.mjs'
+			source: 'export const ok = true;'
+		},
+	],
+		app_name: 'truncation'
+		entry: 'vjsx-bundle/truncation/main.mjs'
+		runtime_profile: 'node'
+	) or { panic(err) }
+	for cut in 0 .. bundle.len {
+		vjsx.bundle_info(bundle[..cut]) or { continue }
+		assert false, 'truncated bundle prefix unexpectedly parsed: ${cut}'
+	}
+}
