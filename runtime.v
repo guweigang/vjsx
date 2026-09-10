@@ -22,6 +22,11 @@ const vmod_info = vmod.decode(@VMOD_FILE) or { panic(err) }
 
 pub const version = vmod_info.version
 
+// Artifact ABI is intentionally independent from the product release version.
+// Increment it only when serialized QuickJS artifacts become incompatible.
+pub const artifact_abi_version = u16(1)
+pub const artifact_abi = 'vjsx-artifact-abi/1'
+
 // JSError structure.
 @[params]
 pub struct JSError {
@@ -41,19 +46,33 @@ pub fn (err &JSError) msg() string {
 }
 
 fn C.JS_NewRuntime() &C.JSRuntime
+
 fn C.JS_SetCanBlock(&C.JSRuntime, int)
+
 fn C.JS_FreeRuntime(&C.JSRuntime)
+
 fn C.JS_RunGC(&C.JSRuntime)
+
 fn C.JS_SetMaxStackSize(&C.JSRuntime, usize)
+
 fn C.JS_SetGCThreshold(&C.JSRuntime, usize)
+
 fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
+
 fn C.JS_IsJobPending(&C.JSRuntime) bool
+
 fn C.JS_ExecutePendingJob(&C.JSRuntime, &&C.JSContext) int
+
 fn C.vjsx_interrupt_state_new(&C.JSRuntime) &C.VJSXInterruptState
+
 fn C.vjsx_interrupt_state_free(&C.JSRuntime, &C.VJSXInterruptState)
+
 fn C.vjsx_interrupt_set_deadline_after_ms(&C.VJSXInterruptState, u64)
+
 fn C.vjsx_interrupt_clear_deadline(&C.VJSXInterruptState)
+
 fn C.vjsx_interrupt_cancel(&C.VJSXInterruptState)
+
 fn C.vjsx_interrupt_reason(&C.VJSXInterruptState) int
 
 // Create new Runtime.
@@ -75,7 +94,7 @@ pub fn new_runtime() Runtime {
 		panic('failed to allocate QuickJS interrupt state')
 	}
 	rt := Runtime{
-		ref:             ref
+		ref: ref
 		interrupt_state: interrupt_state
 	}
 	C.JS_SetCanBlock(rt.ref, 1)
@@ -96,14 +115,14 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 	if status < 0 {
 		if !isnil(job_ctx) {
 			return (&Context{
-				ref:                job_ctx
-				rt:                 rt
+				ref: job_ctx
+				rt: rt
 				host_cleanup_state: &HostCleanupState{
-					cleanups:          []HostCleanup{}
+					cleanups: []HostCleanup{}
 					installed_modules: map[string]bool{}
-					bundle_modules:    map[string][]u8{}
-					bundle_sources:    map[string]string{}
-					bundle_compiled:   map[string][]u8{}
+					bundle_modules: map[string][]u8{}
+					bundle_sources: map[string]string{}
+					bundle_compiled: map[string][]u8{}
 				}
 			}).execution_error()
 		}

@@ -58,6 +58,7 @@ pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatC
 // Install a Node-like compatibility host into the current context.
 pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	ctx.set_runtime_profile('node')
+	ctx.set_host_policy(config.policy)
 	if config.asset_root != '' {
 		ctx.set_asset_root(config.asset_root)
 	}
@@ -74,11 +75,11 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.zlib {
 		ctx.install_zlib_module()
 	}
-	if config.fetch {
-		ctx.install_fetch_globals(config.fetch_config)
+	if config.fetch && config.policy.allow_network {
+		ctx.install_fetch_globals_policy(config.fetch_config, config.policy)
 	}
-	if config.fs {
-		ctx.install_fs_module(config.fs_roots)
+	if config.fs && (config.policy.allow_fs_read || config.policy.allow_fs_write) {
+		ctx.install_fs_module_policy(config.fs_roots, config.policy)
 	}
 	if config.path {
 		ctx.install_path_module()
@@ -86,13 +87,13 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.os {
 		ctx.install_os_module()
 	}
-	if config.http {
-		ctx.install_http_module()
+	if config.http && config.policy.allow_network {
+		ctx.install_http_module_policy(config.policy)
 	}
-	if config.https {
-		ctx.install_https_module()
+	if config.https && config.policy.allow_network {
+		ctx.install_https_module_policy(config.policy)
 	}
-	if config.child_process {
+	if config.child_process && config.policy.allow_subprocess {
 		ctx.install_child_process_module_config(ChildProcessModuleConfig{
 			roots: config.fs_roots
 			allow_shell: config.policy.allow_shell
@@ -101,13 +102,16 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.process {
 		ctx.install_process_config(ProcessConfig{
 			args: config.process_args
+			allow_env_read: config.policy.allow_env_read
 			allow_env_write: config.policy.allow_env_write
+			allow_chdir: config.policy.allow_process_chdir
+			allow_exit: config.policy.allow_process_exit
 		})
 	}
-	if config.sqlite {
+	if config.sqlite && config.policy.allow_fs_read && config.policy.allow_fs_write {
 		ctx.install_sqlite_module(config.fs_roots)
 	}
-	if config.mysql {
+	if config.mysql && config.policy.allow_network {
 		ctx.install_mysql_module()
 	}
 }

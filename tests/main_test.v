@@ -9,18 +9,33 @@ fn test_runtime_version_matches_vmod() {
 
 fn test_host_policy_presets_are_explicit_and_compatible() {
 	safe := vjsx.HostPolicy{}
+	assert !safe.allow_env_read
 	assert !safe.allow_env_write
+	assert !safe.allow_subprocess
 	assert !safe.allow_shell
+	assert !safe.allow_fs_read
+	assert !safe.allow_fs_write
+	assert !safe.allow_network
+	assert !safe.allow_process_chdir
+	assert !safe.allow_process_exit
 	assert vjsx.host_policy_safe() == safe
 
 	trusted := vjsx.host_policy_trusted()
+	assert trusted.allow_env_read
 	assert trusted.allow_env_write
+	assert trusted.allow_subprocess
 	assert trusted.allow_shell
+	assert trusted.allow_fs_read
+	assert trusted.allow_fs_write
+	assert trusted.allow_network
+	assert trusted.allow_process_chdir
+	assert trusted.allow_process_exit
 	// Existing high-level configuration literals retain their historical
 	// trusted behavior unless an embedder opts into the safe policy.
 	assert vjsx.NodeCompatConfig{}.policy == trusted
 	assert vjsx.NodeRuntimeConfig{}.policy == trusted
 	assert vjsx.HostConfig{}.policy == trusted
+	assert vjsx.ScriptRuntimeConfig{}.policy == trusted
 }
 
 fn test_node_policy_can_disable_process_env_writes() {
@@ -75,6 +90,7 @@ fn test_node_policy_can_disable_shell_execution() {
 		sqlite: false
 		mysql: false
 		policy: vjsx.HostPolicy{
+			allow_subprocess: true
 			allow_shell: false
 		}
 	})

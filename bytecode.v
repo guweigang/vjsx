@@ -12,7 +12,9 @@ const bytecode_profile_script = u8(2)
 const bytecode_profile_browser = u8(3)
 
 fn C.vjsx_js_write_bytecode(&C.JSContext, &usize, JSValueConst, int, int) &u8
+
 fn C.vjsx_js_read_bytecode_out(&C.JSContext, &u8, usize, &C.JSValue)
+
 fn C.vjsx_quickjs_version() &char
 
 // CompileModuleOptions describes a self-contained CommonJS/UMD compilation
@@ -27,11 +29,11 @@ pub:
 }
 
 struct BytecodeArtifact {
-	profile  string
-	qjs_abi  string
-	vjsx     string
-	filename string
-	payload  []u8
+	profile     string
+	qjs_abi     string
+	runtime_abi string
+	filename    string
+	payload     []u8
 }
 
 fn bytecode_profile_id(profile string) !u8 {
@@ -39,7 +41,9 @@ fn bytecode_profile_id(profile string) !u8 {
 		'node' { bytecode_profile_node }
 		'script' { bytecode_profile_script }
 		'browser' { bytecode_profile_browser }
-		else { return error('unsupported bytecode runtime profile: ${profile}') }
+		else {
+			return error('unsupported bytecode runtime profile: ${profile}')
+		}
 	}
 }
 
@@ -48,7 +52,9 @@ fn bytecode_profile_name(profile u8) !string {
 		bytecode_profile_node { 'node' }
 		bytecode_profile_script { 'script' }
 		bytecode_profile_browser { 'browser' }
-		else { return error('unsupported bytecode runtime profile id: ${profile}') }
+		else {
+			return error('unsupported bytecode runtime profile id: ${profile}')
+		}
 	}
 }
 
@@ -96,12 +102,12 @@ fn wrap_bytecode_artifact(payload []u8, options CompileModuleOptions) ![]u8 {
 	profile := bytecode_profile_id(options.runtime_profile)!
 	qjs_abi := quickjs_abi_fingerprint()
 	qjs_bytes := qjs_abi.bytes()
-	vjsx_bytes := version.bytes()
+	runtime_abi_bytes := artifact_abi.bytes()
 	filename_bytes := options.filename.bytes()
-	if qjs_bytes.len > 65535 || vjsx_bytes.len > 65535 || filename_bytes.len > 65535 {
+	if qjs_bytes.len > 65535 || runtime_abi_bytes.len > 65535 || filename_bytes.len > 65535 {
 		return error('vjsx bytecode metadata is too large')
 	}
-	header_size := bytecode_fixed_header_size + qjs_bytes.len + vjsx_bytes.len + filename_bytes.len
+	header_size := bytecode_fixed_header_size + qjs_bytes.len + runtime_abi_bytes.len + filename_bytes.len
 	if header_size > 65535 {
 		return error('vjsx bytecode header is too large')
 	}
@@ -120,13 +126,13 @@ fn wrap_bytecode_artifact(payload []u8, options CompileModuleOptions) ![]u8 {
 	}
 	append_u16_le(mut out, flags)
 	append_u16_le(mut out, u16(qjs_bytes.len))
-	append_u16_le(mut out, u16(vjsx_bytes.len))
+	append_u16_le(mut out, u16(runtime_abi_bytes.len))
 	append_u16_le(mut out, u16(filename_bytes.len))
 	append_u16_le(mut out, 0)
 	append_u64_le(mut out, u64(payload.len))
 	out << bytecode_checksum(payload)
 	out << qjs_bytes
-	out << vjsx_bytes
+	out << runtime_abi_bytes
 	out << filename_bytes
 	out << payload
 	return out
@@ -152,22 +158,22 @@ fn parse_bytecode_artifact(data []u8) !BytecodeArtifact {
 	}
 	profile := bytecode_profile_name(data[12])!
 	qjs_len := int(read_u16_le(data, 16)!)
-	vjsx_len := int(read_u16_le(data, 18)!)
+	runtime_abi_len := int(read_u16_le(data, 18)!)
 	filename_len := int(read_u16_le(data, 20)!)
 	payload_len_u64 := read_u64_le(data, 24)!
 	if payload_len_u64 > u64(data.len) {
 		return error('invalid vjsx bytecode: payload is too large')
 	}
 	payload_len := int(payload_len_u64)
-	metadata_end := bytecode_fixed_header_size + qjs_len + vjsx_len + filename_len
+	metadata_end := bytecode_fixed_header_size + qjs_len + runtime_abi_len + filename_len
 	if metadata_end != header_size || header_size + payload_len != data.len {
 		return error('invalid vjsx bytecode: inconsistent lengths')
 	}
 	mut offset := bytecode_fixed_header_size
 	qjs_abi := data[offset..offset + qjs_len].bytestr()
 	offset += qjs_len
-	vjsx_version := data[offset..offset + vjsx_len].bytestr()
-	offset += vjsx_len
+	runtime_abi := data[offset..offset + runtime_abi_len].bytestr()
+	offset += runtime_abi_len
 	filename := data[offset..offset + filename_len].bytestr()
 	payload := data[header_size..].clone()
 	expected_checksum := data[32..64]
@@ -175,11 +181,11 @@ fn parse_bytecode_artifact(data []u8) !BytecodeArtifact {
 		return error('invalid vjsx bytecode: checksum mismatch')
 	}
 	return BytecodeArtifact{
-		profile:  profile
-		qjs_abi:  qjs_abi
-		vjsx:     vjsx_version
+		profile: profile
+		qjs_abi: qjs_abi
+		runtime_abi: runtime_abi
 		filename: filename
-		payload:  payload
+		payload: payload
 	}
 }
 
@@ -204,8 +210,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 	ctx.rt.ensure_executable()!
 	factory_source := commonjs_factory_source(source)
 	mut compiled_ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, factory_source.str, usize(factory_source.len),
-		options.filename.str, type_global | type_compile_only, &compiled_ref)
+	C.vjsx_js_eval_out(ctx.ref, factory_source.str, usize(factory_source.len), options.filename.str, type_global | type_compile_only, &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	defer {
 		compiled.free()
@@ -214,8 +219,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 		return ctx.execution_error()
 	}
 	mut payload_len := usize(0)
-	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref,
-		int(options.strip_source), int(options.strip_debug))
+	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref, int(options.strip_source), int(options.strip_debug))
 	if isnil(payload_ptr) {
 		return ctx.execution_error()
 	}
@@ -234,8 +238,8 @@ fn (ctx &Context) validate_bytecode_artifact(artifact BytecodeArtifact) ! {
 	if artifact.qjs_abi != current_abi {
 		return error('incompatible QuickJS ABI: artifact=${artifact.qjs_abi}, runtime=${current_abi}')
 	}
-	if artifact.vjsx != version {
-		return error('incompatible vjsx runtime: artifact=${artifact.vjsx}, runtime=${version}')
+	if !artifact_runtime_abi_compatible(artifact.runtime_abi) {
+		return error('incompatible vjsx artifact ABI: artifact=${artifact.runtime_abi}, runtime=${artifact_abi}')
 	}
 	if artifact.profile != ctx.runtime_profile() {
 		return error('incompatible runtime profile: artifact=${artifact.profile}, context=${ctx.runtime_profile()}')
@@ -296,8 +300,7 @@ pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
 	defer {
 		dirname_value.free()
 	}
-	result := ctx.call_this(exports_object, factory, module_object, exports_object,
-		undefined_value, filename_value, dirname_value)!
+	result := ctx.call_this(exports_object, factory, module_object, exports_object, undefined_value, filename_value, dirname_value)!
 	result.free()
 	exports := module_object.get('exports')
 	if exports.is_undefined() {
@@ -305,9 +308,9 @@ pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
 		return error('invalid CommonJS bytecode: module.exports is undefined')
 	}
 	return ScriptModule{
-		ctx:     unsafe { ctx }
+		ctx: unsafe { ctx }
 		exports: exports
-		state:   &ScriptModuleState{}
+		state: &ScriptModuleState{}
 	}
 }
 

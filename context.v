@@ -30,6 +30,7 @@ pub:
 mut:
 	asset_root      string
 	runtime_profile string
+	host_policy     HostPolicy
 }
 
 pub fn (ctx &Context) ref_ptr() voidptr {

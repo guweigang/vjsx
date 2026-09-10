@@ -8,20 +8,25 @@ const node_process_version = 'v0.0.0-vjsx'
 pub struct ProcessConfig {
 pub:
 	args            []string
+	allow_env_read  bool = true
 	allow_env_write bool = true
+	allow_chdir     bool = true
+	allow_exit      bool = true
 }
 
-fn process_env_proxy(ctx &Context, allow_env_write bool) Value {
+fn process_env_proxy(ctx &Context, allow_env_read bool, allow_env_write bool) Value {
+	readable := if allow_env_read { 'true' } else { 'false' }
 	writable := if allow_env_write { 'true' } else { 'false' }
 	return ctx.eval('(() => new Proxy(Object.create(null), {
 		get(_target, prop) {
+			if (!${readable}) return undefined;
 			if (typeof prop !== "string") {
 				return undefined;
 			}
 			return globalThis.__vjs_process_env_get(prop);
 		},
 		has(_target, prop) {
-			return typeof prop === "string" ? !!globalThis.__vjs_process_env_has(prop) : false;
+			return ${readable} && typeof prop === "string" ? !!globalThis.__vjs_process_env_has(prop) : false;
 		},
 		set(_target, prop, value) {
 			if (typeof prop !== "string") {
@@ -44,11 +49,12 @@ fn process_env_proxy(ctx &Context, allow_env_write bool) Value {
 			return true;
 		},
 		ownKeys() {
+			if (!${readable}) return [];
 			const keys = globalThis.__vjs_process_env_keys();
 			return Array.isArray(keys) ? keys : [];
 		},
 		getOwnPropertyDescriptor(_target, prop) {
-			if (typeof prop !== "string" || !globalThis.__vjs_process_env_has(prop)) {
+			if (!${readable} || typeof prop !== "string" || !globalThis.__vjs_process_env_has(prop)) {
 				return undefined;
 			}
 			return {
@@ -108,7 +114,10 @@ pub fn (ctx &Context) install_process_config(config ProcessConfig) {
 	process.set('cwd', ctx.js_function(fn [ctx] (args []Value) Value {
 		return ctx.js_string(os.getwd())
 	}))
-	process.set('chdir', ctx.js_function(fn [ctx] (args []Value) Value {
+	process.set('chdir', ctx.js_function(fn [ctx, config] (args []Value) Value {
+		if !config.allow_chdir {
+			return ctx.js_throw(ctx.js_error(message: 'process.chdir is disabled', name: 'Error'))
+		}
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
@@ -142,7 +151,10 @@ pub fn (ctx &Context) install_process_config(config ProcessConfig) {
 	process.set('stdin', process_stdio_value(ctx, 0, false))
 	process.set('stdout', process_stdio_value(ctx, 1, false))
 	process.set('stderr', process_stdio_value(ctx, 2, true))
-	process.set('exit', ctx.js_function(fn [ctx] (args []Value) Value {
+	process.set('exit', ctx.js_function(fn [ctx, config] (args []Value) Value {
+		if !config.allow_exit {
+			return ctx.js_throw(ctx.js_error(message: 'process.exit is disabled', name: 'Error'))
+		}
 		mut code := 0
 		if args.len > 0 && !args[0].is_undefined() && !args[0].is_null() {
 			code = if args[0].is_number() { args[0].to_int() } else { args[0].str().int() }
@@ -150,7 +162,11 @@ pub fn (ctx &Context) install_process_config(config ProcessConfig) {
 			proc := ctx.js_global('process')
 			exit_code := proc.get('exitCode')
 			if !exit_code.is_undefined() && !exit_code.is_null() {
-				code = if exit_code.is_number() { exit_code.to_int() } else { exit_code.str().int() }
+				code = if exit_code.is_number() {
+					exit_code.to_int()
+				} else {
+					exit_code.str().int()
+				}
 			}
 			exit_code.free()
 			proc.free()
@@ -204,7 +220,7 @@ pub fn (ctx &Context) install_process_config(config ProcessConfig) {
 		}
 		return arr
 	}))
-	env := process_env_proxy(ctx, config.allow_env_write)
+	env := process_env_proxy(ctx, config.allow_env_read, config.allow_env_write)
 	process.set('env', env)
 	global.set('process', process)
 	argv.free()

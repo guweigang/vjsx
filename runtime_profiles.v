@@ -20,9 +20,12 @@ pub:
 	sqlite          bool
 	mysql           bool
 	allow_env_write bool = true
-	fetch_config    FetchGlobalsConfig = FetchGlobalsConfig{}
-	log_fn          HostLogFn = default_host_log
-	error_fn        HostLogFn = default_host_error
+	// Unified capability policy. The legacy allow_env_write flag above remains
+	// as a one-way compatibility restriction.
+	policy       HostPolicy = host_policy_trusted()
+	fetch_config FetchGlobalsConfig = FetchGlobalsConfig{}
+	log_fn       HostLogFn = default_host_log
+	error_fn     HostLogFn = default_host_error
 }
 
 // NodeRuntimeConfig describes a fuller Node-like runtime profile.
@@ -44,6 +47,10 @@ pub:
 
 // Install a lightweight script runtime profile.
 pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
+	mut policy := config.policy
+	if !config.allow_env_write {
+		policy.allow_env_write = false
+	}
 	ctx.install_node_compat(NodeCompatConfig{
 		crypto: false
 		zlib: false
@@ -62,9 +69,7 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 		process_args: config.process_args
 		asset_root: config.asset_root
 		fetch_config: config.fetch_config
-		policy: HostPolicy{
-			allow_env_write: config.allow_env_write
-		}
+		policy: policy
 		log_fn: config.log_fn
 		error_fn: config.error_fn
 	})
@@ -98,4 +103,15 @@ pub fn (ctx &Context) set_runtime_profile(profile string) {
 // Return the host runtime profile associated with this context.
 pub fn (ctx &Context) runtime_profile() string {
 	return ctx.runtime_profile
+}
+
+// Record the capability policy installed for this context.
+fn (ctx &Context) set_host_policy(policy HostPolicy) {
+	mut target := unsafe { ctx }
+	target.host_policy = policy
+}
+
+// Return the effective host capability policy.
+pub fn (ctx &Context) capability_policy() HostPolicy {
+	return ctx.host_policy
 }

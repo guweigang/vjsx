@@ -9,7 +9,9 @@ const bundle_fixed_header_size = 60
 const bundle_module_prefix = 'vjsx-bundle/'
 
 fn C.vjsx_js_value_is_module(JSValueConst) int
+
 fn C.vjsx_js_get_module_def_namespace_out(&C.JSContext, &C.JSModuleDef, &C.JSValue)
+
 fn C.vjsx_js_throw_bundle_module_not_found(&C.JSContext, &char)
 
 // BundleSourceModule is an emitted ES module ready for QuickJS compilation.
@@ -42,6 +44,7 @@ struct BundleManifest {
 pub:
 	format_version  int
 	vjsx_version    string
+	runtime_abi     string
 	quickjs_abi     string
 	runtime_profile string
 	app_name        string
@@ -63,6 +66,7 @@ pub:
 	module_count    int
 	format_version  int
 	vjsx_version    string
+	runtime_abi     string
 	quickjs_abi     string
 }
 
@@ -86,8 +90,7 @@ fn bundle_checksum(manifest []u8, payload []u8) []u8 {
 
 fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options CompileBundleOptions) ![]u8 {
 	mut compiled_ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, source.source.str, usize(source.source.len), source.name.str,
-		type_module | type_compile_only, &compiled_ref)
+	C.vjsx_js_eval_out(ctx.ref, source.source.str, usize(source.source.len), source.name.str, type_module | type_compile_only, &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	defer {
 		compiled.free()
@@ -99,8 +102,7 @@ fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options Co
 		return error('QuickJS did not compile an ES module: ${source.name}')
 	}
 	mut payload_len := usize(0)
-	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref,
-		int(options.strip_source), int(options.strip_debug))
+	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref, int(options.strip_source), int(options.strip_debug))
 	if isnil(payload_ptr) {
 		return ctx.execution_error()
 	}
@@ -157,8 +159,7 @@ fn (ctx &Context) store_bundle_compiled_bytecode(name string, bytecode []u8) {
 
 fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, source string) !&C.JSModuleDef {
 	mut ref := C.JSValue{}
-	C.vjsx_js_eval_out(c_ctx, source.str, usize(source.len), name.str,
-		type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(c_ctx, source.str, usize(source.len), name.str, type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return error('failed to compile bundle dependency: ${name}')
 	}
@@ -168,8 +169,7 @@ fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, 
 	}
 	mut payload_len := usize(0)
 	state := ctx.host_cleanup_state
-	payload_ptr := C.vjsx_js_write_bytecode(c_ctx, &payload_len, ref, int(state.bundle_strip_src),
-		int(state.bundle_strip_dbg))
+	payload_ptr := C.vjsx_js_write_bytecode(c_ctx, &payload_len, ref, int(state.bundle_strip_src), int(state.bundle_strip_dbg))
 	if isnil(payload_ptr) {
 		C.JS_FreeValue(c_ctx, ref)
 		return error('failed to serialize bundle dependency: ${name}')
@@ -232,20 +232,21 @@ pub fn (ctx &Context) compile_bundle(modules []BundleSourceModule, options Compi
 			return error('bundle module was not compiled: ${source.name}')
 		}
 		manifest_modules << BundleManifestModule{
-			name:   source.name
+			name: source.name
 			offset: u64(payload.len)
 			length: u64(module_payload.len)
 		}
 		payload << module_payload
 	}
 	manifest := BundleManifest{
-		format_version:  int(bundle_format_version)
-		vjsx_version:    version
-		quickjs_abi:     quickjs_abi_fingerprint()
+		format_version: int(bundle_format_version)
+		vjsx_version: version
+		runtime_abi: artifact_abi
+		quickjs_abi: quickjs_abi_fingerprint()
 		runtime_profile: options.runtime_profile
-		app_name:        options.app_name
-		entry:           options.entry
-		modules:         manifest_modules
+		app_name: options.app_name
+		entry: options.entry
+		modules: manifest_modules
 	}
 	manifest_bytes := json2.encode(manifest, escape_unicode: true).bytes()
 	mut out := []u8{cap: bundle_fixed_header_size + manifest_bytes.len + payload.len}
@@ -321,7 +322,7 @@ fn parse_bundle(data []u8) !ParsedBundle {
 	}
 	return ParsedBundle{
 		manifest: manifest
-		modules:  modules
+		modules: modules
 	}
 }
 
@@ -329,13 +330,19 @@ fn parse_bundle(data []u8) !ParsedBundle {
 pub fn bundle_info(data []u8) !BundleInfo {
 	parsed := parse_bundle(data)!
 	return BundleInfo{
-		app_name:        parsed.manifest.app_name
-		entry:           parsed.manifest.entry
+		app_name: parsed.manifest.app_name
+		entry: parsed.manifest.entry
 		runtime_profile: parsed.manifest.runtime_profile
-		module_count:    parsed.manifest.modules.len
-		format_version:  parsed.manifest.format_version
-		vjsx_version:    parsed.manifest.vjsx_version
-		quickjs_abi:     parsed.manifest.quickjs_abi
+		module_count: parsed.manifest.modules.len
+		format_version: parsed.manifest.format_version
+		vjsx_version: parsed.manifest.vjsx_version
+		runtime_abi: if parsed.manifest.runtime_abi == ''
+			&& artifact_runtime_abi_compatible(parsed.manifest.vjsx_version) {
+			artifact_abi
+		} else {
+			parsed.manifest.runtime_abi
+		}
+		quickjs_abi: parsed.manifest.quickjs_abi
 	}
 }
 
@@ -359,8 +366,13 @@ fn (ctx &Context) validate_bundle_manifest(manifest BundleManifest) ! {
 	if manifest.quickjs_abi != current_abi {
 		return error('incompatible QuickJS ABI: artifact=${manifest.quickjs_abi}, runtime=${current_abi}')
 	}
-	if manifest.vjsx_version != version {
-		return error('incompatible vjsx runtime: artifact=${manifest.vjsx_version}, runtime=${version}')
+	manifest_abi := if manifest.runtime_abi == '' {
+		manifest.vjsx_version
+	} else {
+		manifest.runtime_abi
+	}
+	if !artifact_runtime_abi_compatible(manifest_abi) {
+		return error('incompatible vjsx artifact ABI: artifact=${manifest_abi}, runtime=${artifact_abi}')
 	}
 	if manifest.runtime_profile != ctx.runtime_profile() {
 		return error('incompatible runtime profile: artifact=${manifest.runtime_profile}, context=${ctx.runtime_profile()}')
@@ -409,9 +421,9 @@ pub fn (ctx &Context) load_bundle(data []u8) !ScriptModule {
 		return ctx.execution_error()
 	}
 	return ScriptModule{
-		ctx:     unsafe { ctx }
+		ctx: unsafe { ctx }
 		exports: namespace
-		state:   &ScriptModuleState{}
+		state: &ScriptModuleState{}
 	}
 }
 
