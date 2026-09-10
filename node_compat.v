@@ -55,8 +55,10 @@ pub fn node_compat_minimal(fs_roots []string, process_args []string) NodeCompatC
 	}
 }
 
-// Install a Node-like compatibility host into the current context.
-pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
+// Install a Node-like compatibility host into the current context. If this
+// returns an error the context may be partially configured and should be
+// closed rather than reused.
+pub fn (ctx &Context) try_install_node_compat(config NodeCompatConfig) ! {
 	ctx.set_runtime_profile('node')
 	ctx.set_host_policy(config.policy)
 	if config.asset_root != '' {
@@ -65,18 +67,18 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.console {
 		ctx.install_console(config.log_fn, config.error_fn)
 	}
-	ctx.install_runtime_globals(config.runtime)
+	ctx.try_install_runtime_globals(config.runtime)!
 	if config.timers {
-		ctx.install_node_timers_promises_module()
+		ctx.try_install_node_timers_promises_module()!
 	}
 	if config.crypto {
-		ctx.install_node_crypto_module()
+		ctx.try_install_node_crypto_module()!
 	}
 	if config.zlib {
 		ctx.install_zlib_module()
 	}
 	if config.fetch && config.policy.allow_network {
-		ctx.install_fetch_globals_policy(config.fetch_config, config.policy)
+		ctx.try_install_fetch_globals_policy(config.fetch_config, config.policy)!
 	}
 	if config.fs && (config.policy.allow_fs_read || config.policy.allow_fs_write) {
 		ctx.install_fs_module_policy(config.fs_roots, config.policy)
@@ -115,6 +117,12 @@ pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
 	if config.mysql && config.policy.allow_network && config.policy.network_hosts.len == 0 {
 		ctx.install_mysql_module()
 	}
+}
+
+// Compatibility wrapper for the historical panic-on-install-failure API.
+// New embedders should use try_install_node_compat().
+pub fn (ctx &Context) install_node_compat(config NodeCompatConfig) {
+	ctx.try_install_node_compat(config) or { panic(err) }
 }
 
 fn (config HostConfig) node_compat_config() NodeCompatConfig {

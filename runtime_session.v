@@ -71,15 +71,33 @@ pub fn new_runtime_session(config ContextConfig) RuntimeSession {
 
 // Create a managed lightweight script runtime profile.
 pub fn new_script_runtime_session(ctx_config ContextConfig, runtime_config ScriptRuntimeConfig) RuntimeSession {
+	return try_new_script_runtime_session(ctx_config, runtime_config) or { panic(err) }
+}
+
+// Create a managed lightweight script runtime and report recoverable profile
+// installation failures. Failed sessions are closed before returning.
+pub fn try_new_script_runtime_session(ctx_config ContextConfig, runtime_config ScriptRuntimeConfig) !RuntimeSession {
 	mut session := new_runtime_session(ctx_config)
-	session.context.install_script_runtime(runtime_config)
+	session.context.try_install_script_runtime(runtime_config) or {
+		session.close()
+		return err
+	}
 	return session
 }
 
 // Create a managed fuller Node-style runtime profile.
 pub fn new_node_runtime_session(ctx_config ContextConfig, runtime_config NodeRuntimeConfig) RuntimeSession {
+	return try_new_node_runtime_session(ctx_config, runtime_config) or { panic(err) }
+}
+
+// Create a managed Node-style runtime and report recoverable profile
+// installation failures. Failed sessions are closed before returning.
+pub fn try_new_node_runtime_session(ctx_config ContextConfig, runtime_config NodeRuntimeConfig) !RuntimeSession {
 	mut session := new_runtime_session(ctx_config)
-	session.context.install_node_runtime(runtime_config)
+	session.context.try_install_node_runtime(runtime_config) or {
+		session.close()
+		return err
+	}
 	return session
 }
 

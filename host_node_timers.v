@@ -3,8 +3,9 @@ module vjsx
 // Install Node's promise-based timer module (`node:timers/promises`).
 // The module uses the existing global timer wrapper, so QuickJS still owns the
 // real timer queue while this layer only adds Node-compatible Promise semantics.
-pub fn (ctx &Context) install_node_timers_promises_module() {
-	ctx.eval_runtime_file('web/js/node_timers_promises.js', type_module) or { panic(err) }
+pub fn (ctx &Context) try_install_node_timers_promises_module() ! {
+	value := ctx.eval_runtime_file('web/js/node_timers_promises.js', type_module)!
+	value.free()
 	helpers := ctx.js_global('__vjsxNodeTimersPromises')
 	set_timeout_fn := helpers.get('setTimeout')
 	mut timers_mod := ctx.js_module('node:timers/promises')
@@ -16,4 +17,8 @@ pub fn (ctx &Context) install_node_timers_promises_module() {
 	default_obj.free()
 	set_timeout_fn.free()
 	helpers.free()
+}
+
+pub fn (ctx &Context) install_node_timers_promises_module() {
+	ctx.try_install_node_timers_promises_module() or { panic(err) }
 }

@@ -23,19 +23,19 @@ fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string
 	}
 	match profile {
 		'node' {
-			ctx.install_node_runtime(
-				fs_roots:     fs_roots
+			ctx.try_install_node_runtime(
+				fs_roots: fs_roots
 				process_args: process_args
-			)
+			)!
 		}
 		'script' {
-			ctx.install_script_runtime(
-				fs_roots:     fs_roots
+			ctx.try_install_script_runtime(
+				fs_roots: fs_roots
 				process_args: process_args
-			)
+			)!
 		}
 		'browser' {
-			runtimejs.install_cli_browser_runtime(ctx)
+			runtimejs.try_install_cli_browser_runtime(ctx)!
 		}
 		else {
 			return error('unsupported runtime profile: ${profile}')
