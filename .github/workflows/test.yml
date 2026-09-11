@@ -166,6 +166,28 @@ jobs:
           "$GITHUB_WORKSPACE/dist/vjsx-install-smoke" install is-number@7.0.0
           test -f node_modules/is-number/index.js
 
+      - name: Run Windows package installer smoke
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "vjsx-install-smoke"
+          New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+          v -prod -d link_quickjs -d use_openssl -cg -cc msvc `
+            -o "$PWD\dist\vjsx-install-smoke.exe" .\cli_runner_bin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location $smokeRoot
+          try {
+            & "$env:GITHUB_WORKSPACE\dist\vjsx-install-smoke.exe" install is-number@7.0.0
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path "node_modules\is-number\index.js")) {
+              throw "installed package entry was not created"
+            }
+          } finally {
+            Pop-Location
+          }
+
       - name: Run Tests Windows with MSVC
         if: matrix.os == 'windows-latest'
         shell: powershell
