@@ -51,6 +51,43 @@ find_libcrypto_a() {
   return 1
 }
 
+find_libssl_a() {
+  local candidate
+  if [ -n "${OPENSSL_SSL_STATIC_LIB:-}" ] && [ -f "$OPENSSL_SSL_STATIC_LIB" ]; then
+    echo "$OPENSSL_SSL_STATIC_LIB"
+    return 0
+  fi
+  if [ -n "${OPENSSL_ROOT_DIR:-}" ] && [ -f "$OPENSSL_ROOT_DIR/lib/libssl.a" ]; then
+    echo "$OPENSSL_ROOT_DIR/lib/libssl.a"
+    return 0
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    local brew_prefix
+    brew_prefix=$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null || true)
+    if [ -n "$brew_prefix" ] && [ -f "$brew_prefix/lib/libssl.a" ]; then
+      echo "$brew_prefix/lib/libssl.a"
+      return 0
+    fi
+  fi
+  for candidate in \
+    /opt/homebrew/opt/openssl@3/lib/libssl.a \
+    /opt/homebrew/opt/openssl/lib/libssl.a \
+    /opt/homebrew/lib/libssl.a \
+    /usr/local/opt/openssl@3/lib/libssl.a \
+    /usr/local/opt/openssl/lib/libssl.a \
+    /usr/local/lib/libssl.a \
+    /usr/lib/x86_64-linux-gnu/libssl.a \
+    /usr/lib/aarch64-linux-gnu/libssl.a \
+    /usr/lib64/libssl.a \
+    /usr/lib/libssl.a; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 v_args=()
 if [ -n "${VJS_V_FLAGS:-}" ]; then
   # Split user-provided flags by whitespace into array
@@ -92,20 +129,21 @@ if [ "$has_cc" -eq 0 ]; then
 fi
 
 crypto_static_a=$(find_libcrypto_a || true)
-if [ -n "$crypto_static_a" ]; then
+ssl_static_a=$(find_libssl_a || true)
+if [ -n "$crypto_static_a" ] && [ -n "$ssl_static_a" ]; then
   static_dir="$repo_root/.cache/static-crypto"
   mkdir -p "$static_dir"
   ln -sf "$crypto_static_a" "$static_dir/libcrypto.a"
-  # V's OpenSSL module contributes `-lcrypto` before user C flags on some
-  # toolchains. LIBRARY_PATH participates in every linker lookup regardless of
-  # that argument ordering, so the pinned release build consistently selects
-  # the archive on both Linux architectures.
+  ln -sf "$ssl_static_a" "$static_dir/libssl.a"
+  # V prepends the CFLAGS environment value before module and pkg-config flags.
+  # Giving this directory first priority makes every later `-lssl -lcrypto`
+  # resolve to the archives on Unix toolchains.
+  export CFLAGS="-L$static_dir${CFLAGS:+ $CFLAGS}"
   export LIBRARY_PATH="$static_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
-  v_args+=(-cflags "-L$static_dir")
-  echo "Using static libcrypto: $crypto_static_a" >&2
+  echo "Using static OpenSSL: $ssl_static_a $crypto_static_a" >&2
 elif [ "$require_static_crypto" = "1" ]; then
-  echo "Static libcrypto is required but libcrypto.a was not found" >&2
-  echo "Set OPENSSL_CRYPTO_STATIC_LIB to the absolute archive path" >&2
+  echo "Static OpenSSL is required but libssl.a or libcrypto.a was not found" >&2
+  echo "Set OPENSSL_SSL_STATIC_LIB and OPENSSL_CRYPTO_STATIC_LIB to the absolute archive paths" >&2
   exit 1
 fi
 
@@ -113,18 +151,18 @@ cd "$repo_root"
 VJS_QUICKJS_PATH="$quickjs_path" \
   v "${v_args[@]}" -prod -d build_quickjs -o "$out" ./cli_runner_bin
 
-check_dynamic_crypto() {
+check_dynamic_openssl() {
   local binary=$1
   local dependency=''
   case "$(uname -s)" in
     Darwin)
       if command -v otool >/dev/null 2>&1; then
-        dependency=$(otool -L "$binary" | grep 'libcrypto.*dylib' || true)
+        dependency=$(otool -L "$binary" | grep -E 'lib(ssl|crypto).*dylib' || true)
       fi
       ;;
     Linux)
       if command -v ldd >/dev/null 2>&1; then
-        dependency=$(ldd "$binary" 2>/dev/null | grep 'libcrypto\.so' || true)
+        dependency=$(ldd "$binary" 2>/dev/null | grep -E 'lib(ssl|crypto)\.so' || true)
       fi
       ;;
   esac
@@ -132,12 +170,12 @@ check_dynamic_crypto() {
     return 0
   fi
   if [ "$require_static_crypto" = "1" ]; then
-    echo "$binary unexpectedly depends on dynamic libcrypto: $dependency" >&2
+    echo "$binary unexpectedly depends on dynamic OpenSSL: $dependency" >&2
     return 1
   fi
-  echo "Warning: $binary depends on dynamic libcrypto: $dependency" >&2
+  echo "Warning: $binary depends on dynamic OpenSSL: $dependency" >&2
 }
 
-check_dynamic_crypto "$out"
+check_dynamic_openssl "$out"
 
 echo "$out"

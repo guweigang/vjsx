@@ -93,33 +93,9 @@ jobs:
           arch: amd64
 
       - name: Setup V
-        if: matrix.shell == 'bash'
         uses: vlang/setup-v@v1.7
         with:
           version-file: .v-version
-
-      - name: Build V with MSVC
-        if: matrix.shell == 'powershell'
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $installRoot = Join-Path $env:RUNNER_TEMP "vlang"
-          $vVersion = (Get-Content .v-version -Raw).Trim()
-          git init $installRoot
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Push-Location $installRoot
-          git remote add origin https://github.com/vlang/v.git
-          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-          git fetch --depth 1 origin $vVersion
-          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-          git checkout --detach FETCH_HEAD
-          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
-          cmd /c makev.bat -msvc
-          $vBuildExitCode = $LASTEXITCODE
-          Pop-Location
-          if ($vBuildExitCode -ne 0) { exit $vBuildExitCode }
-          Add-Content -Path $env:GITHUB_PATH -Value $installRoot
-          & (Join-Path $installRoot "v.exe") version
 
       - name: Cache Windows vcpkg packages
         if: matrix.shell == 'powershell'
