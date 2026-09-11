@@ -1,17 +1,31 @@
 globalThis.__vjs_list_module_imports = function(input, fileName) {
-	const values = new Set((ts.preProcessFile(input, true, true).importedFiles || []).map((entry) => entry.fileName));
-	const patterns = [
-		new RegExp("\\bfrom\\s*[\\\"\\x27]([^\\\"\\x27]+)[\\\"\\x27]", "g"),
-		new RegExp("\\bimport\\s*[\\\"\\x27]([^\\\"\\x27]+)[\\\"\\x27]", "g"),
-		new RegExp("\\bimport\\s*\\(\\s*[\\\"\\x27]([^\\\"\\x27]+)[\\\"\\x27]\\s*\\)", "g"),
-		new RegExp("\\brequire\\s*\\(\\s*[\\\"\\x27]([^\\\"\\x27]+)[\\\"\\x27]\\s*\\)", "g")
-	];
-	for (const pattern of patterns) {
-		let match;
-		while ((match = pattern.exec(input)) !== null) {
-			values.add(match[1]);
+	const values = new Set();
+	const kind = /\.tsx$/i.test(fileName)
+		? ts.ScriptKind.TSX
+		: /\.jsx$/i.test(fileName)
+			? ts.ScriptKind.JSX
+			: /\.tsx?$/i.test(fileName)
+				? ts.ScriptKind.TS
+				: ts.ScriptKind.JS;
+	const sourceFile = ts.createSourceFile(fileName, input, ts.ScriptTarget.Latest, true, kind);
+	const addLiteral = (node) => {
+		if (node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))) {
+			values.add(node.text);
 		}
-	}
+	};
+	const visit = (node) => {
+		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
+			addLiteral(node.moduleSpecifier);
+		} else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+			addLiteral(node.moduleReference.expression);
+		} else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+			const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+			const commonJsRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+			if (dynamicImport || commonJsRequire) addLiteral(node.arguments[0]);
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(sourceFile);
 	return Array.from(values).join("\n");
 };
 

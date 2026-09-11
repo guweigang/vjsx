@@ -1,6 +1,6 @@
 # 1.0 Release-Readiness Audit
 
-Audit baseline: `main` at `41834f5`, current package version `0.0.8`.
+Audit baseline: `main` at `6945e7c`, current package version `0.0.8`.
 
 ## Strengthened in this phase
 
@@ -22,21 +22,24 @@ Audit baseline: `main` at `41834f5`, current package version `0.0.8`.
   app-runner build, package and version-sync surface.
 - Prebuilt QuickJS once per CI job so the Unix matrix links the same static
   library into every test instead of recompiling the engine for each file.
+- Defined the 1.x Stable, Compatibility and Advanced public API tiers. Public
+  visibility alone no longer implies a SemVer guarantee.
+- Added a pinned OpenAI SDK/AI SDK real-package fixture to the Ubuntu CI gate
+  with explicit ownership and update rules.
+- Added release archive/checksum provenance attestations and made manual
+  release workflow dispatch non-publishing by default.
+- Added a named-runner benchmark artifact to every release workflow run and
+  documented that 1.0 promises pinned, attested builds rather than
+  bit-for-bit-identical native rebuilds.
 
 ## Remaining 1.0 blockers
 
-1. Release archives are checksummed and extraction-smoked, but the workflow
-   does not yet generate signed provenance/attestations. Bit-for-bit rebuilds
-   are not demonstrated across all five platforms.
-2. The low-level public `Runtime`/`Context`/`Value` surface is still broad and
-   provisional. A 1.0 decision must either stabilize it or explicitly move it
-   behind an advanced compatibility policy.
-3. The selected package corpus is intentionally small. Real-package fixtures
-   need owners, update policy and demonstrated coverage for every package named
-   as supported.
-4. A benchmark baseline and a non-publishing release workflow run must pass on
-   release infrastructure before the 1.0 tag is created.
+1. The updated pull-request matrix, benchmark job, archive assembly and signed
+   attestation path must pass once on release infrastructure.
+2. Publish `v1.0.0-rc.1` from the same pinned inputs and complete the release
+   checklist against its downloadable artifacts before creating `v1.0.0`.
 ## Version recommendation
 
-Do not tag `1.0.0` yet. Continue the `0.x` line until the blockers above are
-closed with CI/release evidence. No version number was changed by this audit.
+Do not tag `1.0.0` directly. Close the evidence gate, publish `v1.0.0-rc.1`, and
+promote the same contracts to `v1.0.0` after the RC checklist passes. No version
+number was changed by this audit.

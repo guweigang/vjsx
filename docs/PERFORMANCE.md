@@ -23,3 +23,8 @@ notes or attached CI artifacts; do not encode machine-independent pass/fail
 latency thresholds in CI. Investigate sustained regressions on comparable
 hardware, especially changes above 15%, but treat that percentage as a review
 trigger rather than an automatic release failure.
+
+Every `Release Binaries` workflow run records the same metadata and a 25-run
+sample in its `release-benchmark` artifact. That named Ubuntu runner artifact is
+the release baseline; local measurements are diagnostic and should only be
+compared when their recorded environment matches.

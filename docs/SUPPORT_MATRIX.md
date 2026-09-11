@@ -61,3 +61,7 @@ The curated executable corpus lives in `tests/conformance/` and is exercised by
 `tests/conformance_test.v`. Parser seeds and truncation properties live beside
 the bytecode, bundle, module-graph and package installer tests. Adding a support
 claim requires a corpus case and a documented behavior.
+
+Pinned third-party integrations and their ownership/update rules are listed in
+[`PACKAGE_CONFORMANCE.md`](PACKAGE_CONFORMANCE.md). Those claims cover only the
+versions and behavior exercised by their fixtures.

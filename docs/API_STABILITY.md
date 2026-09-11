@@ -1,8 +1,28 @@
 # Public API Inventory and Stability
 
-This inventory is the release contract for the current `0.x` line. “Stable”
-means compatible additions are allowed and breaking changes require a migration
-guide plus a versioned release boundary. It does not claim that vjsx is 1.0.
+This inventory defines the compatibility boundary for vjsx 1.x. Public V
+visibility is necessary for modules inside this repository to cooperate, but it
+does not by itself place a symbol in the stable 1.x contract. Every public
+symbol belongs to one of the tiers below.
+
+## Compatibility tiers
+
+- **Stable**: the symbols in the recommended stable surface table follow
+  semantic versioning throughout 1.x. Compatible additions are allowed;
+  removals and incompatible behavior changes require the next major version.
+- **Compatibility**: legacy entry points remain available throughout 1.x, but
+  new code should use their documented replacements. They may receive only
+  correctness and security fixes.
+- **Advanced**: the low-level and provisional surfaces listed below are
+  supported for expert embedders but are outside the 1.x source-compatibility
+  guarantee. They may change in a minor release when QuickJS, safety, or
+  lifecycle correctness requires it. Every such change requires a changelog
+  entry and migration notes.
+
+Unlisted public symbols are Advanced. A symbol becomes Stable only through an
+explicit update to this inventory. This keeps the contract auditable even
+though the V module exposes implementation-building blocks used by
+`runtimejs`.
 
 ## Recommended stable surface
 
@@ -50,9 +70,21 @@ single-lane ownership and lifecycle discipline described in
   in `SUPPORT_MATRIX.md` and `NODE_COMPATIBILITY.md`.
 - Low-level C/QuickJS-facing types and compile flags.
 
-These APIs remain public for existing users, but may evolve during `0.x`.
-Changes should remain source compatible where practical and must be called out
-in `CHANGELOG.md`.
+These APIs remain public for existing users, but they are in the Advanced tier
+and are not covered by the 1.x source-compatibility guarantee. Changes should
+remain source compatible where practical and must be called out in
+`CHANGELOG.md` with migration guidance.
+
+## 1.x change policy
+
+- Patch releases contain compatible fixes only across all tiers unless a
+  security or memory-safety issue makes that impossible.
+- Minor releases may add Stable APIs and may evolve Advanced APIs with
+  migration notes.
+- Stable removals or incompatible Stable behavior changes require 2.0.
+- Artifact compatibility is governed separately by the versioned artifact and
+  QuickJS ABI checks below; product SemVer is not used as an artifact decoder
+  switch.
 
 ## Error model
 

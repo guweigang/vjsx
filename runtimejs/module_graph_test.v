@@ -91,6 +91,26 @@ fn test_module_graph_resolution_diagnostic_has_context() {
 	assert false
 }
 
+fn test_module_graph_ignores_import_text_inside_strings_and_comments() {
+	root := os.join_path(os.temp_dir(), 'vjsx_module_graph_string_imports_${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	entry := os.join_path(root, 'main.mjs')
+	os.write_file(entry, 'const message = "use import(\\"node:buffer\\") when available"; // require("node:stream")\nexport default message;') or {
+		panic(err)
+	}
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	graph := resolve_module_graph(session.context(), entry, 'node') or { panic(err) }
+	assert graph.nodes.len == 1
+	assert graph.nodes[0].imports.len == 0
+}
+
 fn test_module_graph_cycle_is_finite_and_cache_key_is_repeatable() {
 	root := os.join_path(os.temp_dir(), 'vjsx_module_graph_cycle_${os.getpid()}')
 	os.rmdir_all(root) or {}

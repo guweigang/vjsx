@@ -40,6 +40,10 @@ Hosting documentation:
 - [API Stability](docs/API_STABILITY.md) for supported and provisional
   surfaces.
 - [Support Matrix](docs/SUPPORT_MATRIX.md) for platform and JS/TS/package scope.
+- [Package Conformance](docs/PACKAGE_CONFORMANCE.md) for pinned real-package
+  fixtures and their update policy.
+- [Build Provenance](docs/BUILD_PROVENANCE.md) for release attestation and the
+  reproducibility boundary.
 - [Artifact ABI](docs/ARTIFACT_ABI.md) for serialized compatibility rules.
 - [Upgrading](docs/UPGRADING.md) and the [Release Checklist](docs/RELEASE_CHECKLIST.md)
   for migrations and release verification.
