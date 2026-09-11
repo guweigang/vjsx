@@ -164,6 +164,7 @@ jobs:
           }
           Add-Content -Path $env:GITHUB_ENV -Value "OPENSSL_ROOT_DIR=$sdkRoot"
           Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_INSTALLED_DIR=$sdkRoot"
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$(Join-Path $sdkRoot 'include');$env:INCLUDE"
           Add-Content -Path $env:GITHUB_ENV -Value "LIBRARY_PATH=$opensslLibDir;$env:LIBRARY_PATH"
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")

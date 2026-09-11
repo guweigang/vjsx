@@ -109,7 +109,7 @@ fn build_runner(runner string, sqlite bool) ! {
 	v_cache := os.join_path(runner_cache_dir, 'vcache')
 	os.mkdir_all(v_cache) or { panic(err) }
 	sqlite_flag := if sqlite { ' -d vjsx_sqlite' } else { '' }
-	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -d use_openssl${sqlite_flag} -o ${shell_quote(partial)} ./cli_runner_bin'
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} ${quickjs_build_flags()} -d use_openssl${sqlite_flag}${compiler_flag()} -o ${shell_quote(partial)} ./cli_runner_bin'
 	result := os.execute(command)
 	if result.exit_code != 0 {
 		os.rm(partial) or {}
@@ -125,7 +125,7 @@ fn build_app_runner(runner string) ! {
 	quickjs_source_path := resolve_quickjs_path()
 	v_cache := os.join_path(runner_cache_dir, 'vcache-app-runner')
 	os.mkdir_all(v_cache) or { panic(err) }
-	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} -d build_quickjs -d use_openssl -o ${shell_quote(partial)} ./app_runner_bin'
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} ${quickjs_build_flags()} -d use_openssl${compiler_flag()} -o ${shell_quote(partial)} ./app_runner_bin'
 	result := os.execute(command)
 	if result.exit_code != 0 {
 		os.rm(partial) or {}
@@ -133,6 +133,24 @@ fn build_app_runner(runner string) ! {
 	}
 	os.rm(runner) or {}
 	os.mv(partial, runner)!
+}
+
+fn quickjs_build_flags() string {
+	if quickjs_lib_path := os.getenv_opt('VJS_QUICKJS_LIB_PATH') {
+		if quickjs_lib_path != '' {
+			return '-d link_quickjs'
+		}
+	}
+	return '-d build_quickjs'
+}
+
+fn compiler_flag() string {
+	if compiler := os.getenv_opt('VJS_V_CC') {
+		if compiler != '' {
+			return ' -cc ${shell_quote(compiler)}'
+		}
+	}
+	return ''
 }
 
 fn resolve_quickjs_path() string {
