@@ -346,6 +346,10 @@ Packages can be installed without a local Node/npm dependency:
 ./vjsx uninstall typescript
 ```
 
+Package downloads use the system `curl` executable when available so proxy and
+platform TLS settings match the host. If curl is unavailable, vjsx falls back
+to its built-in HTTPS client with bounded read and write timeouts.
+
 When package specs are provided, `vjsx install` updates `package.json` in the
 same way users expect from a package installer: regular installs are written to
 `dependencies`, and `--dev` installs are written to `devDependencies`. When no

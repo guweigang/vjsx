@@ -1,6 +1,35 @@
 module main
 
+import os
 import strconv
+
+fn test_npm_curl_args_require_https_for_redirects() {
+	args := npm_curl_args('https://registry.example/package', '/tmp/body', '/tmp/diagnostics')
+	assert args.contains('--proto')
+	assert args[args.index('--proto') + 1] == '=https'
+	assert args.contains('--proto-redir')
+	assert args[args.index('--proto-redir') + 1] == '=https'
+}
+
+fn test_npm_curl_download_uses_spawn_without_a_shell() {
+	$if !windows {
+		root := os.join_path(os.temp_dir(), 'vjsx_npm_curl_${os.getpid()}')
+		os.rmdir_all(root) or {}
+		os.mkdir_all(root) or { panic(err) }
+		defer {
+			os.rmdir_all(root) or {}
+		}
+		fake_curl := os.join_path(root, 'fake curl')
+		body_path := os.join_path(root, 'body with spaces')
+		diagnostics_path := os.join_path(root, 'diagnostics with spaces')
+		os.write_file(fake_curl, '#!/bin/sh\nwhile [ "\$#" -gt 0 ]; do\n  if [ "\$1" = "--output" ]; then\n    shift\n    printf "downloaded" > "\$1"\n  fi\n  shift\ndone\n') or {
+			panic(err)
+		}
+		os.chmod(fake_curl, 0o700) or { panic(err) }
+		run_npm_curl(fake_curl, npm_curl_args('https://registry.example/package', body_path, diagnostics_path), diagnostics_path) or { panic(err) }
+		assert os.read_file(body_path)! == 'downloaded'
+	}
+}
 
 fn test_package_spec_parser_seed_corpus() {
 	valid := {

@@ -52,3 +52,9 @@ declared a 1.0 stability boundary.
 - Existing panic-on-install constructors remain available as soft-deprecated
   wrappers. See `docs/UPGRADING.md`.
 - Artifact ABI remains `vjsx-artifact-abi/1`; product version remains `0.0.8`.
+
+### Fixed
+
+- `vjsx install` uses a bounded system-curl download path when available,
+  avoiding a macOS hang in V's native HTTPS client while retaining a timed
+  native fallback when curl is unavailable.
