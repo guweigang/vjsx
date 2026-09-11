@@ -1,7 +1,7 @@
 # 1.0 Release-Readiness Audit
 
-Audit baseline: `main` at `28a4379`, release-candidate package version
-`1.0.0-rc.1`.
+Audit baseline: `main` at `99b05b8`, release-candidate package version
+`1.0.0-rc.2`.
 
 ## Strengthened in this phase
 
@@ -44,12 +44,20 @@ Audit baseline: `main` at `28a4379`, release-candidate package version
   signed provenance in
   [run 34588550508](https://github.com/guweigang/vjsx/actions/runs/34588550508).
 
+## RC feedback
+
+`v1.0.0-rc.1` built and published successfully, but its checksum manifest used
+the release workflow's internal artifact-directory paths instead of the flat
+archive names exposed on the GitHub Release page. The archive hashes,
+provenance, packaged runtime, self-hosted build and real-package installation
+were verified independently.
+
 ## Remaining 1.0 blocker
 
-Publish `v1.0.0-rc.1` from the same pinned inputs and complete the release
-checklist against its downloadable artifacts before creating `v1.0.0`.
+Publish `v1.0.0-rc.2` with the corrected checksum manifest and complete the
+release checklist against its downloadable artifacts before creating `v1.0.0`.
 
 ## Version recommendation
 
-Do not tag `1.0.0` directly. Publish `v1.0.0-rc.1` and promote the same contracts
+Do not tag `1.0.0` directly. Publish `v1.0.0-rc.2` and promote the same contracts
 to `v1.0.0` only after the RC checklist passes.
