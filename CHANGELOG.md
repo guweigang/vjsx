@@ -4,6 +4,13 @@ All notable user-visible changes are recorded here.
 
 ## Unreleased
 
+## 1.0.0-rc.2 - 2026-09-11
+
+### Fixed
+
+- Release checksum manifests now use the same flat archive names exposed on the
+  GitHub Release page and are verified before publication.
+
 ## 1.0.0-rc.1 - 2026-09-11
 
 ### Added

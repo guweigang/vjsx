@@ -327,29 +327,37 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Stage flat release directory
+        shell: bash
+        run: |
+          mkdir -p release
+          find release-artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} release/ \;
+          test "$(find release -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)" -eq 5
+
       - name: Generate release checksums
         shell: bash
         run: |
-          cd release-artifacts
-          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} + | sort -k2 > SHA256SUMS
+          cd release
+          sha256sum ./*.tar.gz ./*.zip | sort -k2 > SHA256SUMS
           test "$(wc -l < SHA256SUMS)" -eq 5
+          sha256sum --check SHA256SUMS
 
       - name: Generate signed build provenance
         uses: actions/attest@v4
         with:
           subject-path: |
-            release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.zip
-            release-artifacts/SHA256SUMS
+            release/*.tar.gz
+            release/*.zip
+            release/SHA256SUMS
 
       - name: Upload assembled release
         uses: actions/upload-artifact@v4
         with:
           name: vjsx-release
           path: |
-            release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.zip
-            release-artifacts/SHA256SUMS
+            release/*.tar.gz
+            release/*.zip
+            release/SHA256SUMS
           if-no-files-found: error
 
   publish:
