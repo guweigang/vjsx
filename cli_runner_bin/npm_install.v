@@ -7,6 +7,7 @@ import json2
 import net.http
 import os
 import runtimejs
+import time
 import vjsx
 
 struct PackageSpec {
@@ -45,11 +46,12 @@ struct Installer {
 	install_root string
 	dev          bool
 mut:
-	installed     map[string]bool
-	package_names map[string]bool
-	workspaces    map[string]WorkspacePackage
-	lock          Lockfile
-	warnings      []string
+	installed      map[string]bool
+	package_names  map[string]bool
+	workspaces     map[string]WorkspacePackage
+	lock           Lockfile
+	warnings       []string
+	download_count int
 }
 
 fn install_packages(opts CliOptions) !string {
@@ -777,23 +779,56 @@ fn (installer Installer) installed_peer_version(name string) string {
 	return ''
 }
 
-fn (installer Installer) fetch_metadata(name string) !json2.Any {
-	validate_package_name(name)!
-	url := '${installer.registry}/${registry_package_path(name)}'
-	resp := http.fetch(url: url, method: .get)!
-	if resp.status_code < 200 || resp.status_code >= 300 {
-		return error('registry request failed for ${name}: HTTP ${resp.status_code}')
-	}
-	return json2.decode[json2.Any](resp.body)!
+fn npm_curl_path() ?string {
+	configured := os.getenv('VJSX_CURL').trim_space()
+	name := if configured != '' { configured } else { 'curl' }
+	return os.find_abs_path_of_executable(name) or { return none }
 }
 
-fn (installer Installer) fetch_tarball(url string) ![]u8 {
-	validate_https_url(url, 'tarball')!
-	resp := http.fetch(url: url, method: .get)!
+fn npm_curl_args(url string, body_path string, diagnostics_path string) []string {
+	return ['-q', '-fL', '-sS', '--compressed', '--connect-timeout', '10', '--max-time', '300',
+		'--max-redirs', '16', '--proto', '=https', '--proto-redir', '=https', '--stderr',
+		diagnostics_path, '--output', body_path, '--', url]
+}
+
+fn (mut installer Installer) fetch_url(url string, kind string) ![]u8 {
+	validate_https_url(url, kind)!
+	if curl_path := npm_curl_path() {
+		sequence := installer.download_count
+		installer.download_count++
+		body_path := os.join_path(installer.install_root, '.vjsx-download-${sequence}.body')
+		diagnostics_path := os.join_path(installer.install_root, '.vjsx-download-${sequence}.log')
+		defer {
+			os.rm(body_path) or {}
+			os.rm(diagnostics_path) or {}
+		}
+		run_npm_curl(curl_path, npm_curl_args(url, body_path, diagnostics_path), diagnostics_path) or {
+			return error('${kind} request failed: ${err.msg()}')
+		}
+		return os.read_bytes(body_path)
+	}
+	resp := http.fetch(
+		url: url
+		method: .get
+		read_timeout: 30 * time.second
+		write_timeout: 30 * time.second
+		max_retries: 0
+	)!
 	if resp.status_code < 200 || resp.status_code >= 300 {
-		return error('tarball request failed: HTTP ${resp.status_code}: ${url}')
+		return error('${kind} request failed: HTTP ${resp.status_code}')
 	}
 	return resp.body.bytes()
+}
+
+fn (mut installer Installer) fetch_metadata(name string) !json2.Any {
+	validate_package_name(name)!
+	url := '${installer.registry}/${registry_package_path(name)}'
+	body := installer.fetch_url(url, 'registry request for ${name}')!
+	return json2.decode[json2.Any](body.bytestr())!
+}
+
+fn (mut installer Installer) fetch_tarball(url string) ![]u8 {
+	return installer.fetch_url(url, 'tarball')
 }
 
 fn resolve_package_version(metadata json2.Any, requested string) !string {

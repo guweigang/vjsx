@@ -155,6 +155,41 @@ jobs:
           VJSX_BIN="$PWD/dist/vjsx-package-conformance" \
             ./tests/integration/openai_sdk/run.sh
 
+      - name: Run macOS package installer smoke
+        if: matrix.os == 'macos-26'
+        shell: bash
+        run: |
+          mkdir -p dist "$RUNNER_TEMP/vjsx-install-smoke"
+          v -prod -d link_quickjs -d use_openssl -cg -cc clang \
+            -o "$PWD/dist/vjsx-install-smoke" ./cli_runner_bin
+          cd "$RUNNER_TEMP/vjsx-install-smoke"
+          "$GITHUB_WORKSPACE/dist/vjsx-install-smoke" install is-number@7.0.0
+          test -f node_modules/is-number/index.js
+
+      - name: Run Windows package installer smoke
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "vjsx-install-smoke"
+          New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+          .\scripts\build-vjsx.ps1 `
+            -Out "$PWD\dist\vjsx-install-smoke.exe" `
+            -QuickjsPath $env:VJS_QUICKJS_PATH `
+            -QuickjsLibPath $env:VJS_QUICKJS_LIB_PATH `
+            -Compiler "msvc"
+          Push-Location $smokeRoot
+          try {
+            & "$env:GITHUB_WORKSPACE\dist\vjsx-install-smoke.exe" install is-number@7.0.0
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path "node_modules\is-number\index.js")) {
+              throw "installed package entry was not created"
+            }
+          } finally {
+            Pop-Location
+          }
+
       - name: Run Tests Windows with MSVC
         if: matrix.os == 'windows-latest'
         shell: powershell
