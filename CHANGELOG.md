@@ -32,8 +32,9 @@ declared a 1.0 stability boundary.
 - Unix release builds give the selected static libssl and libcrypto archives
   first priority in the compiler library search path and reject either dynamic
   OpenSSL dependency.
-- Windows release builds reuse the pinned V toolchain and serialize MSVC cgen
-  so the compiler cannot report completion before the final binary exists.
+- Windows release builds reuse the pinned toolchain's V1 compatibility compiler
+  directly, serialize MSVC cgen, and verify the final binary exists before the
+  build step can succeed.
 - CI uses the V version pinned by `.v-version` rather than a moving compiler.
 - Release builds explicitly select V's OpenSSL backend and smoke-test WebCrypto
   ECDSA on every packaged platform.

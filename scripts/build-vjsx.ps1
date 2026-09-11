@@ -28,6 +28,16 @@ if ([string]::IsNullOrWhiteSpace($Compiler)) {
   $Compiler = "msvc"
 }
 
+$vCommand = Get-Command v -CommandType Application -ErrorAction Stop | Select-Object -First 1
+$vExecutable = $vCommand.Source
+$v1Fallback = Join-Path (Split-Path -Parent $vExecutable) "v1_fallback.exe"
+if (Test-Path -LiteralPath $v1Fallback) {
+  # The pinned V3 dispatcher delegates unsupported compilation paths to this
+  # compatibility compiler. Invoke it directly because exec-style delegation
+  # from the dispatcher can return early on Windows runners.
+  $vExecutable = $v1Fallback
+}
+
 if ([string]::IsNullOrWhiteSpace($QuickjsPath)) {
   $workRoot = if ([string]::IsNullOrWhiteSpace($env:VJS_QUICKJS_WORK_ROOT)) {
     $RepoRoot
@@ -162,9 +172,12 @@ try {
     $env:VJS_QUICKJS_LIB_PATH = Resolve-QuickjsLib -SourcePath $QuickjsPath
     Write-Host "VJS_QUICKJS_LIB_PATH=$env:VJS_QUICKJS_LIB_PATH"
   }
-  & v @flagList -prod -o $Out .\cli_runner_bin
+  & $vExecutable @flagList -prod -o $Out .\cli_runner_bin
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
+  }
+  if (!(Test-Path -LiteralPath $Out)) {
+    throw "V reported success but did not create $Out"
   }
   Write-Output $Out
 } finally {
