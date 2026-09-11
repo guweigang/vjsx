@@ -31,6 +31,7 @@ jobs:
         uses: vlang/setup-v@v1.7
         with:
           version-file: .v-version
+          cache: ${{ matrix.os != 'macos-26' }}
 
       - name: Prepare Windows x64
         if: matrix.os == 'windows-latest'
