@@ -97,8 +97,7 @@ fn test_cli_host_fs_path_runtime_features() {
 	assert output.output.contains('.txt')
 	assert output.output.contains('true')
 	assert output.output.contains('false')
-	assert output.output.contains(os.join_path(@VMODROOT, 'tests', '.host_fs_path_runtime_dir',
-		'nested', 'note.txt'))
+	assert output.output.contains(os.join_path(@VMODROOT, 'tests', '.host_fs_path_runtime_dir', 'nested', 'note.txt'))
 	assert !os.exists(dir_path)
 }
 

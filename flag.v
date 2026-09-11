@@ -68,6 +68,9 @@ $if link_quickjs ? {
 $if !windows {
 	#flag -lpthread -lm
 }
+
 #include "quickjs-libc.h"
+
 #include "quickjs.h"
+
 #include "vjsx_quickjs_compat.h"

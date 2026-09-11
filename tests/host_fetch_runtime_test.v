@@ -13,7 +13,7 @@ fn (mut handler HostFetchHandler) handle(req http.Request) http.Response {
 			header.add_custom('x-echo-query', req.url.all_after('?')) or {}
 			header.add_custom('x-echo-client', req.header.custom_values('X-Client').join(', ')) or {}
 			mut response := http.Response{
-				body:   req.data
+				body: req.data
 				header: header
 			}
 			response.set_status(.ok)
@@ -38,11 +38,7 @@ fn (mut handler HostFetchOpenAICompatHandler) handle(req http.Request) http.Resp
 			header.add_custom('content-type', 'text/event-stream') or {}
 			header.add_custom('cache-control', 'no-cache') or {}
 			mut response := http.Response{
-				body:
-					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' +
-					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}\n\n' +
-					'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":" vjsx"},"finish_reason":null}]}\n\n' +
-					'data: [DONE]\n\n'
+				body: 'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n' + 'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}\n\n' + 'data: {"id":"chatcmpl_mock","object":"chat.completion.chunk","created":0,"model":"mock-chat","choices":[{"index":0,"delta":{"content":" vjsx"},"finish_reason":null}]}\n\n' + 'data: [DONE]\n\n'
 				header: header
 			}
 			response.set_status(.ok)
@@ -62,10 +58,10 @@ fn test_node_runtime_fetch_globals() {
 	listener := net.listen_tcp(.ip, 'localhost:0') or { panic(err) }
 	port := listener.addr() or { panic(err) }.port() or { panic(err) }
 	mut server := &http.Server{
-		accept_timeout:       200 * time.millisecond
-		addr:                 '127.0.0.1:${port}'
-		handler:              HostFetchHandler{}
-		listener:             listener
+		accept_timeout: 200 * time.millisecond
+		addr: '127.0.0.1:${port}'
+		handler: HostFetchHandler{}
+		listener: listener
 		show_startup_message: false
 	}
 	server_thread := spawn server.listen_and_serve()
@@ -76,7 +72,7 @@ fn test_node_runtime_fetch_globals() {
 	}
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
-		fs_roots:     [@VMODROOT]
+		fs_roots: [@VMODROOT]
 		process_args: ['host_fetch_runtime.mjs', 'http://127.0.0.1:${port}']
 	})
 	defer {
@@ -97,10 +93,10 @@ fn test_node_runtime_fetch_preserves_binary_request_body() {
 	listener := net.listen_tcp(.ip, 'localhost:0') or { panic(err) }
 	port := listener.addr() or { panic(err) }.port() or { panic(err) }
 	mut server := &http.Server{
-		accept_timeout:       200 * time.millisecond
-		addr:                 '127.0.0.1:${port}'
-		handler:              HostFetchHandler{}
-		listener:             listener
+		accept_timeout: 200 * time.millisecond
+		addr: '127.0.0.1:${port}'
+		handler: HostFetchHandler{}
+		listener: listener
 		show_startup_message: false
 	}
 	server_thread := spawn server.listen_and_serve()
@@ -111,7 +107,7 @@ fn test_node_runtime_fetch_preserves_binary_request_body() {
 	}
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
-		fs_roots:     [@VMODROOT]
+		fs_roots: [@VMODROOT]
 		process_args: ['host_fetch_binary_runtime.mjs', 'http://127.0.0.1:${port}']
 	})
 	defer {
@@ -133,10 +129,10 @@ fn test_node_runtime_fetch_openai_compat_stream_helpers() {
 	listener := net.listen_tcp(.ip, 'localhost:0') or { panic(err) }
 	port := listener.addr() or { panic(err) }.port() or { panic(err) }
 	mut server := &http.Server{
-		accept_timeout:       200 * time.millisecond
-		addr:                 '127.0.0.1:${port}'
-		handler:              HostFetchOpenAICompatHandler{}
-		listener:             listener
+		accept_timeout: 200 * time.millisecond
+		addr: '127.0.0.1:${port}'
+		handler: HostFetchOpenAICompatHandler{}
+		listener: listener
 		show_startup_message: false
 	}
 	server_thread := spawn server.listen_and_serve()
@@ -147,7 +143,7 @@ fn test_node_runtime_fetch_openai_compat_stream_helpers() {
 	}
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
-		fs_roots:     [@VMODROOT]
+		fs_roots: [@VMODROOT]
 		process_args: ['host_fetch_openai_compat_runtime.mjs', 'http://127.0.0.1:${port}']
 	})
 	defer {

@@ -40,8 +40,7 @@ fn test_cli_run_typescript_module_graph() {
 }
 
 fn test_cli_run_typescript_tsconfig_paths() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_runtime',
-		'.tsconfig_runtime_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_runtime', '.tsconfig_runtime_output.txt')
 	os.rm(output_file) or {}
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/tsconfig_runtime/src/main.mts')
@@ -51,8 +50,7 @@ fn test_cli_run_typescript_tsconfig_paths() {
 }
 
 fn test_cli_run_typescript_tsconfig_extends() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_extends_runtime', 'project',
-		'.tsconfig_extends_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'tsconfig_extends_runtime', 'project', '.tsconfig_extends_output.txt')
 	os.rm(output_file) or {}
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/tsconfig_extends_runtime/project/src/main.mts')
@@ -72,8 +70,7 @@ fn test_cli_run_typescript_node_package() {
 }
 
 fn test_cli_run_typescript_node_package_exports() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'ts_pkg_exports_runtime',
-		'.ts_pkg_exports_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'ts_pkg_exports_runtime', '.ts_pkg_exports_output.txt')
 	os.rm(output_file) or {}
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/ts_pkg_exports_runtime/main.mts')
@@ -83,8 +80,7 @@ fn test_cli_run_typescript_node_package_exports() {
 }
 
 fn test_cli_run_javascript_node_package_exports() {
-	output_file := os.join_path(@VMODROOT, 'tests', 'js_pkg_exports_runtime',
-		'.js_pkg_exports_output.txt')
+	output_file := os.join_path(@VMODROOT, 'tests', 'js_pkg_exports_runtime', '.js_pkg_exports_output.txt')
 	os.rm(output_file) or {}
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/js_pkg_exports_runtime/main.mjs')

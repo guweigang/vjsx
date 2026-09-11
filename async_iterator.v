@@ -79,13 +79,13 @@ pub fn (mut iter AsyncIterator) next() !AsyncIteratorResult {
 	if done {
 		iter.closed = true
 		return AsyncIteratorResult{
-			done:  true
+			done: true
 			value: iter.iterator.ctx.js_undefined()
 		}
 	}
 	value := result.get('value')
 	return AsyncIteratorResult{
-		done:  false
+		done: false
 		value: value
 	}
 }

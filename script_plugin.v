@@ -23,9 +23,9 @@ mut:
 // Build a plugin handle from an existing loaded module.
 pub fn new_script_plugin(path string, module_handle ScriptModule, hooks ScriptPluginHooks) ScriptPlugin {
 	return ScriptPlugin{
-		hooks:       hooks
+		hooks: hooks
 		script_path: path
-		module:      module_handle
+		module: module_handle
 	}
 }
 

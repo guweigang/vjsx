@@ -18,7 +18,7 @@ mut:
 pub fn new_bound_script_plugin(host_api HostValueBuilder, plugin_handle ScriptPlugin) BoundScriptPlugin {
 	return BoundScriptPlugin{
 		host_api: host_api
-		plugin:   plugin_handle
+		plugin: plugin_handle
 	}
 }
 

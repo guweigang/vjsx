@@ -52,10 +52,10 @@ pub fn (session RuntimeSession) lifecycle_snapshot() RuntimeSessionLifecycleSnap
 		phase = .poisoned
 	}
 	snapshot := RuntimeSessionLifecycleSnapshot{
-		phase:           phase
+		phase: phase
 		in_flight_turns: state.in_flight_turns
 		completed_turns: state.completed_turns
-		rejected_turns:  state.rejected_turns
+		rejected_turns: state.rejected_turns
 	}
 	state.guard.unlock()
 	return snapshot
@@ -184,15 +184,15 @@ pub fn (session RuntimeSession) run_turn(options RuntimeSessionTurnOptions, acti
 		memory_after := session.memory_usage()
 		session.finish_turn()
 		session.record_observation(RuntimeSessionObservation{
-			session_id:          session.event_loop_state.config.session_id
-			kind:                options.kind
-			outcome:             if session.is_interrupted() { .interrupted } else { .error }
-			message:             err.msg()
-			at_ms:               started_at_ms
-			duration_ms:         duration_ms
-			queue_wait_ms:       options.queue_wait_ms
+			session_id: session.event_loop_state.config.session_id
+			kind: options.kind
+			outcome: if session.is_interrupted() { .interrupted } else { .error }
+			message: err.msg()
+			at_ms: started_at_ms
+			duration_ms: duration_ms
+			queue_wait_ms: options.queue_wait_ms
 			memory_before_bytes: memory_before.memory_used_size
-			memory_after_bytes:  memory_after.memory_used_size
+			memory_after_bytes: memory_after.memory_used_size
 		})
 		session.record_runtime_error('turn_${options.kind}', err.msg())
 		return err
@@ -204,14 +204,14 @@ pub fn (session RuntimeSession) run_turn(options RuntimeSessionTurnOptions, acti
 	memory_after := session.memory_usage()
 	session.finish_turn()
 	session.record_observation(RuntimeSessionObservation{
-		session_id:          session.event_loop_state.config.session_id
-		kind:                options.kind
-		outcome:             .ok
-		at_ms:               started_at_ms
-		duration_ms:         duration_ms
-		queue_wait_ms:       options.queue_wait_ms
+		session_id: session.event_loop_state.config.session_id
+		kind: options.kind
+		outcome: .ok
+		at_ms: started_at_ms
+		duration_ms: duration_ms
+		queue_wait_ms: options.queue_wait_ms
 		memory_before_bytes: memory_before.memory_used_size
-		memory_after_bytes:  memory_after.memory_used_size
+		memory_after_bytes: memory_after.memory_used_size
 	})
 	return result
 }

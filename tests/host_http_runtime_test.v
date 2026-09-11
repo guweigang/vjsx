@@ -39,9 +39,9 @@ fn (mut handler HostHttpHandler) handle(req http.Request) http.Response {
 
 fn test_host_http_runtime_download_and_pipe() {
 	mut server := &http.Server{
-		accept_timeout:       200 * time.millisecond
-		addr:                 '127.0.0.1:18197'
-		handler:              HostHttpHandler{}
+		accept_timeout: 200 * time.millisecond
+		addr: '127.0.0.1:18197'
+		handler: HostHttpHandler{}
 		show_startup_message: false
 	}
 	server_thread := spawn server.listen_and_serve()
@@ -52,7 +52,7 @@ fn test_host_http_runtime_download_and_pipe() {
 	}
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
-		fs_roots:     [@VMODROOT]
+		fs_roots: [@VMODROOT]
 		process_args: ['host_http_runtime.mjs', 'http://127.0.0.1:18197']
 	})
 	defer {

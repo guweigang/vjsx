@@ -15,8 +15,7 @@ fn test_run_helpers() {
 	assert file_value.to_string() == 'test foo'
 	file_value.free()
 
-	module_value := ctx.run_module('globalThis.__run_mod = await Promise.resolve("ok")',
-		'inline.js') or { panic(err) }
+	module_value := ctx.run_module('globalThis.__run_mod = await Promise.resolve("ok")', 'inline.js') or { panic(err) }
 	assert module_value.is_undefined()
 	module_value.free()
 	mod_value := ctx.js_global('__run_mod')

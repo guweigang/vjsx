@@ -86,7 +86,7 @@ fn extension_manifest_hook_name(obj vjsx.Value, key string, fallback string) str
 fn extension_manifest_service_from_value(service_name string, value vjsx.Value) !ExtensionServiceBinding {
 	if value.is_string() {
 		return ExtensionServiceBinding{
-			name:        service_name
+			name: service_name
 			export_name: value.to_string()
 		}
 	}
@@ -96,7 +96,7 @@ fn extension_manifest_service_from_value(service_name string, value vjsx.Value) 
 	export_name := extension_manifest_string_prop(value, 'export')
 	method_name := extension_manifest_string_prop(value, 'method')
 	return ExtensionServiceBinding{
-		name:        service_name
+		name: service_name
 		export_name: if export_name != '' { export_name } else { service_name }
 		method_name: method_name
 	}
@@ -144,35 +144,35 @@ pub fn extension_manifest_from_module(path string, module_handle vjsx.ScriptModu
 	handle_export := extension_manifest_hook_name(metadata, 'handle', defaults.handle_export)
 	dispose_export := extension_manifest_hook_name(metadata, 'dispose', defaults.dispose_export)
 	return ExtensionManifest{
-		path:            defaults.path
-		name:            if name != '' { name } else { defaults.name }
-		capabilities:    capabilities
-		services:        services
+		path: defaults.path
+		name: if name != '' { name } else { defaults.name }
+		capabilities: capabilities
+		services: services
 		activate_export: activate_export
-		handle_export:   handle_export
-		dispose_export:  dispose_export
+		handle_export: handle_export
+		dispose_export: dispose_export
 	}
 }
 
 pub fn extension_manifest_apply_hooks(manifest ExtensionManifest, hooks vjsx.ScriptPluginHooks) vjsx.ScriptPluginHooks {
 	return vjsx.ScriptPluginHooks{
-		name:                  if hooks.name != '' { hooks.name } else { manifest.name }
-		activate_export:       if hooks.activate_export != 'activate' {
+		name: if hooks.name != '' { hooks.name } else { manifest.name }
+		activate_export: if hooks.activate_export != 'activate' {
 			hooks.activate_export
 		} else {
 			manifest.activate_export
 		}
-		handle_export:         if hooks.handle_export != 'handle' {
+		handle_export: if hooks.handle_export != 'handle' {
 			hooks.handle_export
 		} else {
 			manifest.handle_export
 		}
-		dispose_export:        if hooks.dispose_export != 'dispose' {
+		dispose_export: if hooks.dispose_export != 'dispose' {
 			hooks.dispose_export
 		} else {
 			manifest.dispose_export
 		}
-		capabilities:          if hooks.capabilities.len > 0 {
+		capabilities: if hooks.capabilities.len > 0 {
 			hooks.capabilities.clone()
 		} else {
 			manifest.capabilities.clone()
