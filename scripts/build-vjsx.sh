@@ -96,7 +96,13 @@ if [ -n "$crypto_static_a" ]; then
   static_dir="$repo_root/.cache/static-crypto"
   mkdir -p "$static_dir"
   ln -sf "$crypto_static_a" "$static_dir/libcrypto.a"
+  # V's OpenSSL module contributes `-lcrypto` before user C flags on some
+  # toolchains. LIBRARY_PATH participates in every linker lookup regardless of
+  # that argument ordering, so the pinned release build consistently selects
+  # the archive on both Linux architectures.
+  export LIBRARY_PATH="$static_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
   v_args+=(-cflags "-L$static_dir")
+  echo "Using static libcrypto: $crypto_static_a" >&2
 elif [ "$require_static_crypto" = "1" ]; then
   echo "Static libcrypto is required but libcrypto.a was not found" >&2
   echo "Set OPENSSL_CRYPTO_STATIC_LIB to the absolute archive path" >&2

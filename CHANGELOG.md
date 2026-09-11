@@ -29,6 +29,9 @@ declared a 1.0 stability boundary.
 - Module graph discovery now uses the TypeScript syntax tree, preventing
   import-like text inside strings and comments from becoming false dependency
   edges.
+- Unix release builds put the selected static libcrypto directory on the
+  compiler library search path, including on Linux arm64 where V can emit
+  `-lcrypto` before user C flags.
 - CI uses the V version pinned by `.v-version` rather than a moving compiler.
 - Release builds explicitly select V's OpenSSL backend and smoke-test WebCrypto
   ECDSA on every packaged platform.
