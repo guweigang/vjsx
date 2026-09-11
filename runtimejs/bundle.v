@@ -71,19 +71,19 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	fs_roots := [entry_dir, os.dir(entry_dir), os.getwd()]
 	match options.runtime_profile {
 		'node' {
-			ctx.install_node_runtime(
+			ctx.try_install_node_runtime(
 				fs_roots: fs_roots
 				process_args: [entry]
-			)
+			)!
 		}
 		'script' {
-			ctx.install_script_runtime(
+			ctx.try_install_script_runtime(
 				fs_roots: fs_roots
 				process_args: [entry]
-			)
+			)!
 		}
 		'browser' {
-			install_cli_browser_runtime(ctx)
+			try_install_cli_browser_runtime(ctx)!
 		}
 		else {
 			return error('unsupported bundle runtime profile: ${options.runtime_profile}')

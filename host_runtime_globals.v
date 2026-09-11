@@ -3,8 +3,12 @@ module vjsx
 import encoding.base64
 
 // Install a tiny `atob` and `Buffer` global for Node/browser-leaning packages.
-pub fn (ctx &Context) install_binary_globals() {
+pub fn (ctx &Context) try_install_binary_globals() ! {
 	global := ctx.js_global()
+	defer {
+		global.delete('__vjsxBinaryNative')
+		global.free()
+	}
 	native := ctx.js_object()
 	native.set('base64Decode', ctx.js_function(fn [ctx] (args []Value) Value {
 		if args.len == 0 {
@@ -38,52 +42,94 @@ pub fn (ctx &Context) install_binary_globals() {
 		source := args[0].json_stringify()
 		return ctx.eval('(' + source + ')') or { ctx.js_throw(err.msg()) }
 	}))
-	ctx.eval_runtime_file('web/js/typed_array.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/buffer.js', type_module) or { panic(err) }
-	global.delete('__vjsxBinaryNative')
-	global.free()
+	typed_array := ctx.eval_runtime_file('web/js/typed_array.js', type_module)!
+	typed_array.free()
+	buffer := ctx.eval_runtime_file('web/js/buffer.js', type_module)!
+	buffer.free()
+}
+
+// Install a tiny `atob` and `Buffer` global. This compatibility wrapper may
+// panic when a runtime asset cannot be loaded; new embedders should use
+// try_install_binary_globals().
+pub fn (ctx &Context) install_binary_globals() {
+	ctx.try_install_binary_globals() or { panic(err) }
 }
 
 // Install timer globals (`setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`).
+pub fn (ctx &Context) try_install_timer_globals() ! {
+	value := ctx.eval_runtime_file('web/js/timer.js', type_module)!
+	value.free()
+}
+
 pub fn (ctx &Context) install_timer_globals() {
-	ctx.eval_runtime_file('web/js/timer.js', type_module) or { panic(err) }
+	ctx.try_install_timer_globals() or { panic(err) }
 }
 
 // Install event globals (`Event`, `CustomEvent`, `EventTarget`).
+pub fn (ctx &Context) try_install_event_globals() ! {
+	value := ctx.eval_runtime_file('web/js/event.js', type_module)!
+	value.free()
+}
+
 pub fn (ctx &Context) install_event_globals() {
-	ctx.eval_runtime_file('web/js/event.js', type_module) or { panic(err) }
+	ctx.try_install_event_globals() or { panic(err) }
 }
 
 // Install cancellation globals (`AbortController`, `AbortSignal`).
+pub fn (ctx &Context) try_install_abort_globals() ! {
+	value := ctx.eval_runtime_file('web/js/abort.js', type_module)!
+	value.free()
+}
+
 pub fn (ctx &Context) install_abort_globals() {
-	ctx.eval_runtime_file('web/js/abort.js', type_module) or { panic(err) }
+	ctx.try_install_abort_globals() or { panic(err) }
 }
 
 // Install URL globals (`URL`, `URLSearchParams`, `URLPattern`).
+pub fn (ctx &Context) try_install_url_globals() ! {
+	url := ctx.eval_runtime_file('web/js/url.js', type_module)!
+	url.free()
+	pattern := ctx.eval_runtime_file('web/js/url_pattern.js', type_module)!
+	pattern.free()
+}
+
 pub fn (ctx &Context) install_url_globals() {
-	ctx.eval_runtime_file('web/js/url.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/url_pattern.js', type_module) or { panic(err) }
+	ctx.try_install_url_globals() or { panic(err) }
 }
 
 // Install text encoding globals (`TextEncoder`, `TextDecoder`).
-pub fn (ctx &Context) install_encoding_globals() {
+pub fn (ctx &Context) try_install_encoding_globals() ! {
 	glob, boot := fetch_get_bootstrap(ctx)
+	defer {
+		glob.delete('__bootstrap')
+		boot.free()
+		glob.free()
+	}
 	boot.set('text_encode', ctx.js_function_this(host_text_encode))
 	boot.set('text_decode', ctx.js_function_this(host_text_decode))
 	boot.set('decode_text', ctx.js_function_this(host_decode_text))
 	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
-	ctx.eval_runtime_file('web/js/encoding.js', type_module) or { panic(err) }
-	glob.delete('__bootstrap')
-	boot.free()
-	glob.free()
+	value := ctx.eval_runtime_file('web/js/encoding.js', type_module)!
+	value.free()
+}
+
+pub fn (ctx &Context) install_encoding_globals() {
+	ctx.try_install_encoding_globals() or { panic(err) }
 }
 
 // Install a small `Intl.DateTimeFormat` subset.
-pub fn (ctx &Context) install_intl_globals() {
+pub fn (ctx &Context) try_install_intl_globals() ! {
 	glob, boot := fetch_get_bootstrap(ctx)
+	defer {
+		glob.delete('__bootstrap')
+		boot.free()
+		glob.free()
+	}
 	boot.set('intl_date_time_parts', ctx.js_function_this(host_intl_date_time_parts))
-	ctx.eval_runtime_file('web/js/intl.js', type_module) or { panic(err) }
-	glob.delete('__bootstrap')
-	boot.free()
-	glob.free()
+	value := ctx.eval_runtime_file('web/js/intl.js', type_module)!
+	value.free()
+}
+
+pub fn (ctx &Context) install_intl_globals() {
+	ctx.try_install_intl_globals() or { panic(err) }
 }

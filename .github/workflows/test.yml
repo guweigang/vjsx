@@ -10,30 +10,94 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             archive_path: libs/qjs_linux_x64.a
+          - os: ubuntu-24.04-arm
+            archive_path: libs/qjs_linux_arm64.a
           - os: macos-26-intel
             archive_path: libs/qjs_macos_x64.a
-          - os: macos-26
+          - os: macos-15
             archive_path: libs/qjs_macos_arm64.a
           - os: windows-latest
             archive_path: libs/qjs_win_x64.a
     steps:
-      - name: Setup V
-        uses: vlang/setup-v@v1.4
-        with:
-          check-latest: true
-
       - name: Checkout ${{ github.event.repository.name }}
         uses: actions/checkout@v4
 
-      - name: Prepare Windows x64
+      - name: Setup MSVC
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Setup V
+        uses: vlang/setup-v@v1.7
+        with:
+          version-file: .v-version
+
+      - name: Cache Windows vcpkg packages
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg-binary-cache
+          key: windows-vcpkg-openssl-x64-v1-${{ hashFiles('.github/workflows/test.yml') }}
+          restore-keys: |
+            windows-vcpkg-openssl-x64-v1-
+
+      - name: Install Windows OpenSSL SDK
         if: matrix.os == 'windows-latest'
         shell: powershell
-        run: '"C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\.cache\vcpkg-binary-cache" | Out-Null
+          $env:VCPKG_DEFAULT_BINARY_CACHE = "$env:GITHUB_WORKSPACE\.cache\vcpkg-binary-cache"
+          $vcpkgRoot = Join-Path $env:RUNNER_TEMP "vcpkg"
+          git clone --depth 1 https://github.com/microsoft/vcpkg $vcpkgRoot
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $triplet = "x64-windows"
+          & (Join-Path $vcpkgRoot "vcpkg.exe") install openssl:$triplet
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sdkRoot = Join-Path $vcpkgRoot "installed\$triplet"
+          $opensslLibDir = Join-Path $sdkRoot "lib"
+          $cryptoImportLib = Get-ChildItem -Path $opensslLibDir -Include libcrypto.lib, crypto.lib -File -Recurse | Select-Object -First 1
+          $sslImportLib = Get-ChildItem -Path $opensslLibDir -Include libssl.lib, ssl.lib -File -Recurse | Select-Object -First 1
+          if ($null -eq $cryptoImportLib) { throw "OpenSSL crypto import library not found under $sdkRoot" }
+          if ($null -eq $sslImportLib) { throw "OpenSSL ssl import library not found under $sdkRoot" }
+          foreach ($alias in @("crypto.lib", "libcrypto.lib")) {
+            $aliasPath = Join-Path $opensslLibDir $alias
+            if ($cryptoImportLib.FullName -ne $aliasPath) {
+              Copy-Item -Force $cryptoImportLib.FullName $aliasPath
+            }
+          }
+          foreach ($alias in @("ssl.lib", "libssl.lib")) {
+            $aliasPath = Join-Path $opensslLibDir $alias
+            if ($sslImportLib.FullName -ne $aliasPath) {
+              Copy-Item -Force $sslImportLib.FullName $aliasPath
+            }
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "INCLUDE=$(Join-Path $sdkRoot 'include');$env:INCLUDE"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")
+
+      - name: Prepare Ubuntu OpenSSL
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+
+      - name: Prepare macOS SQLite
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          brew install sqlite
+          sqlite_prefix="$(brew --prefix sqlite)"
+          echo "PKG_CONFIG_PATH=${sqlite_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "$GITHUB_ENV"
 
       - name: Check bundled archive
         id: archive
@@ -46,10 +110,28 @@ jobs:
           fi
 
       - name: Ensure quickjs-ng checkout
-        if: steps.archive.outputs.exists != 'true'
+        if: steps.archive.outputs.exists != 'true' || matrix.os == 'windows-latest'
         id: quickjs
         shell: bash
         run: ./.github/scripts/ensure-quickjs.sh
+
+      - name: Build QuickJS for MSVC
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $buildRoot = Join-Path $env:RUNNER_TEMP "vjsx-quickjs-ng-build"
+          $cygpath = "C:\Program Files\Git\usr\bin\cygpath.exe"
+          $quickjsSource = (& $cygpath -w "${{ steps.quickjs.outputs.quickjs_dir }}").Trim()
+          cmake -S $quickjsSource -B $buildRoot -G Ninja -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build $buildRoot --target qjs_exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $qjsLib = Get-ChildItem -Path $buildRoot -Filter qjs.lib -File -Recurse | Select-Object -First 1
+          if ($null -eq $qjsLib) { throw "qjs.lib not found under $buildRoot" }
+          Add-Content -Path $env:GITHUB_ENV -Value "VJS_QUICKJS_PATH=$quickjsSource"
+          Add-Content -Path $env:GITHUB_ENV -Value "VJS_QUICKJS_LIB_PATH=$($qjsLib.FullName)"
+          Add-Content -Path $env:GITHUB_ENV -Value "VJS_V_CC=msvc"
 
       - name: Verify fmt
         run: |
@@ -58,18 +140,24 @@ jobs:
 
       - name: Run Tests Linux and Mac with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os != 'windows-latest'
-        run: v -cg -cc clang test .
+        run: v -d use_openssl -cg -cc clang test .
+
+      - name: Verify macOS ARM compiler compatibility
+        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-15'
+        shell: bash
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang ./tests/runtime_compat_differential_test.v
+
+      - name: Verify macOS Intel SQLite toolchain
+        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-26-intel'
+        shell: bash
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang ./tests/cli_sqlite_test.v
 
       - name: Run Tests Linux and Mac with local quickjs-ng source
         if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
         shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc clang test .
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang test .
 
-      - name: Run Tests Windows with bundled archive
-        if: steps.archive.outputs.exists == 'true' && matrix.os == 'windows-latest'
-        run: v -cg -cc gcc test .
-
-      - name: Run Tests Windows with local quickjs-ng source
-        if: steps.archive.outputs.exists != 'true' && matrix.os == 'windows-latest'
-        shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -cg -cc gcc test .
+      - name: Run Tests Windows with MSVC
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: v -d link_quickjs -d use_openssl -cg -cc msvc test .

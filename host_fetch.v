@@ -624,25 +624,32 @@ pub fn install_fetch_core_boot(ctx &Context, boot Value, config FetchGlobalsConf
 	fetch_boot(ctx, boot, config, host_policy_trusted())
 }
 
+pub fn (ctx &Context) try_install_fetch_globals(config FetchGlobalsConfig) ! {
+	ctx.try_install_fetch_globals_policy(config, host_policy_trusted())!
+}
+
 pub fn (ctx &Context) install_fetch_globals(config FetchGlobalsConfig) {
-	ctx.install_fetch_globals_policy(config, host_policy_trusted())
+	ctx.try_install_fetch_globals(config) or { panic(err) }
 }
 
 // Install fetch with an explicit network capability boundary.
-pub fn (ctx &Context) install_fetch_globals_policy(config FetchGlobalsConfig, policy HostPolicy) {
+pub fn (ctx &Context) try_install_fetch_globals_policy(config FetchGlobalsConfig, policy HostPolicy) ! {
 	glob, boot := fetch_get_bootstrap(ctx)
+	defer {
+		glob.delete('__bootstrap')
+		boot.free()
+		glob.free()
+	}
 	fetch_boot(ctx, boot, config, policy)
 	fetch_util_boot(ctx, boot)
 	fetch_encoding_boot(ctx, boot)
-	ctx.eval_runtime_file('web/js/util.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/stream.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/encoding.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/url.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/url_pattern.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/blob.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/form_data.js', type_module) or { panic(err) }
-	ctx.eval_runtime_file('web/js/fetch.js', type_module) or { panic(err) }
-	glob.delete('__bootstrap')
-	boot.free()
-	glob.free()
+	for asset in ['web/js/util.js', 'web/js/stream.js', 'web/js/encoding.js', 'web/js/url.js',
+		'web/js/url_pattern.js', 'web/js/blob.js', 'web/js/form_data.js', 'web/js/fetch.js'] {
+		value := ctx.eval_runtime_file(asset, type_module)!
+		value.free()
+	}
+}
+
+pub fn (ctx &Context) install_fetch_globals_policy(config FetchGlobalsConfig, policy HostPolicy) {
+	ctx.try_install_fetch_globals_policy(config, policy) or { panic(err) }
 }

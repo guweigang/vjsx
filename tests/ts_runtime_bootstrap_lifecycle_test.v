@@ -50,8 +50,7 @@ fn test_typescript_runtime_uses_embedded_assets_without_vendor_asset_root() {
 		session.close()
 	}
 	ctx := session.context()
-	value := runtimejs.run_runtime_entry(ctx, script_path, true, script_path +
-		'.embedded_assets_build') or { panic(err) }
+	value := runtimejs.run_runtime_entry(ctx, script_path, true, script_path + '.embedded_assets_build') or { panic(err) }
 	defer {
 		value.free()
 	}
@@ -90,7 +89,6 @@ fn test_interactive_javascript_normalizer_preserves_existing_boundaries() {
 	assert normalized == source
 
 	with_semicolon := '({ value: 1 });\nconsole.log("done")'
-	normalized_semicolon := runtimejs.normalize_interactive_javascript(ctx, with_semicolon,
-		'<notebook-cell>.ts') or { panic(err) }
+	normalized_semicolon := runtimejs.normalize_interactive_javascript(ctx, with_semicolon, '<notebook-cell>.ts') or { panic(err) }
 	assert normalized_semicolon == with_semicolon
 }

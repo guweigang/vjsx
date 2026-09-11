@@ -21,35 +21,41 @@ pub fn runtime_globals_full() RuntimeGlobalsConfig {
 // Minimal runtime globals preset for smaller non-host browser/node shims.
 pub fn runtime_globals_minimal() RuntimeGlobalsConfig {
 	return RuntimeGlobalsConfig{
-		binary:   true
-		timer:    false
-		url:      true
+		binary: true
+		timer: false
+		url: true
 		encoding: false
-		intl:     false
+		intl: false
 	}
 }
 
 // Install reusable runtime globals shared by higher-level host profiles.
-pub fn (ctx &Context) install_runtime_globals(config RuntimeGlobalsConfig) {
+pub fn (ctx &Context) try_install_runtime_globals(config RuntimeGlobalsConfig) ! {
 	if config.binary {
-		ctx.install_binary_globals()
+		ctx.try_install_binary_globals()!
 	}
 	if config.event {
-		ctx.install_event_globals()
+		ctx.try_install_event_globals()!
 	}
 	if config.abort {
-		ctx.install_abort_globals()
+		ctx.try_install_abort_globals()!
 	}
 	if config.timer {
-		ctx.install_timer_globals()
+		ctx.try_install_timer_globals()!
 	}
 	if config.url {
-		ctx.install_url_globals()
+		ctx.try_install_url_globals()!
 	}
 	if config.encoding {
-		ctx.install_encoding_globals()
+		ctx.try_install_encoding_globals()!
 	}
 	if config.intl {
-		ctx.install_intl_globals()
+		ctx.try_install_intl_globals()!
 	}
+}
+
+// Install reusable globals using the legacy panic-on-install-failure contract.
+// New embedders should use try_install_runtime_globals().
+pub fn (ctx &Context) install_runtime_globals(config RuntimeGlobalsConfig) {
+	ctx.try_install_runtime_globals(config) or { panic(err) }
 }

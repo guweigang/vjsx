@@ -1,10 +1,15 @@
 module vjsx
 
+#flag @VMODROOT/libs/vjsx_curl_process.c
+
 #include "vjsx_curl_process.h"
 
 fn C.vjsx_curl_process_start(&char, &&char, &char, &int) int
+
 fn C.vjsx_curl_process_poll(int, &int) int
+
 fn C.vjsx_curl_process_signal(int, int) int
+
 fn C.vjsx_curl_process_wait(int, &int) int
 
 struct CurlProcess {

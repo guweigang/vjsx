@@ -33,8 +33,7 @@ fn test_embedded_runtime_asset_registry_covers_web_js_assets() {
 	assert embedded_assets == disk_assets
 	for asset in disk_assets {
 		assert vjsx.has_embedded_runtime_asset(asset)
-		assert vjsx.embedded_runtime_asset_source(asset) or { panic(err) } == os.read_file(os.join_path(@VMODROOT,
-			asset)) or { panic(err) }
+		assert vjsx.embedded_runtime_asset_source(asset) or { panic(err) } == os.read_file(os.join_path(@VMODROOT, asset)) or { panic(err) }
 	}
 }
 
@@ -64,8 +63,7 @@ fn test_eval_runtime_file_uses_context_asset_root() {
 	defer {
 		os.rmdir_all(asset_root) or {}
 	}
-	os.write_file(os.join_path(asset_root, 'web', 'js', 'test.js'),
-		'globalThis.__runtime_asset_value = "asset-ok";') or { panic(err) }
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'test.js'), 'globalThis.__runtime_asset_value = "asset-ok";') or { panic(err) }
 
 	rt := vjsx.new_runtime()
 	defer {
@@ -99,12 +97,10 @@ fn test_eval_runtime_file_uses_virtual_module_name_for_relative_imports() {
 	defer {
 		os.rmdir_all(asset_root) or {}
 	}
-	os.write_file(os.join_path(asset_root, 'web', 'js', 'dep.js'),
-		'export const label = "virtual-dep"; globalThis.__runtime_dep_url = import.meta.url;') or {
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'dep.js'), 'export const label = "virtual-dep"; globalThis.__runtime_dep_url = import.meta.url;') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(asset_root, 'web', 'js', 'entry.js'),
-		'import { label } from "./dep.js"; globalThis.__runtime_virtual_import = label;') or {
+	os.write_file(os.join_path(asset_root, 'web', 'js', 'entry.js'), 'import { label } from "./dep.js"; globalThis.__runtime_virtual_import = label;') or {
 		panic(err)
 	}
 

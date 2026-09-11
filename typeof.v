@@ -2,21 +2,37 @@ module vjsx
 
 // Declare Type Is
 fn C.JS_IsException(JSValueConst) int
+
 fn C.JS_IsNumber(JSValueConst) int
+
 fn C.JS_IsBigInt(&C.JSContext, JSValueConst) int
+
 fn C.JS_IsBool(JSValueConst) int
+
 fn C.JS_IsBigFloat(JSValueConst) int
+
 fn C.JS_IsBigDecimal(JSValueConst) int
+
 fn C.JS_IsNull(JSValueConst) int
+
 fn C.JS_IsUndefined(JSValueConst) int
+
 fn C.JS_IsUninitialized(JSValueConst) int
+
 fn C.JS_IsString(JSValueConst) int
+
 fn C.JS_IsSymbol(JSValueConst) int
+
 fn C.JS_IsObject(JSValueConst) int
+
 fn C.JS_IsArray(&C.JSContext, JSValueConst) int
+
 fn C.JS_IsError(&C.JSContext, JSValueConst) int
+
 fn C.JS_IsFunction(&C.JSContext, JSValueConst) int
+
 fn C.JS_IsInstanceOf(&C.JSContext, JSValueConst, JSValueConst) int
+
 fn C.JS_IsRegisteredClass(&C.JSRuntime, C.JSClassID) int
 
 // Check value is exception.

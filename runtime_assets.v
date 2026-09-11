@@ -206,10 +206,18 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'web/js/url.js' { runtime_asset_url_js.to_string() }
 		'web/js/url_pattern.js' { runtime_asset_url_pattern_js.to_string() }
 		'web/js/util.js' { runtime_asset_util_js.to_string() }
-		'thirdparty/typescript/lib/typescript.js' { runtime_embedded_gzip_asset_source(runtime_asset_typescript_js_gz)! }
-		'thirdparty/typescript/lib/vjs_ts_bootstrap.js' { runtime_asset_vjs_ts_bootstrap_js.to_string() }
-		'thirdparty/typescript/lib/vjs_ts_commonjs.js' { runtime_asset_vjs_ts_commonjs_js.to_string() }
-		'thirdparty/typescript/lib/vjs_ts_resolver.js' { runtime_asset_vjs_ts_resolver_js.to_string() }
+		'thirdparty/typescript/lib/typescript.js' {
+			runtime_embedded_gzip_asset_source(runtime_asset_typescript_js_gz)!
+		}
+		'thirdparty/typescript/lib/vjs_ts_bootstrap.js' {
+			runtime_asset_vjs_ts_bootstrap_js.to_string()
+		}
+		'thirdparty/typescript/lib/vjs_ts_commonjs.js' {
+			runtime_asset_vjs_ts_commonjs_js.to_string()
+		}
+		'thirdparty/typescript/lib/vjs_ts_resolver.js' {
+			runtime_asset_vjs_ts_resolver_js.to_string()
+		}
 		'thirdparty/typescript/lib/vjs_ts_scan.js' { runtime_asset_vjs_ts_scan_js.to_string() }
 		else { error('vjsx embedded runtime asset not found: ${rel_path}') }
 	}
@@ -287,19 +295,19 @@ fn (ctx &Context) runtime_module_source(rel_path string) !RuntimeModuleSource {
 	if override_path != '' {
 		return RuntimeModuleSource{
 			source: os.read_file(override_path)!
-			name:   virtual_name
+			name: virtual_name
 		}
 	}
 	source := runtime_embedded_asset_source(rel_path) or {
 		path := ctx.resolve_runtime_asset_path(rel_path)!
 		return RuntimeModuleSource{
 			source: os.read_file(path)!
-			name:   virtual_name
+			name: virtual_name
 		}
 	}
 	return RuntimeModuleSource{
 		source: source
-		name:   virtual_name
+		name: virtual_name
 	}
 }
 
@@ -340,8 +348,7 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 	}
 	module_source := owner_ctx.runtime_module_source(rel_path) or { return unsafe { nil } }
 	mut ref := C.JSValue{}
-	C.vjsx_js_eval_out(ctx, module_source.source.str, usize(module_source.source.len),
-		module_source.name.str, type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(ctx, module_source.source.str, usize(module_source.source.len), module_source.name.str, type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return unsafe { nil }
 	}
@@ -371,10 +378,10 @@ pub fn (ctx &Context) resolve_runtime_asset_path(rel_path string) !string {
 @[manualfree]
 fn (ctx &Context) eval_runtime_source_custom_meta(source string, fname string, flag int, set_meta SetMeta) !Value {
 	return ctx.js_eval_core(
-		input:    source.str
-		len:      usize(source.len)
-		fname:    fname.str
-		flag:     flag
+		input: source.str
+		len: usize(source.len)
+		fname: fname.str
+		flag: flag
 		set_meta: set_meta
 	)!
 }
@@ -387,8 +394,7 @@ pub fn (ctx &Context) eval_runtime_file(rel_path string, args ...EvalArgs) !Valu
 		path := ctx.resolve_runtime_asset_path(trimmed)!
 		return ctx.eval_file_custom_meta(path, flag, def_set_meta)
 	}
-	return ctx.eval_runtime_source_custom_meta(module_source.source, module_source.name, flag,
-		def_set_meta)
+	return ctx.eval_runtime_source_custom_meta(module_source.source, module_source.name, flag, def_set_meta)
 }
 
 pub fn embedded_runtime_asset_source(rel_path string) !string {

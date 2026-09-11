@@ -46,12 +46,12 @@ pub:
 }
 
 // Install a lightweight script runtime profile.
-pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
+pub fn (ctx &Context) try_install_script_runtime(config ScriptRuntimeConfig) ! {
 	mut policy := config.policy
 	if !config.allow_env_write {
 		policy.allow_env_write = false
 	}
-	ctx.install_node_compat(NodeCompatConfig{
+	ctx.try_install_node_compat(NodeCompatConfig{
 		crypto: false
 		zlib: false
 		fs: false
@@ -72,13 +72,18 @@ pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
 		policy: policy
 		log_fn: config.log_fn
 		error_fn: config.error_fn
-	})
+	})!
 	ctx.set_runtime_profile('script')
 }
 
+// Compatibility wrapper for the historical panic-on-install-failure API.
+pub fn (ctx &Context) install_script_runtime(config ScriptRuntimeConfig) {
+	ctx.try_install_script_runtime(config) or { panic(err) }
+}
+
 // Install a fuller Node-like runtime profile.
-pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
-	ctx.install_node_compat(NodeCompatConfig{
+pub fn (ctx &Context) try_install_node_runtime(config NodeRuntimeConfig) ! {
+	ctx.try_install_node_compat(NodeCompatConfig{
 		runtime: runtime_globals_full()
 		fetch: config.fetch
 		fs_roots: config.fs_roots
@@ -88,8 +93,13 @@ pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
 		policy: config.policy
 		log_fn: config.log_fn
 		error_fn: config.error_fn
-	})
+	})!
 	ctx.set_runtime_profile('node')
+}
+
+// Compatibility wrapper for the historical panic-on-install-failure API.
+pub fn (ctx &Context) install_node_runtime(config NodeRuntimeConfig) {
+	ctx.try_install_node_runtime(config) or { panic(err) }
 }
 
 // Record the host runtime profile associated with this context. Runtime

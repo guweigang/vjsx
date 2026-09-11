@@ -37,8 +37,14 @@ Hosting documentation:
   boundaries.
 - [Security Policy](SECURITY.md) for the threat model, capability presets, and
   trusted-artifact boundary.
-- [v0.1 API Stability](docs/API_STABILITY.md) for supported and provisional
+- [API Stability](docs/API_STABILITY.md) for supported and provisional
   surfaces.
+- [Support Matrix](docs/SUPPORT_MATRIX.md) for platform and JS/TS/package scope.
+- [Artifact ABI](docs/ARTIFACT_ABI.md) for serialized compatibility rules.
+- [Upgrading](docs/UPGRADING.md) and the [Release Checklist](docs/RELEASE_CHECKLIST.md)
+  for migrations and release verification.
+- [Performance Baseline](docs/PERFORMANCE.md) for repeatable benchmark runs.
+- [Release Readiness](docs/RELEASE_READINESS.md) for the current 1.0 gate audit.
 
 ## Install
 
@@ -71,8 +77,9 @@ Notes:
   the calling repository when no compatible local checkout is found.
 - Direct `v` invocations should use `scripts/ensure-quickjs.sh` to prepare and
   print the managed checkout path before compilation starts.
-- The managed quickjs-ng checkout defaults to `v0.15.1`; set `QUICKJS_REF` to
-  build against a different tag or branch.
+- The managed quickjs-ng checkout defaults to the immutable commit in
+  `.quickjs-version`; set `QUICKJS_REF` to deliberately build against a
+  different commit, tag, or branch.
 - Set `VJS_QUICKJS_WORK_ROOT` to choose where `.deps/quickjs` is created, or
   `QUICKJS_DIR` to choose the exact checkout path.
 - `VJS_QUICKJS_PATH` can still point to an explicit source root that contains
@@ -133,7 +140,7 @@ fn host_api() vjsx.HostValueBuilder {
 }
 
 fn main() {
-	mut extension_session := runtimejs.new_node_extension_session(
+	mut extension_session := runtimejs.try_new_node_extension_session(
 		vjsx.ContextConfig{},
 		vjsx.NodeRuntimeConfig{
 			process_args: ['extension.mjs']
@@ -141,7 +148,7 @@ fn main() {
 		},
 		vjsx.HostApiConfig{},
 		host_api(),
-	)
+	) or { panic(err) }
 	defer {
 		extension_session.close()
 	}

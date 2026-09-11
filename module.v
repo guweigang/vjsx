@@ -3,7 +3,9 @@ module vjsx
 type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) int
 
 fn C.JS_NewCModule(&C.JSContext, &char, &JSModuleInitFunc) &C.JSModuleDef
+
 fn C.JS_SetModuleExport(&C.JSContext, &C.JSModuleDef, &char, C.JSValue) int
+
 fn C.JS_AddModuleExport(&C.JSContext, &C.JSModuleDef, &char) int
 
 // Module structure.
@@ -23,7 +25,7 @@ mut:
 // ```
 pub fn (ctx &Context) js_module(name string) Module {
 	return Module{
-		ctx:  ctx
+		ctx: ctx
 		name: name
 	}
 }

@@ -20,8 +20,7 @@ pub fn load_runtime_module(ctx &vjsx.Context, script_path string, temp_root stri
 	value := ctx.js_eval('
 		import * as __vjsx_module_exports from "${specifier}";
 		globalThis.__vjsx_loaded_module = __vjsx_module_exports;
-	',
-		wrapper_path, vjsx.type_module) or { return err }
+	', wrapper_path, vjsx.type_module) or { return err }
 	value.free()
 	ctx.end()
 	global := ctx.js_global()
@@ -39,19 +38,27 @@ pub fn load_runtime_module(ctx &vjsx.Context, script_path string, temp_root stri
 
 pub fn runtime_session_bridge() vjsx.RuntimeSessionBridge {
 	return vjsx.RuntimeSessionBridge{
-		run:         run_runtime_entry
+		run: run_runtime_entry
 		load_module: load_runtime_module
 	}
 }
 
 pub fn new_script_runtime_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig) vjsx.RuntimeSession {
-	mut session := vjsx.new_script_runtime_session(ctx_config, runtime_config)
+	return try_new_script_runtime_session(ctx_config, runtime_config) or { panic(err) }
+}
+
+pub fn try_new_script_runtime_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig) !vjsx.RuntimeSession {
+	mut session := vjsx.try_new_script_runtime_session(ctx_config, runtime_config)!
 	session.set_runtime_bridge(runtime_session_bridge())
 	return session
 }
 
 pub fn new_node_runtime_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig) vjsx.RuntimeSession {
-	mut session := vjsx.new_node_runtime_session(ctx_config, runtime_config)
+	return try_new_node_runtime_session(ctx_config, runtime_config) or { panic(err) }
+}
+
+pub fn try_new_node_runtime_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig) !vjsx.RuntimeSession {
+	mut session := vjsx.try_new_node_runtime_session(ctx_config, runtime_config)!
 	session.set_runtime_bridge(runtime_session_bridge())
 	return session
 }

@@ -160,32 +160,27 @@ fn runtime_profile_has_global(ctx &Context, expr string) bool {
 
 pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 	return RuntimeProfileSnapshot{
-		has_abort_controller:     runtime_profile_has_global(ctx,
-			'typeof AbortController === "function"')
-		has_abort_signal:         runtime_profile_has_global(ctx,
-			'typeof AbortSignal === "function"')
-		has_event_target:         runtime_profile_has_global(ctx,
-			'typeof EventTarget === "function"')
-		has_url:                  runtime_profile_has_global(ctx, 'typeof URL === "function"')
-		has_buffer:               runtime_profile_has_global(ctx, 'typeof Buffer !== "undefined"')
-		has_set_timeout:          runtime_profile_has_global(ctx,
-			'typeof setTimeout === "function"')
-		has_clear_timeout:        runtime_profile_has_global(ctx,
-			'typeof clearTimeout === "function"')
-		has_fetch:                runtime_profile_has_global(ctx, 'typeof fetch === "function"')
-		has_process:              runtime_profile_has_global(ctx, 'typeof process === "object"')
+		has_abort_controller: runtime_profile_has_global(ctx, 'typeof AbortController === "function"')
+		has_abort_signal: runtime_profile_has_global(ctx, 'typeof AbortSignal === "function"')
+		has_event_target: runtime_profile_has_global(ctx, 'typeof EventTarget === "function"')
+		has_url: runtime_profile_has_global(ctx, 'typeof URL === "function"')
+		has_buffer: runtime_profile_has_global(ctx, 'typeof Buffer !== "undefined"')
+		has_set_timeout: runtime_profile_has_global(ctx, 'typeof setTimeout === "function"')
+		has_clear_timeout: runtime_profile_has_global(ctx, 'typeof clearTimeout === "function"')
+		has_fetch: runtime_profile_has_global(ctx, 'typeof fetch === "function"')
+		has_process: runtime_profile_has_global(ctx, 'typeof process === "object"')
 		has_node_timers_promises: ctx.has_runtime_module('node:timers/promises')
-		has_node_crypto_module:   ctx.has_runtime_module('node:crypto')
-		has_node_zlib_module:     ctx.has_runtime_module('node:zlib')
-		has_node_fs_module:       ctx.has_runtime_module('node:fs')
-		has_node_fs_promises:     ctx.has_runtime_module('node:fs/promises')
-		has_fs_module:            ctx.has_runtime_module('fs')
-		has_path_module:          ctx.has_runtime_module('path')
-		has_http_module:          ctx.has_runtime_module('http')
-		has_https_module:         ctx.has_runtime_module('https')
-		has_os_module:            ctx.has_runtime_module('os')
+		has_node_crypto_module: ctx.has_runtime_module('node:crypto')
+		has_node_zlib_module: ctx.has_runtime_module('node:zlib')
+		has_node_fs_module: ctx.has_runtime_module('node:fs')
+		has_node_fs_promises: ctx.has_runtime_module('node:fs/promises')
+		has_fs_module: ctx.has_runtime_module('fs')
+		has_path_module: ctx.has_runtime_module('path')
+		has_http_module: ctx.has_runtime_module('http')
+		has_https_module: ctx.has_runtime_module('https')
+		has_os_module: ctx.has_runtime_module('os')
 		has_child_process_module: ctx.has_runtime_module('child_process')
-		has_sqlite_module:        ctx.has_runtime_module('sqlite')
-		has_mysql_module:         ctx.has_runtime_module('mysql')
+		has_sqlite_module: ctx.has_runtime_module('sqlite')
+		has_mysql_module: ctx.has_runtime_module('mysql')
 	}
 }

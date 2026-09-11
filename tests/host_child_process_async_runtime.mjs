@@ -103,7 +103,7 @@ await new Promise((resolve, reject) => {
   const child = spawn(shell, printArgs);
   const file = fs.createWriteStream(target);
   file.on("finish", () => {
-    lines.push(`pipe:${fs.readFileSync(target).trim()}`);
+    lines.push(`pipe:${fs.readFileSync(target, "utf8").trim()}`);
     fs.rmSync(tmpDir, { recursive: true, force: true });
     resolve();
   });
@@ -122,7 +122,7 @@ await new Promise((resolve, reject) => {
   child.stdout.pipe(file);
   child.stdout.unpipe(file);
   child.on("close", () => {
-    lines.push(`unpipe:${String(fs.readFileSync(target).trim() === "")}`);
+    lines.push(`unpipe:${String(fs.readFileSync(target, "utf8").trim() === "")}`);
     fs.rmSync(tmpDir, { recursive: true, force: true });
     resolve();
   });

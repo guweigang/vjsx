@@ -15,9 +15,7 @@ fn test_runtime_session_close_closes_unclosed_sqlite_connections() {
 	ctx := session.context()
 	script :=
 		'
-		globalThis.__cleanup_db = await import("sqlite").then((mod) => mod.open({ path: "' +
-		db_path.replace('\\', '\\\\') +
-		'" }));
+		globalThis.__cleanup_db = await import("sqlite").then((mod) => mod.open({ path: "' + db_path.replace('\\', '\\\\') + '" }));
 		await globalThis.__cleanup_db.exec("create table if not exists items (id integer primary key, name text)");
 		await globalThis.__cleanup_db.begin();
 		await globalThis.__cleanup_db.exec("insert into items(name) values (?)", ["alpha"]);
@@ -34,9 +32,7 @@ fn test_runtime_session_close_closes_unclosed_sqlite_connections() {
 	}
 	verify_ctx := verify_session.context()
 	verify_script := '
-		const db = await import("sqlite").then((mod) => mod.open({ path: "' +
-		db_path.replace('\\', '\\\\') +
-		'" }));
+		const db = await import("sqlite").then((mod) => mod.open({ path: "' + db_path.replace('\\', '\\\\') + '" }));
 		const total = await db.scalar("select count(*) from items");
 		await db.exec("insert into items(name) values (?)", ["beta"]);
 		await db.close();

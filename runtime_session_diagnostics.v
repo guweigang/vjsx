@@ -31,11 +31,11 @@ fn (session RuntimeSession) record_runtime_error(kind string, message string) {
 	}
 	mut state := session.diagnostic_state
 	diagnostic := RuntimeSessionDiagnostic{
-		session_id:        session.event_loop_state.config.session_id
-		kind:              kind
-		message:           message
+		session_id: session.event_loop_state.config.session_id
+		kind: kind
+		message: message
 		wakeup_generation: session.wakeup_generation()
-		at_ms:             session.now_ms()
+		at_ms: session.now_ms()
 	}
 	max_diagnostics := session.limit_state.config.max_diagnostics
 	if max_diagnostics > 0 && state.errors.len >= max_diagnostics {

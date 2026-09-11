@@ -13,12 +13,10 @@ fn test_package_compatibility_checks_only_reachable_module_graph() {
 	defer {
 		os.rmdir_all(root) or {}
 	}
-	os.write_file(os.join_path(root, 'package.json'),
-		'{"name":"reachable-native","version":"1.0.0","type":"module","exports":"./index.js"}') or {
+	os.write_file(os.join_path(root, 'package.json'), '{"name":"reachable-native","version":"1.0.0","type":"module","exports":"./index.js"}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(root, 'index.js'),
-		'import { value } from "./value.js"; globalThis.__package_compat_executed = true; throw new Error("must not execute"); export { value };') or {
+	os.write_file(os.join_path(root, 'index.js'), 'import { value } from "./value.js"; globalThis.__package_compat_executed = true; throw new Error("must not execute"); export { value };') or {
 		panic(err)
 	}
 	os.write_file(os.join_path(root, 'value.js'), 'export const value = 42;') or { panic(err) }
@@ -50,12 +48,10 @@ fn test_package_compatibility_rejects_reachable_unsupported_host_module() {
 	defer {
 		os.rmdir_all(root) or {}
 	}
-	os.write_file(os.join_path(root, 'package.json'),
-		'{"name":"unsupported-host","version":"1.0.0","type":"module","exports":"./index.js"}') or {
+	os.write_file(os.join_path(root, 'package.json'), '{"name":"unsupported-host","version":"1.0.0","type":"module","exports":"./index.js"}') or {
 		panic(err)
 	}
-	os.write_file(os.join_path(root, 'index.js'),
-		'import { Worker } from "node:worker_threads"; export { Worker };') or { panic(err) }
+	os.write_file(os.join_path(root, 'index.js'), 'import { Worker } from "node:worker_threads"; export { Worker };') or { panic(err) }
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fs_roots: [root]

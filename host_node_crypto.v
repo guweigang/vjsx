@@ -7,14 +7,19 @@ import crypto.sha256
 // Install the practical Ed25519 subset of Node's `crypto`/`node:crypto`
 // modules. The JS compatibility layer owns KeyObject and RFC 8410 DER/PEM
 // handling; these callbacks keep private-key operations in V.
-pub fn (ctx &Context) install_node_crypto_module() {
+pub fn (ctx &Context) try_install_node_crypto_module() ! {
 	glob, boot := fetch_get_bootstrap(ctx)
+	defer {
+		glob.delete('__bootstrap')
+		boot.free()
+		glob.free()
+	}
 	native := ctx.js_object()
 	native.set('digest', ctx.js_function(fn [ctx] (args []Value) Value {
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'algorithm and data are required'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		bytes := args[1].to_bytes()
@@ -28,7 +33,7 @@ pub fn (ctx &Context) install_node_crypto_module() {
 			else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'Digest method not supported: ${args[0].str()}'
-					name:    'TypeError'
+					name: 'TypeError'
 				))
 			}
 		}
@@ -51,7 +56,7 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		if args.len == 0 || args[0].byte_len() != ed25519.seed_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 private key seed must be 32 bytes'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		private_key := ed25519.new_key_from_seed(args[0].to_bytes())
@@ -61,7 +66,7 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		if args.len == 0 || args[0].byte_len() != ed25519.private_key_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 private key must be 64 bytes'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		private_key := ed25519.PrivateKey(args[0].to_bytes())
@@ -71,7 +76,7 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		if args.len < 2 || args[0].byte_len() != ed25519.private_key_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 signing requires a 64-byte private key'
-				name:    'TypeError'
+				name: 'TypeError'
 			))
 		}
 		signature := ed25519.sign(ed25519.PrivateKey(args[0].to_bytes()), args[1].to_bytes()) or {
@@ -83,13 +88,13 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		if args.len < 3 || args[0].byte_len() != ed25519.public_key_size {
 			return ctx.js_bool(false)
 		}
-		valid := ed25519.verify(ed25519.PublicKey(args[0].to_bytes()), args[1].to_bytes(),
-			args[2].to_bytes()) or { false }
+		valid := ed25519.verify(ed25519.PublicKey(args[0].to_bytes()), args[1].to_bytes(), args[2].to_bytes()) or { false }
 		return ctx.js_bool(valid)
 	}))
 	boot.set('nodeCrypto', native)
 	native.free()
-	ctx.eval_runtime_file('web/js/node_crypto.js', type_module) or { panic(err) }
+	installed := ctx.eval_runtime_file('web/js/node_crypto.js', type_module)!
+	installed.free()
 
 	helpers := ctx.js_global('__vjsxNodeCrypto')
 	export_names := ['KeyObject', 'createHash', 'createPrivateKey', 'createPublicKey',
@@ -107,8 +112,9 @@ pub fn (ctx &Context) install_node_crypto_module() {
 		crypto_mod.create()
 		default_obj.free()
 	}
-	glob.delete('__bootstrap')
-	boot.free()
 	helpers.free()
-	glob.free()
+}
+
+pub fn (ctx &Context) install_node_crypto_module() {
+	ctx.try_install_node_crypto_module() or { panic(err) }
 }

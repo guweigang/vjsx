@@ -17,7 +17,13 @@ mut:
 
 // Create a script-oriented extension session and install the embedder host API.
 pub fn new_script_extension_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig, host_config vjsx.HostApiConfig, host_api vjsx.HostValueBuilder) ExtensionSession {
-	mut session := new_script_runtime_session(ctx_config, runtime_config)
+	return try_new_script_extension_session(ctx_config, runtime_config, host_config, host_api) or {
+		panic(err)
+	}
+}
+
+pub fn try_new_script_extension_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig, host_config vjsx.HostApiConfig, host_api vjsx.HostValueBuilder) !ExtensionSession {
+	mut session := try_new_script_runtime_session(ctx_config, runtime_config)!
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api
@@ -28,7 +34,13 @@ pub fn new_script_extension_session(ctx_config vjsx.ContextConfig, runtime_confi
 // Create a fuller Node-style extension session and install the embedder host
 // API.
 pub fn new_node_extension_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig, host_config vjsx.HostApiConfig, host_api vjsx.HostValueBuilder) ExtensionSession {
-	mut session := new_node_runtime_session(ctx_config, runtime_config)
+	return try_new_node_extension_session(ctx_config, runtime_config, host_config, host_api) or {
+		panic(err)
+	}
+}
+
+pub fn try_new_node_extension_session(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig, host_config vjsx.HostApiConfig, host_api vjsx.HostValueBuilder) !ExtensionSession {
+	mut session := try_new_node_runtime_session(ctx_config, runtime_config)!
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api

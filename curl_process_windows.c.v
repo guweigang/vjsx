@@ -16,7 +16,7 @@ fn start_curl_process(path string, args []string, output_path string) !CurlProce
 	process.set_redirect_stdio_merged()
 	process.run()
 	return CurlProcess{
-		process:     process
+		process: process
 		output_path: output_path
 	}
 }

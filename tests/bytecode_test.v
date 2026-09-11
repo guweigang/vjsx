@@ -121,3 +121,20 @@ fn test_bytecode_rejects_artifact_abi_mismatch_independently() {
 	}
 	assert false
 }
+
+fn test_bytecode_parser_rejects_every_truncated_prefix() {
+	bytecode := vjsx.compile_module('module.exports = 42;',
+		filename: 'truncation-seed.js'
+		runtime_profile: 'node'
+	) or { panic(err) }
+	mut session := vjsx.try_new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{}) or {
+		panic(err)
+	}
+	defer {
+		session.close()
+	}
+	for cut in 0 .. bytecode.len {
+		session.context().load_bytecode(bytecode[..cut]) or { continue }
+		assert false, 'truncated bytecode prefix unexpectedly loaded: ${cut}'
+	}
+}

@@ -55,6 +55,8 @@ fn C.JS_RunGC(&C.JSRuntime)
 
 fn C.JS_SetMaxStackSize(&C.JSRuntime, usize)
 
+fn C.JS_UpdateStackTop(&C.JSRuntime)
+
 fn C.JS_SetGCThreshold(&C.JSRuntime, usize)
 
 fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
@@ -149,6 +151,13 @@ pub fn (rt Runtime) set_max_stack_size(stack_size u32) {
 // Set maximum stack size in bytes without the legacy u32 size ceiling.
 pub fn (rt Runtime) set_max_stack_size_bytes(stack_size usize) {
 	C.JS_SetMaxStackSize(rt.ref, stack_size)
+}
+
+// Refresh QuickJS's native stack baseline before executing on the current
+// thread. This is required when a serialized runtime moves between host
+// threads.
+pub fn (rt Runtime) update_stack_top() {
+	C.JS_UpdateStackTop(rt.ref)
 }
 
 // Set gc threshold.

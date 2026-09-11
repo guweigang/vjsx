@@ -15,12 +15,12 @@ fn test_app_executable_footer_round_trip_and_corruption_check() {
 	mut compiler := vjsx.new_runtime_session()
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name:   'vjsx-bundle/footer/main.mjs'
+			name: 'vjsx-bundle/footer/main.mjs'
 			source: 'export const value = 42;'
 		},
 	],
-		app_name:        'footer'
-		entry:           'vjsx-bundle/footer/main.mjs'
+		app_name: 'footer'
+		entry: 'vjsx-bundle/footer/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()

@@ -129,15 +129,10 @@ pub fn install_typescript_runtime(ctx &vjsx.Context) ! {
 		return
 	}
 	install_typescript_host_bridge(ctx)
-	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/typescript.js',
-		'TypeScript runtime')!
-	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
-		'TypeScript bootstrap helper')!
-	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_scan.js',
-		'TypeScript scan helper')!
-	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_commonjs.js',
-		'TypeScript CommonJS helper')!
-	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_resolver.js',
-		'TypeScript resolver helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/typescript.js', 'TypeScript runtime')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_bootstrap.js', 'TypeScript bootstrap helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_scan.js', 'TypeScript scan helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_commonjs.js', 'TypeScript CommonJS helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_resolver.js', 'TypeScript resolver helper')!
 	mark_typescript_runtime_installed(ctx)
 }

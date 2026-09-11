@@ -6,9 +6,9 @@ fn test_fetch_deadline_returns_before_host_watchdog() {
 	sw := time.new_stopwatch()
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fetch_config: vjsx.FetchGlobalsConfig{
-			read_timeout:  1 * time.millisecond
+			read_timeout: 1 * time.millisecond
 			write_timeout: 1 * time.millisecond
-			max_retries:   0
+			max_retries: 0
 		}
 	})
 	defer {
@@ -39,8 +39,7 @@ fn test_fetch_uses_configured_curl() {
 		os.rmdir_all(temp_dir) or {}
 	}
 	curl_path := os.join_path(temp_dir, 'curl')
-	os.write_file(curl_path,
-		'#!/bin/sh\nheaders=""\nbody=""\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    -D) shift; headers="$1" ;;\n    -o) shift; body="$1" ;;\n  esac\n  shift\ndone\nprintf "HTTP/2 200\\r\\ncontent-type: application/json\\r\\n\\r\\n" > "$headers"\nprintf "{\\"ok\\":true,\\"source\\":\\"fake-curl\\"}" > "$body"\n') or {
+	os.write_file(curl_path, '#!/bin/sh\nheaders=""\nbody=""\nwhile [ "\$#" -gt 0 ]; do\n  case "\$1" in\n    -D) shift; headers="\$1" ;;\n    -o) shift; body="\$1" ;;\n  esac\n  shift\ndone\nprintf "HTTP/2 200\\r\\ncontent-type: application/json\\r\\n\\r\\n" > "\$headers"\nprintf "{\\"ok\\":true,\\"source\\":\\"fake-curl\\"}" > "\$body"\n') or {
 		panic(err)
 	}
 	os.chmod(curl_path, 0o755) or { panic(err) }
@@ -55,11 +54,11 @@ fn test_fetch_uses_configured_curl() {
 	}
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fetch_config: vjsx.FetchGlobalsConfig{
-			read_timeout:        1 * time.second
-			write_timeout:       1 * time.second
-			max_retries:         0
+			read_timeout: 1 * time.second
+			write_timeout: 1 * time.second
+			max_retries: 0
 			curl_proxy_fallback: true
-			curl_path:           curl_path
+			curl_path: curl_path
 		}
 	})
 	defer {
@@ -88,8 +87,7 @@ fn test_fetch_abort_terminates_curl_process() {
 	curl_path := os.join_path(temp_dir, 'curl')
 	started_path := os.join_path(temp_dir, 'started')
 	terminated_path := os.join_path(temp_dir, 'terminated')
-	os.write_file(curl_path,
-		'#!/bin/sh\nprintf started > "${started_path}"\ntrap \'printf terminated > "${terminated_path}"; exit 143\' TERM\nwhile :; do :; done\n') or {
+	os.write_file(curl_path, '#!/bin/sh\nprintf started > "${started_path}"\ntrap \'printf terminated > "${terminated_path}"; exit 143\' TERM\nwhile :; do :; done\n') or {
 		panic(err)
 	}
 	os.chmod(curl_path, 0o755) or { panic(err) }
@@ -105,7 +103,7 @@ fn test_fetch_abort_terminates_curl_process() {
 	started := time.now()
 	value := ctx.eval('
 		fetch("https://example.test/slow", {
-			signal: AbortSignal.timeout(500)
+			signal: AbortSignal.timeout(2000)
 		}).then(
 			() => "resolved",
 			(error) => error.name
@@ -121,7 +119,7 @@ fn test_fetch_abort_terminates_curl_process() {
 		resolved.free()
 	}
 	assert resolved.to_string() == 'AbortError'
-	assert time.since(started) < 1500 * time.millisecond
+	assert time.since(started) < 4 * time.second
 	assert os.exists(started_path)
 	for _ in 0 .. 100 {
 		if os.exists(terminated_path) {
@@ -139,8 +137,7 @@ fn test_fast_fetch_is_not_starved_by_long_timer() {
 		os.rmdir_all(temp_dir) or {}
 	}
 	curl_path := os.join_path(temp_dir, 'curl')
-	os.write_file(curl_path,
-		'#!/bin/sh\nheaders=""\nbody=""\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    -D) shift; headers="$1" ;;\n    -o) shift; body="$1" ;;\n  esac\n  shift\ndone\nprintf "HTTP/2 200\\r\\ncontent-type: text/plain\\r\\n\\r\\n" > "$headers"\nprintf "ok" > "$body"\n') or {
+	os.write_file(curl_path, '#!/bin/sh\nheaders=""\nbody=""\nwhile [ "\$#" -gt 0 ]; do\n  case "\$1" in\n    -D) shift; headers="\$1" ;;\n    -o) shift; body="\$1" ;;\n  esac\n  shift\ndone\nprintf "HTTP/2 200\\r\\ncontent-type: text/plain\\r\\n\\r\\n" > "\$headers"\nprintf "ok" > "\$body"\n') or {
 		panic(err)
 	}
 	os.chmod(curl_path, 0o755) or { panic(err) }

@@ -7,28 +7,28 @@ pub type HostModuleInstaller = fn (&Context, mut Module)
 @[params]
 pub struct HostObjectField {
 pub:
-	name  string           @[required]
+	name  string @[required]
 	value HostValueBuilder @[required]
 }
 
 @[params]
 pub struct HostGlobalBinding {
 pub:
-	name  string           @[required]
+	name  string @[required]
 	value HostValueBuilder @[required]
 }
 
 @[params]
 pub struct HostModuleExport {
 pub:
-	name  string           @[required]
+	name  string @[required]
 	value HostValueBuilder @[required]
 }
 
 @[params]
 pub struct HostModuleBinding {
 pub:
-	name           string              @[required]
+	name           string @[required]
 	install        HostModuleInstaller @[required]
 	export_default bool = true
 }

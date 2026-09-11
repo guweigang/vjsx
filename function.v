@@ -40,11 +40,17 @@ pub struct ClassWithIDParams {
 }
 
 fn C.JS_NewCFunction(&C.JSContext, &JSCFunction, &i8, int) C.JSValue
+
 fn C.JS_NewCFunction2(&C.JSContext, &JSCFunction, &i8, int, int, int) C.JSValue
+
 fn C.JS_NewClassID(&u32) C.JSClassID
+
 fn C.JS_NewClass(&C.JSRuntime, C.JSClassID, &C.JSClassDef) int
+
 fn C.JS_SetConstructor(&C.JSContext, JSValueConst, JSValueConst)
+
 fn C.JS_SetClassProto(&C.JSContext, C.JSClassID, C.JSValue)
+
 fn C.JS_NewObjectProtoClass(&C.JSContext, JSValueConst, C.JSClassID) C.JSValue
 
 fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {

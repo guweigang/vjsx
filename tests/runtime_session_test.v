@@ -87,7 +87,8 @@ fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
 	setup.free()
 	done := chan bool{ cap: 1 }
 	worker := spawn runtime_session_test_complete_async(operation.completion, done)
-	assert <-done
+	completed := <-done
+	assert completed
 	worker.wait()
 	assert session.pending_host_async_operation_count() == 1
 	before := ctx.js_global('__host_async_result')
@@ -192,6 +193,42 @@ fn test_runtime_host_async_completion_queued_before_close_wins() {
 	session.close()
 	assert operation.cancel.is_cancelled() == false
 	assert operation.completion.reject('late') == false
+}
+
+fn test_runtime_host_async_stress_releases_terminal_records() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	catcher := ctx.eval('(promise) => promise.catch(() => {})') or { panic(err) }
+	defer {
+		catcher.free()
+	}
+	baseline := session.memory_usage()
+	for round in 0 .. 8 {
+		for index in 0 .. 32 {
+			operation := session.start_host_async_operation(kind: 'stress-${round}-${index}') or {
+				panic(err)
+			}
+			observed := ctx.call(catcher, operation.promise) or { panic(err) }
+			observed.free()
+			operation.promise.free()
+			if index % 2 == 0 {
+				assert operation.completion.resolve_text('ok')
+			} else {
+				assert session.cancel_host_async_operation(operation.id, 'stress-cancel')
+			}
+		}
+		assert session.pending_host_async_operation_count() == 32
+		assert session.drain_host_async_events() or { panic(err) } == 32
+		assert session.pending_host_async_operation_count() == 0
+		session.drain_ready_tasks() or { panic(err) }
+		session.runtime().run_gc()
+	}
+	after := session.memory_usage()
+	assert after.object_count <= baseline.object_count + 24
+	assert after.string_count <= baseline.string_count + 24
 }
 
 fn test_runtime_owned_timer_fires_from_host_wakeup() {

@@ -51,9 +51,9 @@ fn test_runtime_engine_limits_and_memory_snapshot() {
 		session.close()
 	}
 	session.configure_engine_limits(vjsx.RuntimeEngineLimits{
-		memory_limit_bytes:      64 * 1024 * 1024
-		max_stack_size_bytes:    2 * 1024 * 1024
-		gc_threshold_bytes:      4 * 1024 * 1024
+		memory_limit_bytes: 64 * 1024 * 1024
+		max_stack_size_bytes: 2 * 1024 * 1024
+		gc_threshold_bytes: 4 * 1024 * 1024
 		default_turn_timeout_ms: 500
 	})
 	limits := session.engine_limits()
@@ -70,7 +70,7 @@ fn test_runtime_engine_limits_and_memory_snapshot() {
 
 fn test_session_lane_admission_policy_is_pure_and_explicit() {
 	config := runtimejs.SessionLaneConfig{
-		max_queue:         2
+		max_queue: 2
 		admission_wait_ms: 10
 	}
 	assert runtimejs.decide_session_lane_admission(runtimejs.SessionLaneLoad{}, config) == .admit
@@ -84,6 +84,15 @@ fn test_session_lane_admission_policy_is_pure_and_explicit() {
 	assert runtimejs.session_lane_admission_timed_out(10, 10)
 }
 
+fn test_fallible_runtime_facades_construct_and_close() {
+	mut session := runtimejs.try_new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{}) or { panic(err) }
+	assert session.context().runtime_profile() == 'script'
+	session.close()
+	mut lane := runtimejs.try_new_node_session_lane(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{}, runtimejs.SessionLaneConfig{}) or { panic(err) }
+	assert lane.debug_snapshot().closed == false
+	lane.close()
+}
+
 fn test_runtime_turn_tracks_lifecycle_and_observation() {
 	mut session := vjsx.new_runtime_session()
 	defer {
@@ -93,7 +102,7 @@ fn test_runtime_turn_tracks_lifecycle_and_observation() {
 		session_id: 'hosting-test'
 	})
 	value := session.run_turn(vjsx.RuntimeSessionTurnOptions{
-		kind:          'answer'
+		kind: 'answer'
 		queue_wait_ms: 7
 	}, runtime_hosting_eval_answer) or { panic(err) }
 	assert value.to_int() == 42
@@ -161,18 +170,21 @@ fn test_runtime_turn_default_deadline_poisons_session() {
 
 fn test_session_lane_serializes_turns_and_drains() {
 	mut lane := runtimejs.new_session_lane(vjsx.new_runtime_session(), runtimejs.SessionLaneConfig{
-		max_queue:         2
+		max_queue: 2
 		admission_wait_ms: 500
 	})
-	done := chan string{cap: 1}
+	done := chan string{ cap: 1 }
 	slow_thread := spawn runtime_hosting_run_slow(lane, done)
-	time.sleep(10 * time.millisecond)
+	for !lane.snapshot().running {
+		time.sleep(time.millisecond)
+	}
 	fast := lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'fast'
 	}, runtime_hosting_fast_turn) or { panic(err) }
 	assert fast.to_string() == 'fast'
 	fast.free()
-	assert <-done == 'slow'
+	slow_result := <-done
+	assert slow_result == 'slow'
 	slow_thread.wait()
 	snapshot := lane.snapshot()
 	assert snapshot.completed == 2
@@ -192,10 +204,10 @@ fn test_session_lane_serializes_turns_and_drains() {
 
 fn test_session_lane_enforces_admission_timeout() {
 	mut lane := runtimejs.new_session_lane(vjsx.new_runtime_session(), runtimejs.SessionLaneConfig{
-		max_queue:         2
+		max_queue: 2
 		admission_wait_ms: 5
 	})
-	done := chan string{cap: 1}
+	done := chan string{ cap: 1 }
 	slow_thread := spawn runtime_hosting_run_slow(lane, done)
 	for !lane.snapshot().running {
 		time.sleep(time.millisecond)
@@ -203,7 +215,8 @@ fn test_session_lane_enforces_admission_timeout() {
 	lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'timeout'
 	}, runtime_hosting_fast_turn) or { assert err.msg().contains('timed out') }
-	assert <-done == 'slow'
+	slow_result := <-done
+	assert slow_result == 'slow'
 	slow_thread.wait()
 	assert lane.snapshot().rejected_timeout == 1
 	lane.close()
@@ -211,11 +224,11 @@ fn test_session_lane_enforces_admission_timeout() {
 
 fn test_session_lane_enforces_queue_limit() {
 	mut lane := runtimejs.new_session_lane(vjsx.new_runtime_session(), runtimejs.SessionLaneConfig{
-		max_queue:         1
+		max_queue: 1
 		admission_wait_ms: 500
 	})
-	slow_done := chan string{cap: 1}
-	fast_done := chan string{cap: 1}
+	slow_done := chan string{ cap: 1 }
+	fast_done := chan string{ cap: 1 }
 	slow_thread := spawn runtime_hosting_run_slow(lane, slow_done)
 	for !lane.snapshot().running {
 		time.sleep(time.millisecond)
@@ -227,8 +240,10 @@ fn test_session_lane_enforces_queue_limit() {
 	lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'queue-full'
 	}, runtime_hosting_fast_turn) or { assert err.msg().contains('queue is full') }
-	assert <-slow_done == 'slow'
-	assert <-fast_done == 'fast'
+	slow_result := <-slow_done
+	fast_result := <-fast_done
+	assert slow_result == 'slow'
+	assert fast_result == 'fast'
 	slow_thread.wait()
 	fast_thread.wait()
 	assert lane.snapshot().rejected_full == 1

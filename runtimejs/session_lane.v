@@ -58,11 +58,21 @@ pub fn new_session_lane(session vjsx.RuntimeSession, config SessionLaneConfig) &
 }
 
 pub fn new_script_session_lane(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig, config SessionLaneConfig) &SessionLane {
-	return new_session_lane(new_script_runtime_session(ctx_config, runtime_config), config)
+	return try_new_script_session_lane(ctx_config, runtime_config, config) or { panic(err) }
+}
+
+pub fn try_new_script_session_lane(ctx_config vjsx.ContextConfig, runtime_config vjsx.ScriptRuntimeConfig, config SessionLaneConfig) !&SessionLane {
+	session := vjsx.try_new_script_runtime_session(ctx_config, runtime_config)!
+	return new_session_lane(session, config)
 }
 
 pub fn new_node_session_lane(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig, config SessionLaneConfig) &SessionLane {
-	return new_session_lane(new_node_runtime_session(ctx_config, runtime_config), config)
+	return try_new_node_session_lane(ctx_config, runtime_config, config) or { panic(err) }
+}
+
+pub fn try_new_node_session_lane(ctx_config vjsx.ContextConfig, runtime_config vjsx.NodeRuntimeConfig, config SessionLaneConfig) !&SessionLane {
+	session := vjsx.try_new_node_runtime_session(ctx_config, runtime_config)!
+	return new_session_lane(session, config)
 }
 
 fn (lane &SessionLane) reserve_waiter() ! {
