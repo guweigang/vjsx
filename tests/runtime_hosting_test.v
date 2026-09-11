@@ -175,7 +175,9 @@ fn test_session_lane_serializes_turns_and_drains() {
 	})
 	done := chan string{ cap: 1 }
 	slow_thread := spawn runtime_hosting_run_slow(lane, done)
-	time.sleep(10 * time.millisecond)
+	for !lane.snapshot().running {
+		time.sleep(time.millisecond)
+	}
 	fast := lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'fast'
 	}, runtime_hosting_fast_turn) or { panic(err) }
