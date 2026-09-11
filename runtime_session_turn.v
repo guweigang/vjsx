@@ -165,6 +165,7 @@ fn (session RuntimeSession) mark_closed() {
 // only entry point into a session.
 pub fn (session RuntimeSession) run_turn(options RuntimeSessionTurnOptions, action RuntimeSessionTurnFn) !Value {
 	session.begin_turn()!
+	session.runtime.update_stack_top()
 	started_at_ms := session.now_ms()
 	started_tick := time.ticks()
 	memory_before := session.memory_usage()
