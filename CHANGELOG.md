@@ -32,9 +32,9 @@ declared a 1.0 stability boundary.
 - Unix release builds give the selected static libssl and libcrypto archives
   first priority in the compiler library search path and reject either dynamic
   OpenSSL dependency.
-- Windows release builds reuse the pinned toolchain's V1 compatibility compiler
-  directly, serialize MSVC cgen, and verify the final binary exists before the
-  build step can succeed.
+- Windows releases pin the Windows 2022 runner so the fixed V compiler is built
+  with the previously verified MSVC toolchain instead of a moving Visual Studio
+  release.
 - CI uses the V version pinned by `.v-version` rather than a moving compiler.
 - Release builds explicitly select V's OpenSSL backend and smoke-test WebCrypto
   ECDSA on every packaged platform.
