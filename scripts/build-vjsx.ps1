@@ -62,6 +62,13 @@ if (!$hasCompiler) {
   $flagList = @("-cc", $Compiler) + $flagList
 }
 
+# The pinned V compiler can return before its parallel MSVC child processes
+# finish, leaving the requested executable unavailable to the next CI step.
+# Serial cgen makes completion synchronous and only applies to MSVC builds.
+if ($Compiler -eq "msvc" -and !$flagList.Contains("-no-parallel")) {
+  $flagList += "-no-parallel"
+}
+
 function Test-VDefineFlag {
   param(
     [string[]]$Flags,
