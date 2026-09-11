@@ -42,7 +42,7 @@ Audit baseline: `main` at `28a4379`, release-candidate package version
 - A non-publishing release dry run built and smoke-tested all five archives,
   recorded the benchmark, assembled and revalidated `SHA256SUMS`, and generated
   signed provenance in
-  [run 34579959195](https://github.com/guweigang/vjsx/actions/runs/34579959195).
+  [run 34588550508](https://github.com/guweigang/vjsx/actions/runs/34588550508).
 
 ## Remaining 1.0 blocker
 
