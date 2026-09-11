@@ -42,18 +42,38 @@ fn append_app_executable_payload(path string, bundle []u8) ! {
 	}
 }
 
-// pack_app_executable copies an unbundled native app runner and appends a
-// `.vjsx` bundle plus a fixed footer. The resulting file remains a native
-// executable while the runner can locate the bundle from its own file tail.
-pub fn pack_app_executable(runner_path string, bundle []u8, output_path string, options PackAppExecutableOptions) ! {
+// has_appended_bundle reports whether an executable ends with a vjsx app
+// footer. Call read_appended_bundle() afterwards to validate the complete
+// footer and payload before executing it.
+pub fn has_appended_bundle(executable_path string) !bool {
+	if !os.is_file(executable_path) {
+		return false
+	}
+	file_size := os.file_size(executable_path)
+	if file_size < app_executable_footer_size {
+		return false
+	}
+	mut file := os.open(executable_path)!
+	defer {
+		file.close()
+	}
+	footer_offset := file_size - app_executable_footer_size
+	magic := file.read_bytes_at(app_executable_magic.len, footer_offset)
+	return magic == app_executable_magic
+}
+
+// pack_app_executable copies an unbundled vjsx executable and appends a `.vjsx`
+// bundle plus a fixed footer. The resulting file remains a native executable
+// and switches to app mode when it detects the bundle in its own file tail.
+pub fn pack_app_executable(base_executable_path string, bundle []u8, output_path string, options PackAppExecutableOptions) ! {
 	if bundle.len == 0 {
 		return error('cannot pack an empty vjsx bundle')
 	}
-	if !os.is_file(runner_path) {
-		return error('vjsx app runner not found: ${runner_path}')
+	if !os.is_file(base_executable_path) {
+		return error('vjsx base executable not found: ${base_executable_path}')
 	}
-	if os.real_path(runner_path) == os.real_path(output_path) {
-		return error('vjsx app output must differ from the runner path')
+	if os.real_path(base_executable_path) == os.real_path(output_path) {
+		return error('vjsx app output must differ from the base executable path')
 	}
 	if os.is_dir(output_path) {
 		return error('vjsx app output is a directory: ${output_path}')
@@ -69,7 +89,7 @@ pub fn pack_app_executable(runner_path string, bundle []u8, output_path string, 
 	defer {
 		os.rm(temp_path) or {}
 	}
-	os.cp(runner_path, temp_path)!
+	os.cp(base_executable_path, temp_path)!
 	append_app_executable_payload(temp_path, bundle)!
 	$if !windows {
 		os.chmod(temp_path, 0o755)!
@@ -82,7 +102,7 @@ pub fn pack_app_executable(runner_path string, bundle []u8, output_path string, 
 }
 
 // read_appended_bundle validates and reads the `.vjsx` payload appended to a
-// native vjsx app runner. It reads only the footer and bundle, not the runner.
+// native vjsx executable. It reads only the footer and bundle, not the executable body.
 pub fn read_appended_bundle(executable_path string) ![]u8 {
 	if !os.is_file(executable_path) {
 		return error('vjsx app executable not found: ${executable_path}')

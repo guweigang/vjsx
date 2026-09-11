@@ -22,7 +22,6 @@ struct CliOptions {
 	output_file      string
 	entry_only       bool
 	bundle           bool
-	runner_file      string
 	json_output      bool
 }
 
@@ -65,7 +64,7 @@ Usage:
   vjsx inspect [--json] [--runtime|-r <node|script|browser>] <entry.js>
   vjsx compile --entry-only [--runtime|-r <node|script|browser>] <input.js> -o <output.qbc>
   vjsx compile --bundle [--runtime|-r <node|script|browser>] <entry.js> -o <app.vjsx>
-  vjsx build [--runtime|-r <node|script|browser>] [--runner <path>] <entry.js> -o <app>
+  vjsx build [--runtime|-r <node|script|browser>] <entry.js> -o <app>
   vjsx check-runtime [--runtime|-r <node|script|browser>]
   vjsx capabilities [--runtime|-r <node|script|browser>]
   vjsx install [--registry <url>] [--dev] [package[@version]...]
@@ -92,7 +91,7 @@ Runtime commands:
 
 Compile command:
   compile       Compile a file or static project graph to QuickJS bytecode.
-  build         Package a project bundle with the native vjsx app runner.
+  build         Package a project bundle with the current vjsx executable.
 
 Compile options:
   --entry-only          Compile one self-contained file;
@@ -103,8 +102,6 @@ Compile options:
   -r, --runtime <name>  Record the required runtime profile in the artifact.
 
 Build options:
-  --runner <path>       Use this unbundled vjsx-app-runner executable. By default,
-                        use the runner installed next to the vjsx executable.
   -o, --output <file>   Write the single-file native application executable.
 
 Bytecode artifacts:
@@ -290,7 +287,6 @@ fn parse_args(args []string) CliOptions {
 	if command == 'build' {
 		mut input_file := ''
 		mut output_file := ''
-		mut runner_file := ''
 		mut runtime_profile := os.getenv_opt('VJS_RUNTIME_PROFILE') or { 'node' }
 		mut i := 0
 		for i < rest.len {
@@ -308,13 +304,6 @@ fn parse_args(args []string) CliOptions {
 						fail('missing output path after ${arg}')
 					}
 					output_file = rest[i + 1]
-					i++
-				}
-				'--runner' {
-					if i + 1 >= rest.len {
-						fail('missing app runner path after ${arg}')
-					}
-					runner_file = rest[i + 1]
 					i++
 				}
 				'--help', '-h' {
@@ -346,7 +335,6 @@ fn parse_args(args []string) CliOptions {
 			command: command
 			script_file: input_file
 			output_file: output_file
-			runner_file: runner_file
 			runtime_profile: runtime_profile
 		}
 	}
@@ -889,26 +877,6 @@ fn compile_script(opts CliOptions) !string {
 	return ''
 }
 
-fn default_app_runner_path() string {
-	runner_name := $if windows { 'vjsx-app-runner.exe' } $else { 'vjsx-app-runner' }
-	return os.join_path(os.dir(os.real_path(os.executable())), runner_name)
-}
-
-fn resolve_app_runner(opts CliOptions) !string {
-	candidate := if opts.runner_file != '' {
-		opts.runner_file
-	} else if configured := os.getenv_opt('VJS_APP_RUNNER') {
-		configured
-	} else {
-		default_app_runner_path()
-	}
-	resolved := os.real_path(candidate)
-	if !os.is_file(resolved) {
-		return error('vjsx app runner not found: ${resolved}\ninstall vjsx-app-runner next to vjsx or pass --runner <path>')
-	}
-	return resolved
-}
-
 fn build_app(opts CliOptions) !string {
 	input_path := os.real_path(opts.script_file)
 	if !os.is_file(input_path) {
@@ -919,7 +887,7 @@ fn build_app(opts CliOptions) !string {
 	} else {
 		os.join_path(os.getwd(), opts.output_file)
 	}
-	runner_path := resolve_app_runner(opts)!
+	base_executable_path := os.real_path(os.executable())
 	mut compiler := vjsx.new_runtime_session()
 	defer {
 		compiler.close()
@@ -929,11 +897,14 @@ fn build_app(opts CliOptions) !string {
 		app_name: app_name
 		runtime_profile: opts.runtime_profile
 	)!
-	vjsx.pack_app_executable(runner_path, bundle, output_path)!
+	vjsx.pack_app_executable(base_executable_path, bundle, output_path)!
 	return ''
 }
 
 fn main() {
+	if run_embedded_app_if_present() or { fail(err.msg()) } {
+		return
+	}
 	if cli_cwd := os.getenv_opt('VJS_CLI_CWD') {
 		if cli_cwd != '' {
 			os.chdir(cli_cwd) or { fail(err.msg()) }

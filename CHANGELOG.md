@@ -18,6 +18,10 @@ declared a 1.0 stability boundary.
 
 ### Changed
 
+- `vjsx build` now copies the running `vjsx` executable and appends the bundle;
+  release packages no longer include a separate `vjsx-app-runner` binary.
+- Unix CI builds QuickJS once and links it into the test binaries, and the
+  macOS arm64 test target now uses macOS 26.
 - CI uses the V version pinned by `.v-version` rather than a moving compiler.
 - Release builds explicitly select V's OpenSSL backend and smoke-test WebCrypto
   ECDSA on every packaged platform.

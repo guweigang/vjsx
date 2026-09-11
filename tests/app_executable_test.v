@@ -8,9 +8,11 @@ fn test_app_executable_footer_round_trip_and_corruption_check() {
 	defer {
 		os.rmdir_all(root) or {}
 	}
-	runner_path := os.join_path(root, 'runner')
+	base_executable_path := os.join_path(root, 'vjsx')
 	output_path := os.join_path(root, 'app')
-	os.write_file_array(runner_path, [u8(1), 2, 3, 4]) or { panic(err) }
+	os.write_file_array(base_executable_path, [u8(1), 2, 3, 4]) or { panic(err) }
+	base_has_bundle := vjsx.has_appended_bundle(base_executable_path) or { panic(err) }
+	assert !base_has_bundle
 
 	mut compiler := vjsx.new_runtime_session()
 	bundle := compiler.context().compile_bundle([
@@ -24,13 +26,15 @@ fn test_app_executable_footer_round_trip_and_corruption_check() {
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()
-	vjsx.pack_app_executable(runner_path, bundle, output_path) or { panic(err) }
+	vjsx.pack_app_executable(base_executable_path, bundle, output_path) or { panic(err) }
+	output_has_bundle := vjsx.has_appended_bundle(output_path) or { panic(err) }
+	assert output_has_bundle
 	loaded := vjsx.read_appended_bundle(output_path) or { panic(err) }
 	assert loaded == bundle
 
 	mut corrupted := os.read_bytes(output_path) or { panic(err) }
 	corrupted[1] ^= u8(1)
-	// Changing runner bytes is allowed because the footer protects the bundle.
+	// Changing base executable bytes is allowed because the footer protects the bundle.
 	os.write_file_array(output_path, corrupted) or { panic(err) }
 	loaded_after_runner_change := vjsx.read_appended_bundle(output_path) or { panic(err) }
 	assert loaded_after_runner_change == bundle

@@ -4,13 +4,7 @@ import os
 import runtimejs
 import vjsx
 
-@[noreturn]
-fn fail(message string) {
-	eprintln('vjsx-app-runner: ${message}')
-	exit(1)
-}
-
-fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string) ! {
+fn install_embedded_app_runtime(ctx &vjsx.Context, profile string, executable_path string) ! {
 	wd := os.getwd()
 	mut process_args := [executable_path, executable_path]
 	if os.args.len > 1 {
@@ -43,8 +37,7 @@ fn install_app_runtime(ctx &vjsx.Context, profile string, executable_path string
 	}
 }
 
-fn run_embedded_app() !int {
-	executable_path := os.real_path(os.executable())
+fn run_embedded_app(executable_path string) !int {
 	bundle := vjsx.read_appended_bundle(executable_path)!
 	info := vjsx.bundle_info(bundle)!
 	mut session := vjsx.new_runtime_session()
@@ -52,7 +45,7 @@ fn run_embedded_app() !int {
 		session.close()
 	}
 	ctx := session.context()
-	install_app_runtime(ctx, info.runtime_profile, executable_path)!
+	install_embedded_app_runtime(ctx, info.runtime_profile, executable_path)!
 	mut app := ctx.load_bundle(bundle)!
 	defer {
 		app.close()
@@ -65,9 +58,14 @@ fn run_embedded_app() !int {
 	return exit_code.to_int()
 }
 
-fn main() {
-	exit_code := run_embedded_app() or { fail(err.msg()) }
+fn run_embedded_app_if_present() !bool {
+	executable_path := os.real_path(os.executable())
+	if !vjsx.has_appended_bundle(executable_path)! {
+		return false
+	}
+	exit_code := run_embedded_app(executable_path)!
 	if exit_code != 0 {
 		exit(exit_code)
 	}
+	return true
 }

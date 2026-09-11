@@ -14,15 +14,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            archive_path: libs/qjs_linux_x64.a
           - os: ubuntu-24.04-arm
-            archive_path: libs/qjs_linux_arm64.a
           - os: macos-26-intel
-            archive_path: libs/qjs_macos_x64.a
-          - os: macos-15
-            archive_path: libs/qjs_macos_arm64.a
+          - os: macos-26
           - os: windows-latest
-            archive_path: libs/qjs_win_x64.a
     steps:
       - name: Checkout ${{ github.event.repository.name }}
         uses: actions/checkout@v4
@@ -99,23 +94,12 @@ jobs:
           sqlite_prefix="$(brew --prefix sqlite)"
           echo "PKG_CONFIG_PATH=${sqlite_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "$GITHUB_ENV"
 
-      - name: Check bundled archive
-        id: archive
-        shell: bash
-        run: |
-          if [ -f "${{ matrix.archive_path }}" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Ensure quickjs-ng checkout
-        if: steps.archive.outputs.exists != 'true' || matrix.os == 'windows-latest'
         id: quickjs
         shell: bash
         run: ./.github/scripts/ensure-quickjs.sh
 
-      - name: Build QuickJS for MSVC
+      - name: Build QuickJS static library on Windows
         if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
@@ -133,29 +117,33 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "VJS_QUICKJS_LIB_PATH=$($qjsLib.FullName)"
           Add-Content -Path $env:GITHUB_ENV -Value "VJS_V_CC=msvc"
 
+      - name: Build QuickJS static library on Unix
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_root="$RUNNER_TEMP/vjsx-quickjs-ng-build"
+          cmake -S "${{ steps.quickjs.outputs.quickjs_dir }}" -B "$build_root" \
+            -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+          cmake --build "$build_root" --target qjs_exe
+          qjs_lib="$(find "$build_root" -name libqjs.a -print -quit)"
+          if [ -z "$qjs_lib" ]; then
+            echo "libqjs.a not found under $build_root" >&2
+            exit 1
+          fi
+          echo "VJS_QUICKJS_PATH=${{ steps.quickjs.outputs.quickjs_dir }}" >> "$GITHUB_ENV"
+          echo "VJS_QUICKJS_LIB_PATH=$qjs_lib" >> "$GITHUB_ENV"
+          echo "VJS_V_CC=clang" >> "$GITHUB_ENV"
+
       - name: Verify fmt
         run: |
           v fmt -diff .
           v fmt -verify .
 
-      - name: Run Tests Linux and Mac with bundled archive
-        if: steps.archive.outputs.exists == 'true' && matrix.os != 'windows-latest'
-        run: v -d use_openssl -cg -cc clang test .
-
-      - name: Verify macOS ARM compiler compatibility
-        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-15'
+      - name: Run Tests on Unix
+        if: matrix.os != 'windows-latest'
         shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang ./tests/runtime_compat_differential_test.v
-
-      - name: Verify macOS Intel SQLite toolchain
-        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-26-intel'
-        shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang ./tests/cli_sqlite_test.v
-
-      - name: Run Tests Linux and Mac with local quickjs-ng source
-        if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
-        shell: bash
-        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang test .
+        run: v -d link_quickjs -d use_openssl -cg -cc clang test .
 
       - name: Run Tests Windows with MSVC
         if: matrix.os == 'windows-latest'

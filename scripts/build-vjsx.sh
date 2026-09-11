@@ -5,7 +5,6 @@ repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 export VMODULES="${VMODULES:-$repo_root/.cache/vmodules}"
 mkdir -p "$VMODULES"
 out=${VJS_OUT:-"$repo_root/bin/vjsx"}
-app_runner_out=${VJS_APP_RUNNER_OUT:-"$(dirname "$out")/vjsx-app-runner"}
 quickjs_path=${VJS_QUICKJS_PATH:-}
 require_static_crypto=${VJS_REQUIRE_STATIC_CRYPTO:-0}
 
@@ -14,7 +13,6 @@ if [ -z "$quickjs_path" ]; then
 fi
 
 mkdir -p "$(dirname "$out")"
-mkdir -p "$(dirname "$app_runner_out")"
 
 find_libcrypto_a() {
   local candidate
@@ -108,8 +106,6 @@ fi
 cd "$repo_root"
 VJS_QUICKJS_PATH="$quickjs_path" \
   v "${v_args[@]}" -prod -d build_quickjs -o "$out" ./cli_runner_bin
-VJS_QUICKJS_PATH="$quickjs_path" \
-  v "${v_args[@]}" -prod -d build_quickjs -o "$app_runner_out" ./app_runner_bin
 
 check_dynamic_crypto() {
   local binary=$1
@@ -137,6 +133,5 @@ check_dynamic_crypto() {
 }
 
 check_dynamic_crypto "$out"
-check_dynamic_crypto "$app_runner_out"
 
 echo "$out"
