@@ -181,7 +181,8 @@ fn test_session_lane_serializes_turns_and_drains() {
 	}, runtime_hosting_fast_turn) or { panic(err) }
 	assert fast.to_string() == 'fast'
 	fast.free()
-	assert <-done == 'slow'
+	slow_result := <-done
+	assert slow_result == 'slow'
 	slow_thread.wait()
 	snapshot := lane.snapshot()
 	assert snapshot.completed == 2
@@ -212,7 +213,8 @@ fn test_session_lane_enforces_admission_timeout() {
 	lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'timeout'
 	}, runtime_hosting_fast_turn) or { assert err.msg().contains('timed out') }
-	assert <-done == 'slow'
+	slow_result := <-done
+	assert slow_result == 'slow'
 	slow_thread.wait()
 	assert lane.snapshot().rejected_timeout == 1
 	lane.close()
@@ -236,8 +238,10 @@ fn test_session_lane_enforces_queue_limit() {
 	lane.run_turn(vjsx.RuntimeSessionTurnOptions{
 		kind: 'queue-full'
 	}, runtime_hosting_fast_turn) or { assert err.msg().contains('queue is full') }
-	assert <-slow_done == 'slow'
-	assert <-fast_done == 'fast'
+	slow_result := <-slow_done
+	fast_result := <-fast_done
+	assert slow_result == 'slow'
+	assert fast_result == 'fast'
 	slow_thread.wait()
 	fast_thread.wait()
 	assert lane.snapshot().rejected_full == 1

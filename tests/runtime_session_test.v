@@ -87,7 +87,8 @@ fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
 	setup.free()
 	done := chan bool{ cap: 1 }
 	worker := spawn runtime_session_test_complete_async(operation.completion, done)
-	assert <-done
+	completed := <-done
+	assert completed
 	worker.wait()
 	assert session.pending_host_async_operation_count() == 1
 	before := ctx.js_global('__host_async_result')
