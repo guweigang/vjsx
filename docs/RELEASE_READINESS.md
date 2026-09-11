@@ -1,6 +1,6 @@
 # 1.0 Release-Readiness Audit
 
-Audit baseline: `main` at `6554fa4`, current package version `0.0.8`.
+Audit baseline: `main` at `41834f5`, current package version `0.0.8`.
 
 ## Strengthened in this phase
 
@@ -16,21 +16,26 @@ Audit baseline: `main` at `6554fa4`, current package version `0.0.8`.
   generated checksums for all release archives.
 - Documented API stability, migration, security boundaries, platform support,
   artifact ABI and release procedure.
+- Promoted Linux arm64 into the pull-request test matrix and aligned macOS
+  arm64 testing with the macOS 26 release target.
+- Converged `vjsx build` on the running CLI executable, removing the separate
+  app-runner build, package and version-sync surface.
+- Prebuilt QuickJS once per CI job so the Unix matrix links the same static
+  library into every test instead of recompiling the engine for each file.
 
 ## Remaining 1.0 blockers
 
-1. Linux arm64 is release-smoked but not part of the pull-request test matrix.
-2. Release archives are checksummed and extraction-smoked, but the workflow
+1. Release archives are checksummed and extraction-smoked, but the workflow
    does not yet generate signed provenance/attestations. Bit-for-bit rebuilds
    are not demonstrated across all five platforms.
-3. The low-level public `Runtime`/`Context`/`Value` surface is still broad and
+2. The low-level public `Runtime`/`Context`/`Value` surface is still broad and
    provisional. A 1.0 decision must either stabilize it or explicitly move it
    behind an advanced compatibility policy.
-4. The selected package corpus is intentionally small. Real-package fixtures
+3. The selected package corpus is intentionally small. Real-package fixtures
    need owners, update policy and demonstrated coverage for every package named
    as supported.
-5. The full matrix and benchmark baseline must pass on release infrastructure;
-   local macOS evidence alone is insufficient.
+4. A benchmark baseline and a non-publishing release workflow run must pass on
+   release infrastructure before the 1.0 tag is created.
 ## Version recommendation
 
 Do not tag `1.0.0` yet. Continue the `0.x` line until the blockers above are

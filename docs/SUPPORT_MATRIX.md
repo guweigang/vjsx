@@ -9,7 +9,7 @@ TypeScript compatibility.
 | Platform | CI | Release artifact | Status |
 | --- | --- | --- | --- |
 | Linux x64 | test + release smoke | `vjsx-linux-x64.tar.gz` | supported |
-| Linux arm64 | release build + smoke | `vjsx-linux-arm64.tar.gz` | supported |
+| Linux arm64 | test + release smoke | `vjsx-linux-arm64.tar.gz` | supported |
 | macOS x64 | test + release smoke | `vjsx-darwin-x64.tar.gz` | supported |
 | macOS arm64 | test + release smoke | `vjsx-darwin-arm64.tar.gz` | supported |
 | Windows x64 | test + release smoke | `vjsx-windows-x64.zip` | supported |

@@ -211,17 +211,12 @@ jobs:
               otool -L "./dist/${{ matrix.binary }}"
               exit 1
             fi
-            if otool -L "./dist/vjsx-app-runner" | grep -q 'libcrypto.*dylib'; then
-              echo "Error: ./dist/vjsx-app-runner has unexpected dynamic dependency on libcrypto" >&2
-              otool -L "./dist/vjsx-app-runner"
-              exit 1
-            fi
           fi
           ./dist/${{ matrix.binary }} check-runtime --runtime node
           test "$(./dist/${{ matrix.binary }} --version)" = "vjsx ${{ needs.metadata.outputs.version }}"
           ./dist/${{ matrix.binary }} ./tests/test.js
           ./dist/${{ matrix.binary }} --runtime browser --module ./examples/webcrypto/signatures.mjs | grep -Eq '^ECDSA:(70|71|72):true$'
-          ./dist/${{ matrix.binary }} build --runner ./dist/vjsx-app-runner ./tests/test.js -o ./dist/vjsx-smoke-app
+          ./dist/${{ matrix.binary }} build ./tests/test.js -o ./dist/vjsx-smoke-app
           ./dist/vjsx-smoke-app
 
 
@@ -235,7 +230,7 @@ jobs:
           $signatureOutput = .\dist\${{ matrix.binary }} --runtime browser --module .\examples\webcrypto\signatures.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (($signatureOutput | Select-Object -Last 1) -notmatch '^ECDSA:(70|71|72):true$') { throw "WebCrypto ECDSA smoke failed: $signatureOutput" }
-          .\dist\${{ matrix.binary }} build --runner .\dist\vjsx-app-runner.exe .\tests\test.js -o .\dist\vjsx-smoke-app.exe
+          .\dist\${{ matrix.binary }} build .\tests\test.js -o .\dist\vjsx-smoke-app.exe
           .\dist\vjsx-smoke-app.exe
 
       - name: Package Unix archive
@@ -244,7 +239,6 @@ jobs:
         run: |
           mkdir -p "release/${{ matrix.artifact }}"
           cp "dist/${{ matrix.binary }}" "release/${{ matrix.artifact }}/"
-          cp "dist/vjsx-app-runner" "release/${{ matrix.artifact }}/"
           cp README.md "release/${{ matrix.artifact }}/"
           tar -C release -czf "${{ matrix.archive }}" "${{ matrix.artifact }}"
 
@@ -254,7 +248,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "release\${{ matrix.artifact }}" | Out-Null
           Copy-Item "dist\${{ matrix.binary }}" "release\${{ matrix.artifact }}\"
-          Copy-Item "dist\vjsx-app-runner.exe" "release\${{ matrix.artifact }}\"
           Copy-Item "dist\*.dll" "release\${{ matrix.artifact }}\"
           Copy-Item "README.md" "release\${{ matrix.artifact }}\"
           Compress-Archive -Path "release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}" -Force
