@@ -6,13 +6,15 @@ on:
       publish_release:
         description: Publish GitHub release
         type: boolean
-        default: true
+        default: false
   push:
     tags:
       - "v*"
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   VCPKG_BINARY_CACHE_DIR: ${{ github.workspace }}\.cache\vcpkg-binary-cache
@@ -278,12 +280,70 @@ jobs:
           path: ${{ matrix.archive }}
           if-no-files-found: error
 
-  publish:
-    name: Publish ${{ needs.metadata.outputs.tag }}
+  benchmark:
+    name: Record release benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup V
+        uses: vlang/setup-v@v1.7
+        with:
+          version-file: .v-version
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+
+      - name: Ensure quickjs-ng checkout
+        id: quickjs
+        shell: bash
+        run: ./.github/scripts/ensure-quickjs.sh
+
+      - name: Build QuickJS static library
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_root="$RUNNER_TEMP/vjsx-quickjs-ng-benchmark"
+          cmake -S "${{ steps.quickjs.outputs.quickjs_dir }}" -B "$build_root" \
+            -DCMAKE_BUILD_TYPE=Release -DQJS_BUILD_LIBC=ON -DBUILD_SHARED_LIBS=OFF
+          cmake --build "$build_root" --target qjs_exe
+          qjs_lib="$(find "$build_root" -name libqjs.a -print -quit)"
+          test -n "$qjs_lib"
+          echo "VJS_QUICKJS_PATH=${{ steps.quickjs.outputs.quickjs_dir }}" >> "$GITHUB_ENV"
+          echo "VJS_QUICKJS_LIB_PATH=$qjs_lib" >> "$GITHUB_ENV"
+
+      - name: Run benchmark and record environment
+        shell: bash
+        run: |
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "v_version=$(cat .v-version)"
+            echo "quickjs_version=$(cat .quickjs-version)"
+            echo "runner_image=${ImageOS:-unknown}-${ImageVersion:-unknown}"
+            echo "architecture=$(uname -m)"
+            echo "compiler=$(clang --version | head -n 1)"
+            lscpu | grep -E '^(Model name|CPU\(s\)):' || true
+          } | tee release-benchmark.txt
+          VJSX_BENCH_ITERATIONS=25 \
+            v -prod -d link_quickjs -d use_openssl -cc clang \
+            run benchmarks/release_benchmark.v | tee -a release-benchmark.txt
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-benchmark
+          path: release-benchmark.txt
+          if-no-files-found: error
+
+  assemble:
+    name: Assemble and attest release
     needs:
       - metadata
       - build
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_release
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -297,6 +357,39 @@ jobs:
           cd release-artifacts
           find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} + | sort -k2 > SHA256SUMS
           test "$(wc -l < SHA256SUMS)" -eq 5
+
+      - name: Generate signed build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.zip
+            release-artifacts/SHA256SUMS
+
+      - name: Upload assembled release
+        uses: actions/upload-artifact@v4
+        with:
+          name: vjsx-release
+          path: |
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.zip
+            release-artifacts/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    name: Publish ${{ needs.metadata.outputs.tag }}
+    needs:
+      - metadata
+      - benchmark
+      - assemble
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download assembled release
+        uses: actions/download-artifact@v4
+        with:
+          name: vjsx-release
+          path: release-artifacts
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

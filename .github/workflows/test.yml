@@ -145,6 +145,16 @@ jobs:
         shell: bash
         run: v -d link_quickjs -d use_openssl -cg -cc clang test .
 
+      - name: Run pinned real-package conformance
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          mkdir -p dist
+          v -d link_quickjs -d use_openssl -cg -cc clang \
+            -o "$PWD/dist/vjsx-package-conformance" ./cli_runner_bin
+          VJSX_BIN="$PWD/dist/vjsx-package-conformance" \
+            ./tests/integration/openai_sdk/run.sh
+
       - name: Run Tests Windows with MSVC
         if: matrix.os == 'windows-latest'
         shell: powershell

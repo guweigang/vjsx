@@ -15,6 +15,8 @@ declared a 1.0 stability boundary.
 - Boundary/property seeds for artifact and npm tar/package parsers plus runtime
   cancellation and memory-pressure loops.
 - Release archive checksums and binary/version consistency smoke checks.
+- Signed release provenance, a release benchmark artifact, and pinned
+  real-package conformance in CI.
 
 ### Changed
 
@@ -22,6 +24,11 @@ declared a 1.0 stability boundary.
   release packages no longer include a separate `vjsx-app-runner` binary.
 - Unix CI builds QuickJS once and links it into the test binaries, and the
   macOS arm64 test target now uses macOS 26.
+- The public API contract now separates Stable, Compatibility and Advanced
+  tiers for the 1.x compatibility boundary.
+- Module graph discovery now uses the TypeScript syntax tree, preventing
+  import-like text inside strings and comments from becoming false dependency
+  edges.
 - CI uses the V version pinned by `.v-version` rather than a moving compiler.
 - Release builds explicitly select V's OpenSSL backend and smoke-test WebCrypto
   ECDSA on every packaged platform.

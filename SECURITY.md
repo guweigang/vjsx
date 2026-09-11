@@ -75,7 +75,10 @@ the archive before writing, including header checksums, octal sizes, entry
 bounds, termination and absolute/traversal paths on Unix and Windows. Links and
 special device entries are never materialized. Package integrity metadata is
 checked when a supported `sha512-` value is present; release archives publish
-SHA-256 checksums. These checks do not replace signed provenance or an OS
+SHA-256 checksums. Official release archives and the checksum manifest also
+carry GitHub Actions build-provenance attestations. See
+[`docs/BUILD_PROVENANCE.md`](docs/BUILD_PROVENANCE.md). Provenance links an
+artifact to its source and workflow; it does not replace review or an OS
 sandbox.
 
 ## Reporting

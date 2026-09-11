@@ -6,8 +6,8 @@
     "smoke": "./run.sh"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "latest",
-    "ai": "latest",
-    "openai": "latest"
+    "@ai-sdk/openai-compatible": "2.0.41",
+    "ai": "6.0.168",
+    "openai": "6.34.0"
   }
 }
