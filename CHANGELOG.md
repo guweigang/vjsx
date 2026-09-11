@@ -1,9 +1,10 @@
 # Changelog
 
-All notable user-visible changes are recorded here. This project has not yet
-declared a 1.0 stability boundary.
+All notable user-visible changes are recorded here.
 
 ## Unreleased
+
+## 1.0.0-rc.1 - 2026-09-11
 
 ### Added
 
@@ -51,7 +52,8 @@ declared a 1.0 stability boundary.
 
 - Existing panic-on-install constructors remain available as soft-deprecated
   wrappers. See `docs/UPGRADING.md`.
-- Artifact ABI remains `vjsx-artifact-abi/1`; product version remains `0.0.8`.
+- Artifact ABI remains `vjsx-artifact-abi/1`; product version is now the
+  `1.0.0-rc.1` release candidate.
 
 ### Fixed
 

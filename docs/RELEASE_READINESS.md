@@ -1,6 +1,7 @@
 # 1.0 Release-Readiness Audit
 
-Audit baseline: `main` at `6945e7c`, current package version `0.0.8`.
+Audit baseline: `main` at `28a4379`, release-candidate package version
+`1.0.0-rc.1`.
 
 ## Strengthened in this phase
 
@@ -32,14 +33,23 @@ Audit baseline: `main` at `6945e7c`, current package version `0.0.8`.
   documented that 1.0 promises pinned, attested builds rather than
   bit-for-bit-identical native rebuilds.
 
-## Remaining 1.0 blockers
+## Release-infrastructure evidence
 
-1. The updated pull-request matrix, benchmark job, archive assembly and signed
-   attestation path must pass once on release infrastructure.
-2. Publish `v1.0.0-rc.1` from the same pinned inputs and complete the release
-   checklist against its downloadable artifacts before creating `v1.0.0`.
+- The five-platform pull-request matrix passed on Linux x64/arm64, macOS
+  x64/arm64 and Windows x64, including real-package installation smoke tests
+  on macOS arm64 and Windows x64, in
+  [run 34585825347](https://github.com/guweigang/vjsx/actions/runs/34585825347).
+- A non-publishing release dry run built and smoke-tested all five archives,
+  recorded the benchmark, assembled and revalidated `SHA256SUMS`, and generated
+  signed provenance in
+  [run 34579959195](https://github.com/guweigang/vjsx/actions/runs/34579959195).
+
+## Remaining 1.0 blocker
+
+Publish `v1.0.0-rc.1` from the same pinned inputs and complete the release
+checklist against its downloadable artifacts before creating `v1.0.0`.
+
 ## Version recommendation
 
-Do not tag `1.0.0` directly. Close the evidence gate, publish `v1.0.0-rc.1`, and
-promote the same contracts to `v1.0.0` after the RC checklist passes. No version
-number was changed by this audit.
+Do not tag `1.0.0` directly. Publish `v1.0.0-rc.1` and promote the same contracts
+to `v1.0.0` only after the RC checklist passes.
