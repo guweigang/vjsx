@@ -19,7 +19,7 @@ jobs:
             archive_path: libs/qjs_linux_arm64.a
           - os: macos-26-intel
             archive_path: libs/qjs_macos_x64.a
-          - os: macos-26
+          - os: macos-15
             archive_path: libs/qjs_macos_arm64.a
           - os: windows-latest
             archive_path: libs/qjs_win_x64.a
@@ -31,7 +31,6 @@ jobs:
         uses: vlang/setup-v@v1.7
         with:
           version-file: .v-version
-          cache: ${{ matrix.os != 'macos-26' }}
 
       - name: Prepare Windows x64
         if: matrix.os == 'windows-latest'
@@ -74,24 +73,9 @@ jobs:
         run: v -d use_openssl -cg -cc clang test .
 
       - name: Run Tests Linux and Mac with local quickjs-ng source
-        if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest' && matrix.os != 'macos-26'
+        if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest'
         shell: bash
         run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang test .
-
-      - name: Run Tests macOS ARM with local quickjs-ng source
-        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-26'
-        shell: bash
-        run: |
-          ulimit -s "$(ulimit -Hs)"
-          compat_test=./tests/runtime_compat_differential_test.v
-          echo "::group::${compat_test}"
-          VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang "${compat_test}"
-          echo "::endgroup::"
-          for test_file in $(find . -type f -name '*_test.v' ! -path "${compat_test}" | sort); do
-            echo "::group::${test_file}"
-            VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang "${test_file}"
-            echo "::endgroup::"
-          done
 
       - name: Run Tests Windows with bundled archive
         if: steps.archive.outputs.exists == 'true' && matrix.os == 'windows-latest'
