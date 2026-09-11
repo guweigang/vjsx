@@ -377,6 +377,12 @@ jobs:
             vjsx ${{ needs.metadata.outputs.version }}
 
             Built from GitHub Actions run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            - [API stability contract](https://github.com/${{ github.repository }}/blob/${{ needs.metadata.outputs.tag }}/docs/API_STABILITY.md)
+            - [Upgrade and migration guidance](https://github.com/${{ github.repository }}/blob/${{ needs.metadata.outputs.tag }}/docs/UPGRADING.md)
+            - [Security policy and boundaries](https://github.com/${{ github.repository }}/blob/${{ needs.metadata.outputs.tag }}/SECURITY.md)
+            - [Platform support matrix](https://github.com/${{ github.repository }}/blob/${{ needs.metadata.outputs.tag }}/docs/SUPPORT_MATRIX.md)
+          prerelease: ${{ contains(needs.metadata.outputs.version, '-') }}
           files: |
             release-artifacts/**/*.tar.gz
             release-artifacts/**/*.zip
