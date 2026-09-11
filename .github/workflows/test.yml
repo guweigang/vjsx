@@ -50,6 +50,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev
 
+      - name: Prepare macOS SQLite
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          brew install sqlite
+          sqlite_prefix="$(brew --prefix sqlite)"
+          echo "PKG_CONFIG_PATH=${sqlite_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "$GITHUB_ENV"
+
       - name: Check bundled archive
         id: archive
         shell: bash
@@ -79,6 +87,11 @@ jobs:
         if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-15'
         shell: bash
         run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cc clang ./tests/runtime_compat_differential_test.v
+
+      - name: Verify macOS Intel SQLite toolchain
+        if: steps.archive.outputs.exists != 'true' && matrix.os == 'macos-26-intel'
+        shell: bash
+        run: VJS_QUICKJS_PATH="${{ steps.quickjs.outputs.quickjs_dir }}" v -d build_quickjs -d use_openssl -cg -cc clang ./tests/cli_sqlite_test.v
 
       - name: Run Tests Linux and Mac with local quickjs-ng source
         if: steps.archive.outputs.exists != 'true' && matrix.os != 'windows-latest' && matrix.os != 'macos-15'
