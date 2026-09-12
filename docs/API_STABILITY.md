@@ -5,6 +5,10 @@ visibility is necessary for modules inside this repository to cooperate, but it
 does not by itself place a symbol in the stable 1.x contract. Every public
 symbol belongs to one of the tiers below.
 
+This inventory defines source/API stability. The behavioral promises made by
+the managed hosting surface and their required host conditions are defined in
+[Runtime Guarantees](GUARANTEES.md).
+
 ## Compatibility tiers
 
 - **Stable**: the symbols in the recommended stable surface table follow

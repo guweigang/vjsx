@@ -35,6 +35,8 @@ Hosting documentation:
   limits, lifecycle, lanes, observations, capability hardening, and migration.
 - [Runtime Contract](docs/RUNTIME_CONTRACT.md) for ownership and engine/host
   boundaries.
+- [Runtime Guarantees](docs/GUARANTEES.md) for the explicit 1.x promises and
+  required host conditions.
 - [Security Policy](SECURITY.md) for the threat model, capability presets, and
   trusted-artifact boundary.
 - [API Stability](docs/API_STABILITY.md) for supported and provisional
@@ -49,6 +51,8 @@ Hosting documentation:
   for migrations and release verification.
 - [Performance Baseline](docs/PERFORMANCE.md) for repeatable benchmark runs.
 - [Release Readiness](docs/RELEASE_READINESS.md) for the current 1.0 gate audit.
+- [Post-1.0 Roadmap](docs/ROADMAP.md) for planned 1.1 hosting work that is not
+  part of the 1.0 compatibility contract.
 
 ## Install
 

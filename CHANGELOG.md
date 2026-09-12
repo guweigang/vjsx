@@ -4,6 +4,16 @@ All notable user-visible changes are recorded here.
 
 ## Unreleased
 
+### Documentation
+
+- Defined the managed runtime guarantees and required host conditions for 1.x.
+- Recorded host-contract verification, safe runtime generations, bounded drain,
+  deterministic scheduler testing and correlated observations as post-1.0 work.
+
+### Tests
+
+- Covered stale host-wakeup generation rejection as a managed runtime invariant.
+
 ## 1.0.0-rc.2 - 2026-09-11
 
 ### Fixed

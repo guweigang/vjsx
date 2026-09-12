@@ -9,6 +9,8 @@ The hosting layer is additive. Existing embedders can continue using
 `RuntimeSession`, `Context`, and `ctx.eval(...)` directly. Adopting the managed
 entrypoints adds explicit resource governance, lifecycle state, serialization,
 and bounded observations without introducing distributed ownership or storage.
+The normative 1.x behavior of these managed entrypoints is collected in
+[Runtime Guarantees](GUARANTEES.md).
 
 ## What The Host Gains
 

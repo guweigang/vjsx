@@ -523,6 +523,27 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	assert session.wakeup_generation() == 0
 }
 
+fn test_runtime_session_ignores_stale_wakeup_generation() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	session.request_wakeup_at(9000, 'first')
+	stale_generation := session.wakeup_generation()
+	session.request_wakeup_at(8000, 'replacement')
+	current_generation := session.wakeup_generation()
+	assert current_generation > stale_generation
+
+	assert session.deliver_wakeup(stale_generation) or { panic(err) } == 0
+	assert session.has_pending_wakeup()
+	assert session.next_wakeup_at() or { panic(err) } == 8000
+	assert session.wakeup_generation() == current_generation
+
+	assert session.deliver_wakeup(current_generation) or { panic(err) } == 0
+	assert session.has_pending_wakeup() == false
+	assert session.next_wakeup_at() == none
+}
+
 fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 	log_path := os.join_path(os.temp_dir(), 'vjsx_runtime_session_test_timer_wakeup.log')
 	runtime_session_test_reset_wakeup_hooks(log_path)
