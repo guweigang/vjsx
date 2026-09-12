@@ -1,6 +1,6 @@
 # 1.0 Release-Readiness Audit
 
-Audit baseline: `main` at `99b05b8`, release-candidate package version
+Audit baseline: `v1.0.0-rc.2` at `cb901fe`, release-candidate package version
 `1.0.0-rc.2`.
 
 ## Strengthened in this phase
@@ -17,6 +17,9 @@ Audit baseline: `main` at `99b05b8`, release-candidate package version
   generated checksums for all release archives.
 - Documented API stability, migration, security boundaries, platform support,
   artifact ABI and release procedure.
+- Defined the managed runtime guarantees and separated planned 1.1 host
+  verification, safe replacement, bounded drain, scheduler testing and
+  observability work from the 1.0 compatibility contract.
 - Promoted Linux arm64 into the pull-request test matrix and aligned macOS
   arm64 testing with the macOS 26 release target.
 - Converged `vjsx build` on the running CLI executable, removing the separate
