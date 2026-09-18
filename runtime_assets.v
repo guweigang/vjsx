@@ -273,7 +273,7 @@ fn context_from_c_ctx(c_ctx &C.JSContext) &Context {
 	if isnil(opaque) {
 		return unsafe { nil }
 	}
-	return &Context(opaque)
+	return unsafe { &Context(opaque) }
 }
 
 fn vjsx_runtime_module_normalize(ctx &C.JSContext, module_base_name &char, module_name &char, opaque voidptr) &char {

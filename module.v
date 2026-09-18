@@ -1,6 +1,6 @@
 module vjsx
 
-type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) int
+type JSModuleInitFunc = fn (&C.JSContext, &C.JSModuleDef) i32
 
 fn C.JS_NewCModule(&C.JSContext, &char, &JSModuleInitFunc) &C.JSModuleDef
 
@@ -97,14 +97,14 @@ pub fn (mut m Module) export_default(any AnyValue) {
 pub fn (mut m Module) create() &C.JSModuleDef {
 	exports := m.exports.clone()
 	values := m.values.clone()
-	cb := fn [exports, values] (ctx &C.JSContext, mod &C.JSModuleDef) int {
+	cb := fn [exports, values] (ctx &C.JSContext, mod &C.JSModuleDef) i32 {
 		len := exports.len
 		for i in 0 .. len {
 			export := exports[i]
 			value := values[i].dup_value()
 			C.JS_SetModuleExport(ctx, mod, export, value.ref)
 		}
-		return len
+		return i32(len)
 	}
 	ref := C.JS_NewCModule(m.ctx.ref, m.name.str, cb)
 	for export in exports {

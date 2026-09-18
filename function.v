@@ -1,7 +1,7 @@
 module vjsx
 
 // Original `type` JS Callback function from `qjs`
-pub type JSCFunction = fn (&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
+pub type JSCFunction = fn (&C.JSContext, JSValueConst, i32, &JSValueConst) C.JSValue
 
 // `type` JS Callback function with `this`
 pub type JSFunctionThis = fn (this Value, args []Value) Value
@@ -54,9 +54,9 @@ fn C.JS_SetClassProto(&C.JSContext, C.JSClassID, C.JSValue)
 fn C.JS_NewObjectProtoClass(&C.JSContext, JSValueConst, C.JSClassID) C.JSValue
 
 fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {
-	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
-		mut args := []Value{cap: len}
-		for i in 0 .. len {
+	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len i32, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: int(len)}
+		for i in 0 .. int(len) {
 			args << ctx.c_val(unsafe { argv[i] })
 		}
 		return cb(ctx.c_val(this), args).ref
@@ -64,9 +64,9 @@ fn (ctx &Context) js_fn_this(cb JSFunctionThis) JSCFunction {
 }
 
 fn (ctx &Context) js_fn_plain(cb JSFunction) JSCFunction {
-	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len int, argv &JSValueConst) C.JSValue {
-		mut args := []Value{cap: len}
-		for i in 0 .. len {
+	return fn [ctx, cb] (jctx &C.JSContext, this JSValueConst, len i32, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: int(len)}
+		for i in 0 .. int(len) {
 			args << ctx.c_val(unsafe { argv[i] })
 		}
 		return cb(args).ref
@@ -130,9 +130,9 @@ pub fn (ctx &Context) js_class(cls ClassParams) Value {
 	}
 	proto := ctx.js_object()
 	C.JS_NewClass(ctx.rt.ref, ref, &def)
-	c_ctor := fn [ctx, ctor, ref] (jctx &C.JSContext, new_target JSValueConst, len int, argv &JSValueConst) C.JSValue {
-		mut args := []Value{cap: len}
-		for i in 0 .. len {
+	c_ctor := fn [ctx, ctor, ref] (jctx &C.JSContext, new_target JSValueConst, len i32, argv &JSValueConst) C.JSValue {
+		mut args := []Value{cap: int(len)}
+		for i in 0 .. int(len) {
 			args << ctx.c_val(unsafe { argv[i] })
 		}
 		target := ctx.c_val(new_target)
