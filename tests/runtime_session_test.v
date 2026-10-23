@@ -185,6 +185,39 @@ fn test_runtime_host_async_timeout_and_close_cancel_tokens() {
 	os.unsetenv(runtime_session_test_now_env)
 }
 
+fn test_runtime_host_async_worker_timeout_uses_first_terminal_gate() {
+	mut session := vjsx.new_runtime_session()
+	defer { session.close() }
+	ctx := session.context()
+	operation := session.start_host_async_operation(kind: 'worker-timeout') or { panic(err) }
+	global := ctx.js_global()
+	global.set('__worker_timeout_promise', operation.promise)
+	global.free()
+	operation.promise.free()
+	setup := ctx.eval('__worker_timeout_promise.catch(error => globalThis.__worker_timeout_name = error.name)') or {
+		panic(err)
+	}
+	setup.free()
+	assert operation.completion.timeout()
+	assert operation.cancel.is_cancelled()
+	assert operation.cancel.reason() == 'host operation timed out'
+	assert !operation.completion.resolve_text('late response')
+	assert !operation.completion.timeout()
+	assert session.drain_host_async_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	name := ctx.js_global('__worker_timeout_name')
+	assert name.to_string() == 'TimeoutError'
+	name.free()
+	assert session.pending_host_async_operation_count() == 0
+	assert session.pending_host_async_event_count() == 0
+	completed := session.start_host_async_operation(kind: 'completion-before-timeout') or { panic(err) }
+	completed.promise.free()
+	assert completed.completion.resolve_text('ready')
+	assert !completed.completion.timeout()
+	assert !completed.cancel.is_cancelled()
+	assert session.drain_host_async_events() or { panic(err) } == 1
+}
+
 fn test_runtime_host_async_completion_queued_before_close_wins() {
 	mut session := vjsx.new_runtime_session()
 	operation := session.start_host_async_operation(kind: 'complete-before-close') or { panic(err) }
@@ -403,7 +436,7 @@ fn test_runtime_session_records_async_job_diagnostics() {
 	}
 	session.resolve_value(promise_value) or { assert err.msg().contains('async boom') }
 	assert session.diagnostic_error_count() == 1
-	diagnostic := session.last_diagnostic() or { panic('missing runtime diagnostic') }
+	diagnostic := session.last_diagnostic() or { panic('expected runtime diagnostic') }
 	assert diagnostic.session_id == 'diagnostic-session'
 	assert diagnostic.kind == 'resolve_value'
 	assert diagnostic.message.contains('async boom')
@@ -458,7 +491,7 @@ fn test_runtime_session_timer_wakeup_hints_are_bounded() {
 	assert session.request_timer_wakeup_after('timer-b', 20) == -1
 	assert session.rejected_timer_wakeup_hint_count() == 1
 	assert session.diagnostic_error_count() == 1
-	diagnostic := session.last_diagnostic() or { panic('missing runtime diagnostic') }
+	diagnostic := session.last_diagnostic() or { panic('expected timer limit diagnostic') }
 	assert diagnostic.kind == 'timer_wakeup_hint_limit'
 	snapshot := session.debug_snapshot()
 	assert snapshot.timer_wakeup_hint_count == 1
@@ -494,7 +527,7 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	session.request_wakeup_at(9001, 'timer-ready')
 	assert session.has_pending_wakeup()
 	assert session.needs_wakeup()
-	assert (session.next_wakeup_at() or { panic('missing wakeup') }) == 9001
+	assert session.next_wakeup_at() or { panic('expected wakeup') } == 9001
 	mut wake_log := runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 1
 	assert wake_log[0] == 'wake:session-a:9001:1:timer-ready'
@@ -505,7 +538,7 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 	assert session.wakeup_generation() == 1
 	requested_after := session.request_wakeup_after(250, 'delay-ready')
 	assert requested_after == 4492
-	assert (session.next_wakeup_at() or { panic('missing wakeup') }) == 4492
+	assert session.next_wakeup_at() or { panic('expected wakeup') } == 4492
 	wake_log = runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 2
 	assert wake_log[1] == 'wake:session-a:4492:2:delay-ready'
@@ -536,7 +569,7 @@ fn test_runtime_session_ignores_stale_wakeup_generation() {
 
 	assert session.deliver_wakeup(stale_generation) or { panic(err) } == 0
 	assert session.has_pending_wakeup()
-	assert (session.next_wakeup_at() or { panic('missing wakeup') }) == 8000
+	assert session.next_wakeup_at() or { panic('expected wakeup') } == 8000
 	assert session.wakeup_generation() == current_generation
 
 	assert session.deliver_wakeup(current_generation) or { panic(err) } == 0
@@ -577,7 +610,7 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 	wake_log := runtime_session_test_read_wakeup_log(log_path)
 	assert wake_log.len == 1
 	assert wake_log[0] == 'wake:timer-session:1010:1:timer'
-	assert (session.next_wakeup_at() or { panic('missing wakeup') }) == 1010
+	assert session.next_wakeup_at() or { panic('expected wakeup') } == 1010
 	assert session.wakeup_generation() == 1
 	session.pump_until_idle()
 	result := ctx.js_global('__timer_wrapper_value')
@@ -610,7 +643,7 @@ fn test_runtime_session_close_clears_event_loop_wakeup_state() {
 	})
 	session.request_timer_wakeup_after('timer-a', 25)
 	assert session.has_pending_wakeup()
-	assert (session.next_wakeup_at() or { panic('missing wakeup') }) == 5025
+	assert session.next_wakeup_at() or { panic('expected wakeup') } == 5025
 	session.close()
 	assert session.is_closed()
 	assert session.has_pending_wakeup() == false

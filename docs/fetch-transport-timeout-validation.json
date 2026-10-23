@@ -1,0 +1,124 @@
+{
+  "fixture_fix_validation": {
+    "date": "2026-10-23",
+    "branch": "codex/fix-fetch-transport-timeout",
+    "compiler": {
+      "path": "/Users/guweigang/local/v/v",
+      "branch": "local-dev",
+      "commit": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef"
+    },
+    "baseline": {
+      "main_commit": "93cb8345eac32b58aa60f1844f53543a78542807",
+      "isolated_snapshot_commit": "b0c9417",
+      "description": "Copied main pending fetch/runtime changes into this independent worktree; snapshot committed separately so the fix can be reviewed on its own."
+    },
+    "failure": {
+      "exception": "TimeoutError: fetch timed out",
+      "VJOBS": 2,
+      "fixture_default_workers": 2,
+      "slow_handler_ms": 300,
+      "fetch_deadline_ms": 80,
+      "trace": "Both /abort and /timeout reached handlers; JS Promise.all settled after 86ms. /echo never reached a handler before its deadline.",
+      "log": ".build/fetch-timeout/repro-trace.log"
+    },
+    "root_cause": "net.http.Server defaults worker_num to runtime.nr_jobs(), which respects VJOBS. Both fixture workers were occupied by slow requests whose client promises had already been cancelled or timed out. The next echo request waited in the server queue and correctly timed out.",
+    "fix": {
+      "file": "tests/fetch_transport_validation_test.v",
+      "worker_num": 4,
+      "description": "Give the local fixture explicit capacity independent of test/compiler parallelism, including requests still running after client cancellation.",
+      "runtime_changes_beyond_imported_snapshot": false,
+      "timeout_and_assertions_weakened": false
+    },
+    "repeated_runs": {
+      "total": 9,
+      "passed": 9,
+      "matrix": [
+        {
+          "VJOBS": 1,
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "VJOBS": 2,
+          "passed": 3,
+          "total": 3
+        },
+        {
+          "VJOBS": 4,
+          "passed": 3,
+          "total": 3
+        }
+      ],
+      "log": ".build/fetch-timeout/repeated-runs.json"
+    },
+    "related_tests": {
+      "passed": 9,
+      "total": 9,
+      "VJOBS": 2,
+      "elapsed_ms": 79011,
+      "files": [
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/host_websocket_internal_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/runtime_asset_gzip_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/host_fetch_runtime_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/fetch_transport_validation_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/runtime_assets_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/runtime_hosting_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/runtime_policy_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/websocket_contract_test.v",
+        "/Users/guweigang/.codex/worktrees/65eb/vjsx/tests/runtime_session_test.v"
+      ],
+      "log": ".build/fetch-timeout/related-tests.log"
+    },
+    "reproduce": "source .build/local-dev/env.sh; \"$VEXE\" -no-retry-compilation -path \"$PWD/..|$VMODULES|@vlib\" -cc clang -d link_quickjs -d use_openssl test tests/fetch_transport_validation_test.v",
+    "boundaries": {
+      "main_working_files_match_start_snapshot": true,
+      "main_modified_by_this_task": false,
+      "v_checkout_modified_by_this_task": false,
+      "merged": false,
+      "pushed": false
+    }
+  },
+  "fetch_submission_validation": {
+    "date": "2026-10-23",
+    "base_commit": "93cb8345eac32b58aa60f1844f53543a78542807",
+    "validation_worktree": "/Users/guweigang/.codex/worktrees/65eb/vjsx",
+    "description": "Validate the exact fetch changes intended for main without pending embedded gzip optimizations or CommonJS API visibility edits.",
+    "compiler_commit": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef",
+    "related_tests": {
+      "passed": 9,
+      "total": 9,
+      "VJOBS": 2,
+      "elapsed_ms": 72619,
+      "files": [
+        "host_websocket_internal_test.v",
+        "tests/fetch_transport_validation_test.v",
+        "tests/host_fetch_runtime_test.v",
+        "tests/promise_test.v",
+        "tests/runtime_assets_test.v",
+        "tests/runtime_hosting_test.v",
+        "tests/runtime_policy_test.v",
+        "tests/websocket_contract_test.v",
+        "tests/runtime_session_test.v"
+      ],
+      "log": ".build/fetch-consolidation/related-tests.log"
+    },
+    "additional_coverage": "Worker completion-port timeout uses the first-terminal-event gate, rejects with TimeoutError, cancels the token, releases queued records, and cannot override an earlier completion.",
+    "source_sha256": {
+      "context.v": "e7adf82f958e128b35ccaba0a5ad8df32fb772c4df8b244efeb2e26621d54141",
+      "docs/NODE_COMPATIBILITY.md": "a62445fb79154a70b451d15e03de87e95fb0815ce100f134e3b4ba853f466551",
+      "host_fetch.v": "3580aea24a6bf2b7ef01d161bc32ca71fe3326ea5d99370b09900067f2496f7f",
+      "promise.v": "6200aa564d764b168e5ce87c94789aacfef9a949751382f3ff5030aa541456fb",
+      "runtime_host_async.v": "fcfbde4db3ce22d8a5ec9181f25c777558b6bc56bf23ff7d288626f7f525911f",
+      "tests/runtime_session_test.v": "4459674d8f09a8c986aa787fe7a87b20d73f9ca8c7fbf888d15395e2264864c7",
+      "tests/fetch_transport_validation_test.v": "b3a936a431d5a8fc3e6db0eeaca61eacc9aaed5529ba10a8dadc63e682d41d3b"
+    },
+    "excluded_pending_files": [
+      "runtime_assets.v",
+      "runtime_asset_gzip.c.v",
+      "runtime_asset_gzip.h",
+      "runtime_asset_gzip_test.v",
+      "runtimejs/ts_api.v"
+    ],
+    "remote_push_requested": false
+  }
+}

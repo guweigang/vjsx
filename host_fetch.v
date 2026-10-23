@@ -2,6 +2,7 @@ module vjsx
 
 import net.http
 import os
+import sync
 import time
 
 @[params]
@@ -10,8 +11,12 @@ pub:
 	read_timeout        i64 = 30 * time.second
 	write_timeout       i64 = 30 * time.second
 	max_retries         int = 5
-	curl_proxy_fallback bool = true
+	curl_proxy_fallback bool
 	curl_path           string
+	// Bounds outstanding native workers, including cancelled requests still
+	// finishing in the underlying blocking V transport. Zero disables admission.
+	max_concurrent_requests int = 16
+	timeout_ms              int = 30_000
 }
 
 struct FetchCoreRequest {
@@ -35,8 +40,133 @@ struct FetchCoreResult {
 
 @[heap]
 struct FetchCoreConfigState {
-	config FetchGlobalsConfig
-	policy HostPolicy
+	config  FetchGlobalsConfig
+	policy  HostPolicy
+	workers &FetchNativeWorkers = &FetchNativeWorkers{}
+}
+
+@[heap]
+struct FetchNativeWorkers {
+	guard &sync.Mutex = sync.new_mutex()
+mut:
+	active int
+}
+
+fn (mut workers FetchNativeWorkers) acquire(limit int) bool {
+	workers.guard.lock()
+	defer { workers.guard.unlock() }
+	if workers.active >= limit { return false }
+	workers.active++
+	return true
+}
+
+fn fetch_native_worker(request FetchCoreRequest, port RuntimeHostAsyncCompletionPort, token RuntimeHostAsyncCancelToken, results chan FetchCoreResult, deadline i64, mut workers FetchNativeWorkers) {
+	defer {
+		workers.guard.lock()
+		workers.active--
+		workers.guard.unlock()
+	}
+	if token.is_cancelled() { return }
+	result := fetch_core_run_native(request)
+	if token.is_cancelled() { return }
+	// An owner busy running JS may deliver its timer late. Do not let a
+	// response completed after the total deadline win that race.
+	if time.sys_mono_now() >= deadline {
+		port.submit(RuntimeHostAsyncCompletion{
+			outcome:    .timed_out
+			text:       'fetch timed out'
+			error_name: 'TimeoutError'
+		})
+		return
+	}
+	results <- result
+	if result.message != '' {
+		port.reject(result.message)
+	} else {
+		port.resolve_text('ready')
+	}
+}
+
+fn fetch_native_schedule(ctx &Context, port RuntimeHostAsyncCompletionPort, deadline i64) ! {
+	timeout := ctx.js_global('setTimeout')
+	defer { timeout.free() }
+	if !timeout.is_function() { return error('native fetch requires setTimeout') }
+	runner := ctx.js_function(fn [ctx, port, deadline] (args []Value) Value {
+		mut state := port.state
+		state.guard.lock()
+		pending := port.operation_id in state.operations && !state.closed
+		state.guard.unlock()
+		if !pending { return ctx.js_undefined() }
+		if time.sys_mono_now() >= deadline {
+			port.submit(RuntimeHostAsyncCompletion{
+				outcome:    .timed_out
+				text:       'fetch timed out'
+				error_name: 'TimeoutError'
+			})
+		}
+		ctx.drain_context_host_async_events() or {
+			return ctx.js_throw(ctx.js_error(
+				message: err.msg()
+			))
+		}
+		// js_std_await polls timers between Promise jobs. Flush the ready
+		// chain here so wrapper .finally handlers can clear long deadlines
+		// before that poll, just as the curl completion path already does.
+		ctx.drain_ready_tasks() or {
+			return ctx.js_throw(ctx.js_error(message: err.msg()))
+		}
+		fetch_native_schedule(ctx, port, deadline) or { port.reject(err.msg()) }
+		return ctx.js_undefined()
+	})
+	defer { runner.free() }
+	result := ctx.call(timeout, runner, 5)!
+	result.free()
+}
+
+fn fetch_start_native(ctx &Context, state &FetchCoreConfigState, request FetchCoreRequest, resolve Value, reject Value) !Value {
+	mut workers := state.workers
+	if !workers.acquire(state.config.max_concurrent_requests) {
+		return error('native fetch concurrency limit reached')
+	}
+	operation := ctx.start_context_host_async_operation(RuntimeHostAsyncOptions{ kind: 'fetch' }, 0) or {
+		workers.guard.lock()
+		workers.active--
+		workers.guard.unlock()
+		return err
+	}
+	defer { operation.promise.free() }
+	results := chan FetchCoreResult{cap: 1}
+	on_response := ctx.js_function(fn [ctx, results] (args []Value) Value {
+		result := <-results
+		return fetch_response_value(ctx, result.response)
+	})
+	defer { on_response.free() }
+	// These JS-owned handlers release the caller's callbacks on settlement.
+	then := operation.promise.get('then')
+	defer { then.free() }
+	transformed := ctx.call_this(operation.promise, then, on_response)!
+	defer { transformed.free() }
+	forward := transformed.get('then')
+	defer { forward.free() }
+	observed := ctx.call_this(transformed, forward, resolve, reject)!
+	observed.free()
+	port := operation.completion
+	cancel := ctx.js_function(fn [ctx, port] (args []Value) Value {
+		return ctx.js_bool(port.cancel('This operation was aborted'))
+	})
+	timeout_ms := if state.config.timeout_ms > 0 { state.config.timeout_ms } else { 30_000 }
+	deadline := time.sys_mono_now() + i64(timeout_ms) * time.millisecond
+	fetch_native_schedule(ctx, port, deadline) or {
+		cancel.free()
+		workers.guard.lock()
+		workers.active--
+		workers.guard.unlock()
+		port.reject(err.msg())
+		ctx.drain_context_host_async_events() or {}
+		return err
+	}
+	spawn fetch_native_worker(request, port, operation.cancel, results, deadline, mut workers)
+	return cancel
 }
 
 @[heap]
@@ -56,32 +186,28 @@ mut:
 }
 
 fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
-	mut resp := http.Response{}
-	if request.boundary == '' {
-		resp = http.fetch(
-			url: request.url
-			method: request.method
-			header: request.header
-			data: request.body
-			read_timeout: request.read_timeout
-			write_timeout: request.write_timeout
-			max_retries: 0
-			allow_redirect: request.allow_redirect
-		) or {
-			return FetchCoreResult{
-				message: err.msg()
-			}
+	mut header := request.header
+	if request.boundary != '' {
+		header.set_custom('content-type', 'multipart/form-data; boundary=----formdata-${request.boundary}') or {
+			return FetchCoreResult{ message: err.msg() }
 		}
-	} else {
-		form, files := http.parse_multipart_form(request.body, '----formdata-' + request.boundary)
-		resp = http.post_multipart_form(request.url,
-			form: form
-			header: request.header
-			files: files
-		) or {
-			return FetchCoreResult{
-				message: err.msg()
-			}
+	}
+	// FormData is already serialized by the JS body layer. Send it through the
+	// same transport so timeout, redirect and single-attempt rules apply too.
+	resp := http.fetch(
+		url:            request.url
+		method:         request.method
+		header:         header
+		data:           request.body
+		read_timeout:   request.read_timeout
+		write_timeout:  request.write_timeout
+		// V counts attempts, so zero would skip the request entirely.
+		// Never replay a possibly side-effecting request automatically.
+		max_retries:    1
+		allow_redirect: request.allow_redirect
+	) or {
+		return FetchCoreResult{
+			message: err.msg()
 		}
 	}
 	return FetchCoreResult{
@@ -185,10 +311,10 @@ fn fetch_parse_curl_response(headers_text string, body_text string) !http.Respon
 	}
 	return http.Response{
 		http_version: parts[0].all_after('/')
-		status_code: parts[1].int()
-		status_msg: status_msg
-		header: header
-		body: body_text
+		status_code:  parts[1].int()
+		status_msg:   status_msg
+		header:       header
+		body:         body_text
 	}
 }
 
@@ -329,13 +455,13 @@ fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, res
 		return err
 	}
 	mut task := &FetchCurlTask{
-		process: process
-		temp_dir: temp_dir
+		process:      process
+		temp_dir:     temp_dir
 		headers_path: headers_path
-		body_path: body_path
-		output_path: output_path
-		resolve: resolve.dup_value()
-		reject: reject.dup_value()
+		body_path:    body_path
+		output_path:  output_path
+		resolve:      resolve.dup_value()
+		reject:       reject.dup_value()
 	}
 	cancel := ctx.js_function(fn [ctx, mut task] (args []Value) Value {
 		if task.cancelled || task.cleaned {
@@ -345,7 +471,7 @@ fn fetch_start_curl(ctx Context, curl_path string, request FetchCoreRequest, res
 		task.process.terminate(false)
 		fetch_curl_task_settle(ctx, mut task, ctx.js_error(
 			message: 'This operation was aborted'
-			name: 'AbortError'
+			name:    'AbortError'
 		), true)
 		return ctx.js_bool(true)
 	})
@@ -477,7 +603,9 @@ fn fetch_encoding_boot(ctx &Context, boot Value) {
 	boot.set('text_encode_into', ctx.js_function_this(host_text_encode_into))
 }
 
-fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, this Value, args []Value) Value {
+fn fetch_core_with_config(state &FetchCoreConfigState, this Value, args []Value) Value {
+	fetch_config := state.config
+	policy := state.policy
 	ctx := this.ctx
 	noop_cancel := ctx.js_function(fn [ctx] (args []Value) Value {
 		return ctx.js_bool(false)
@@ -488,18 +616,18 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 	resolve := args[2]
 	reject := args[3]
 	if args[0].is_undefined() || args[0].is_null() {
-		error := ctx.js_error(message: 'url is required', name: 'TypeError')
-		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+		js_error := ctx.js_error(message: 'url is required', name: 'TypeError')
+		call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 		call_result.free()
-		error.free()
+		js_error.free()
 		return noop_cancel
 	}
 	url := args[0].str()
 	host_policy_allows_url(policy, url) or {
-		error := ctx.js_error(message: err.msg(), name: 'Error')
-		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+		js_error := ctx.js_error(message: err.msg(), name: 'Error')
+		call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 		call_result.free()
-		error.free()
+		js_error.free()
 		return noop_cancel
 	}
 	opts := if args.len > 1 { args[1].dup_value() } else { ctx.js_object() }
@@ -525,10 +653,10 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 	mut hd := http.new_header()
 	if headers.is_object() {
 		props := headers.property_names() or {
-			error := ctx.js_error(message: err.msg())
-			call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+			js_error := ctx.js_error(message: err.msg())
+			call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 			call_result.free()
-			error.free()
+			js_error.free()
 			return noop_cancel
 		}
 		for data in props {
@@ -536,10 +664,10 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 			val := headers.get(key)
 			hd.set_custom(key, val.str()) or {
 				val.free()
-				error := ctx.js_error(message: err.msg())
-				call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+				js_error := ctx.js_error(message: err.msg())
+				call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 				call_result.free()
-				error.free()
+				js_error.free()
 				return noop_cancel
 			}
 			val.free()
@@ -552,10 +680,10 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 		raw_body,
 	]) {
 		bytes := host_decode_text_bytes(this, raw_body) or {
-			error := ctx.js_error(message: err.msg(), name: 'TypeError')
-			call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+			js_error := ctx.js_error(message: err.msg(), name: 'TypeError')
+			call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 			call_result.free()
-			error.free()
+			js_error.free()
 			return noop_cancel
 		}
 		body = bytes.bytestr()
@@ -564,19 +692,19 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 		body = raw_body.str()
 	}
 	request := FetchCoreRequest{
-		url: url
-		method: request_method
-		header: hd
-		body: body
-		body_is_binary: body_is_binary
-		boundary: if boundary.is_undefined() { '' } else { boundary.str() }
-		read_timeout: fetch_config.read_timeout
-		write_timeout: fetch_config.write_timeout
-		max_retries: fetch_config.max_retries
+		url:                 url
+		method:              request_method
+		header:              hd
+		body:                body
+		body_is_binary:      body_is_binary
+		boundary:            if boundary.is_undefined() { '' } else { boundary.str() }
+		read_timeout:        fetch_config.read_timeout
+		write_timeout:       fetch_config.write_timeout
+		max_retries:         fetch_config.max_retries
 		curl_proxy_fallback: fetch_config.curl_proxy_fallback
-		allow_redirect: policy.network_hosts.len == 0
+		allow_redirect:      policy.network_hosts.len == 0
 	}
-	if request.curl_proxy_fallback && request.boundary == '' {
+	if (request.curl_proxy_fallback || fetch_config.curl_path != '') && request.boundary == '' {
 		curl_path := if fetch_config.curl_path != '' {
 			fetch_config.curl_path
 		} else {
@@ -584,29 +712,25 @@ fn fetch_core_with_config(fetch_config FetchGlobalsConfig, policy HostPolicy, th
 		}
 		if curl_path != '' {
 			cancel := fetch_start_curl(ctx, curl_path, request, resolve, reject) or {
-				error := ctx.js_error(message: err.msg())
-				call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+				js_error := ctx.js_error(message: err.msg())
+				call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 				call_result.free()
-				error.free()
+				js_error.free()
 				return noop_cancel
 			}
 			noop_cancel.free()
 			return cancel
 		}
 	}
-	result := fetch_core_run_native(request)
-	if result.message != '' {
-		error := ctx.js_error(message: result.message)
-		call_result := ctx.call(reject, error) or { ctx.js_undefined() }
+	cancel := fetch_start_native(ctx, state, request, resolve, reject) or {
+		js_error := ctx.js_error(message: err.msg())
+		call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
 		call_result.free()
-		error.free()
+		js_error.free()
 		return noop_cancel
 	}
-	response_value := fetch_response_value(ctx, result.response)
-	call_result := ctx.call(resolve, response_value) or { ctx.js_undefined() }
-	call_result.free()
-	response_value.free()
-	return noop_cancel
+	noop_cancel.free()
+	return cancel
 }
 
 fn fetch_boot(ctx &Context, boot Value, config FetchGlobalsConfig, policy HostPolicy) {
@@ -615,7 +739,7 @@ fn fetch_boot(ctx &Context, boot Value, config FetchGlobalsConfig, policy HostPo
 		policy: policy
 	}
 	boot.set('core_fetch', ctx.js_function_this(fn [state] (this Value, args []Value) Value {
-		return fetch_core_with_config(state.config, state.policy, this, args)
+		return fetch_core_with_config(state, this, args)
 	}))
 }
 

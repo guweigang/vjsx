@@ -119,8 +119,8 @@ mut:
 fn new_runtime_host_async_state() &RuntimeHostAsyncState {
 	return &RuntimeHostAsyncState{
 		operations: map[u64]RuntimeHostAsyncRecord{}
-		queued: []RuntimeHostAsyncQueuedEvent{}
-		terminal: map[u64]bool{}
+		queued:     []RuntimeHostAsyncQueuedEvent{}
+		terminal:   map[u64]bool{}
 	}
 }
 
@@ -141,7 +141,7 @@ fn (port RuntimeHostAsyncCompletionPort) submit(completion RuntimeHostAsyncCompl
 	}
 	state.terminal[port.operation_id] = true
 	state.queued << RuntimeHostAsyncQueuedEvent{
-		id: port.operation_id
+		id:         port.operation_id
 		completion: completion
 	}
 	ready_fn := state.ready_fn
@@ -151,7 +151,7 @@ fn (port RuntimeHostAsyncCompletionPort) submit(completion RuntimeHostAsyncCompl
 		port.token.mark_cancelled(completion.text)
 	}
 	ready_fn(RuntimeHostAsyncReadyRequest{
-		session_id: session_id
+		session_id:   session_id
 		operation_id: port.operation_id
 	})
 	return true
@@ -163,25 +163,35 @@ pub fn (port RuntimeHostAsyncCompletionPort) resolve_text(text string) bool {
 
 pub fn (port RuntimeHostAsyncCompletionPort) resolve_bytes(bytes []u8) bool {
 	return port.submit(RuntimeHostAsyncCompletion{
-		outcome: .resolve
-		bytes: bytes.clone()
+		outcome:   .resolve
+		bytes:     bytes.clone()
 		is_binary: true
 	})
 }
 
 pub fn (port RuntimeHostAsyncCompletionPort) reject(message string) bool {
 	return port.submit(RuntimeHostAsyncCompletion{
-		outcome: .reject
-		text: message
+		outcome:    .reject
+		text:       message
 		error_name: 'Error'
 	})
 }
 
 pub fn (port RuntimeHostAsyncCompletionPort) cancel(reason string) bool {
 	return port.submit(RuntimeHostAsyncCompletion{
-		outcome: .cancelled
-		text: if reason == '' { 'This operation was aborted' } else { reason }
+		outcome:    .cancelled
+		text:       if reason == '' { 'This operation was aborted' } else { reason }
 		error_name: 'AbortError'
+	})
+}
+
+// A worker can enforce its monotonic deadline even while the owning JS lane is
+// busy. This shares the same first-terminal gate as completion and cancellation.
+pub fn (port RuntimeHostAsyncCompletionPort) timeout() bool {
+	return port.submit(RuntimeHostAsyncCompletion{
+		outcome: .timed_out
+		text: 'host operation timed out'
+		error_name: 'TimeoutError'
 	})
 }
 
@@ -228,50 +238,57 @@ pub fn (mut session RuntimeSession) start_host_async_operation(options RuntimeHo
 	if session.is_closed() || session.phase() in [.draining, .poisoned, .closed] {
 		return error('runtime session is not accepting host operations')
 	}
-	capability := session.context.js_promise_capability()
+	operation := session.context.start_context_host_async_operation(options, session.now_ms())!
+	if options.timeout_ms > 0 {
+		session.reschedule_host_async_wakeup('host-async-timeout')
+	}
+	return operation
+}
+
+// Context and managed session transports share one completion queue. Only the
+// owner may create capabilities or drain it; workers receive plain-data ports.
+fn (ctx &Context) start_context_host_async_operation(options RuntimeHostAsyncOptions, now_ms i64) !RuntimeHostAsyncOperation {
+	mut state := ctx.host_cleanup_state.host_async
+	state.guard.lock()
+	closed := state.closed
+	state.guard.unlock()
+	if closed { return error('runtime session is not accepting host operations') }
+	capability := ctx.js_promise_capability()
 	token := RuntimeHostAsyncCancelToken{
 		state: &RuntimeHostAsyncCancelState{}
 	}
-	mut state := session.host_async_state
 	state.guard.lock()
 	id := state.next_id
 	state.next_id++
 	state.operations[id] = RuntimeHostAsyncRecord{
-		id: id
-		kind: options.kind
+		id:          id
+		kind:        options.kind
 		deadline_ms: if options.timeout_ms > 0 {
-			session.now_ms() + i64(options.timeout_ms)
+			now_ms + i64(options.timeout_ms)
 		} else {
 			i64(-1)
 		}
-		resolve: capability.resolve
-		reject: capability.reject
-		token: token
+		resolve:     capability.resolve
+		reject:      capability.reject
+		token:       token
 	}
 	state.guard.unlock()
-	cancel_fn := session.context.js_function(fn [mut session, id] (args []Value) Value {
+	port := RuntimeHostAsyncCompletionPort{ operation_id: id, state: state, token: token }
+	cancel_fn := ctx.js_function(fn [ctx, port] (args []Value) Value {
 		reason := if args.len > 0 && args[0].is_string() {
 			args[0].str()
 		} else {
 			'This operation was aborted'
 		}
-		return session.context.js_bool(session.cancel_host_async_operation(id, reason))
+		return ctx.js_bool(port.cancel(reason))
 	})
 	capability.promise.set('__vjsxCancel', cancel_fn)
 	cancel_fn.free()
-	if options.timeout_ms > 0 {
-		session.reschedule_host_async_wakeup('host-async-timeout')
-	}
-	port := RuntimeHostAsyncCompletionPort{
-		operation_id: id
-		state: state
-		token: token
-	}
 	return RuntimeHostAsyncOperation{
-		id: id
-		promise: capability.promise
+		id:         id
+		promise:    capability.promise
 		completion: port
-		cancel: token
+		cancel:     token
 	}
 }
 
@@ -288,8 +305,8 @@ pub fn (mut session RuntimeSession) cancel_host_async_operation(id u64, reason s
 	state.guard.unlock()
 	real_port := RuntimeHostAsyncCompletionPort{
 		operation_id: id
-		state: session.host_async_state
-		token: record.token
+		state:        session.host_async_state
+		token:        record.token
 	}
 	return real_port.cancel(reason)
 }
@@ -303,10 +320,10 @@ fn (mut session RuntimeSession) enqueue_due_host_async_timeouts() {
 			state.terminal[id] = true
 			record.token.mark_cancelled('host operation timed out')
 			state.queued << RuntimeHostAsyncQueuedEvent{
-				id: id
+				id:         id
 				completion: RuntimeHostAsyncCompletion{
-					outcome: .timed_out
-					text: 'host operation timed out'
+					outcome:    .timed_out
+					text:       'host operation timed out'
 					error_name: 'TimeoutError'
 				}
 			}
@@ -318,24 +335,30 @@ fn (mut session RuntimeSession) enqueue_due_host_async_timeouts() {
 // Settle queued host events. This must only be called by the session owner.
 // JS Values are constructed and Promise callbacks invoked exclusively here.
 fn (mut session RuntimeSession) settle_host_async_record(record RuntimeHostAsyncRecord, completion RuntimeHostAsyncCompletion) ! {
+	session.context.settle_context_host_async_record(record, completion) or {
+		session.record_runtime_error('host_async_${record.kind}', err.msg())
+		return err
+	}
+}
+
+fn (ctx &Context) settle_context_host_async_record(record RuntimeHostAsyncRecord, completion RuntimeHostAsyncCompletion) ! {
 	value := if completion.outcome == .resolve {
 		if completion.is_binary {
-			session.context.js_array_buffer(completion.bytes)
+			ctx.js_array_buffer(completion.bytes)
 		} else {
-			session.context.js_string(completion.text)
+			ctx.js_string(completion.text)
 		}
 	} else {
-		session.context.js_error(
+		ctx.js_error(
 			message: completion.text
-			name: if completion.error_name == '' { 'Error' } else { completion.error_name }
+			name:    if completion.error_name == '' { 'Error' } else { completion.error_name }
 		)
 	}
 	callback := if completion.outcome == .resolve { record.resolve } else { record.reject }
-	call_result := session.context.call(callback, value) or {
+	call_result := ctx.call(callback, value) or {
 		value.free()
 		record.resolve.free()
 		record.reject.free()
-		session.record_runtime_error('host_async_${record.kind}', err.msg())
 		return err
 	}
 	call_result.free()
@@ -349,7 +372,13 @@ pub fn (mut session RuntimeSession) drain_host_async_events() !int {
 		return 0
 	}
 	session.enqueue_due_host_async_timeouts()
-	mut state := session.host_async_state
+	settled := session.context.drain_context_host_async_events()!
+	session.reschedule_host_async_wakeup('host-async')
+	return settled
+}
+
+fn (ctx &Context) drain_context_host_async_events() !int {
+	mut state := ctx.host_cleanup_state.host_async
 	state.guard.lock()
 	events := state.queued.clone()
 	state.queued = []RuntimeHostAsyncQueuedEvent{}
@@ -364,16 +393,19 @@ pub fn (mut session RuntimeSession) drain_host_async_events() !int {
 		state.operations.delete(event.id)
 		state.terminal.delete(event.id)
 		state.guard.unlock()
-		session.settle_host_async_record(record, event.completion)!
+		ctx.settle_context_host_async_record(record, event.completion)!
 		settled++
 	}
-	session.reschedule_host_async_wakeup('host-async')
 	return settled
 }
 
 fn (mut session RuntimeSession) close_host_async_operations() {
 	session.enqueue_due_host_async_timeouts()
-	mut state := session.host_async_state
+	session.context.close_context_host_async_operations()
+}
+
+fn (ctx &Context) close_context_host_async_operations() {
+	mut state := ctx.host_cleanup_state.host_async
 	state.guard.lock()
 	if state.closed {
 		state.guard.unlock()
@@ -398,12 +430,12 @@ fn (mut session RuntimeSession) close_host_async_operations() {
 		completion := terminal_events[record.id] or {
 			record.token.mark_cancelled('runtime session closed')
 			RuntimeHostAsyncCompletion{
-				outcome: .closed
-				text: 'runtime session closed'
+				outcome:    .closed
+				text:       'runtime session closed'
 				error_name: 'SessionClosedError'
 			}
 		}
-		session.settle_host_async_record(record, completion) or {}
+		ctx.settle_context_host_async_record(record, completion) or {}
 	}
 }
 

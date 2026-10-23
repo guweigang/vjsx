@@ -482,6 +482,7 @@ pub fn (ctx &Context) runtime() Runtime {
 // Only use this when you are managing ownership manually. When using
 // `RuntimeSession`, call `session.close()` instead.
 pub fn (ctx &Context) free() {
+	ctx.close_context_host_async_operations()
 	ctx.run_host_cleanups()
 	C.js_std_free_handlers(ctx.rt.ref)
 	C.JS_FreeContext(ctx.ref)

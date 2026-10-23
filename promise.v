@@ -42,19 +42,19 @@ pub:
 // for long-lived host operations whose completion is delivered later on the
 // Context's owning thread.
 pub fn (ctx &Context) js_promise_capability() PromiseCapability {
-	resolving_funcs := [2]C.JSValue{}
+	resolving_funcs := [ctx.js_undefined().ref, ctx.js_undefined().ref]!
 	promise := ctx.c_val(C.JS_NewPromiseCapability(ctx.ref, &resolving_funcs[0]))
 	return PromiseCapability{
 		promise: promise
 		resolve: ctx.c_val(resolving_funcs[0])
-		reject: ctx.c_val(resolving_funcs[1])
+		reject:  ctx.c_val(resolving_funcs[1])
 	}
 }
 
 @[manualfree]
 fn resolve_or_reject(ctx &Context, code int, any AnyValue) Value {
-	resolving_funcs := [2]C.JSValue{}
-	mut result_funcs := [2]C.JSValue{}
+	resolving_funcs := [ctx.js_undefined().ref, ctx.js_undefined().ref]!
+	mut result_funcs := [ctx.js_undefined().ref, ctx.js_undefined().ref]!
 	result_funcs[code] = ctx.any_to_val(any).ref
 	promise := ctx.c_val(C.JS_NewPromiseCapability(ctx.ref, &resolving_funcs[0]))
 	C.JS_Call(ctx.ref, resolving_funcs[code], promise.ref, 1, &result_funcs[code])

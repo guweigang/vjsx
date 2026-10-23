@@ -210,6 +210,47 @@ Browser-profile applications should continue using `crypto.subtle`; the
 `node:crypto` module is installed only by the full Node-style compatibility
 profile. `node_compat_minimal()` and the `script` profile do not install it.
 
+## Native Fetch Transport
+
+Global `fetch()` uses V's native HTTP client on background workers by default.
+It no longer needs an external curl executable. The legacy Node `http.get()`
+and `https.get()` modules are separate compatibility APIs and remain synchronous.
+
+Workers receive only V-owned request data, a cancellation token, and a host-async
+completion port. They never touch QuickJS. Responses and rejections are delivered
+through the same completion queue as `RuntimeSession.start_host_async_operation()`.
+The owner drains that queue using a short compatibility timer, so existing
+`resolve_value()`, top-level await, and QuickJS timer-loop entrypoints keep working.
+Configured `async_ready_fn` callbacks still receive completion notifications;
+embedders may drive the queue through the managed session instead.
+
+`FetchGlobalsConfig` controls the native transport:
+
+- `max_concurrent_requests` defaults to 16 per installed fetch host. Excess
+  requests reject immediately; zero disables native admission. There is no
+  unbounded request queue.
+- `timeout_ms` defaults to 30,000 and bounds the JS operation using monotonic
+  time, including response buffering. Non-positive values select that default.
+- `read_timeout` and `write_timeout` bound underlying V transport operations.
+- Each native request makes one attempt. The legacy `max_retries` field is not
+  used to automatically replay requests, including POST requests.
+- `curl_proxy_fallback: true` explicitly selects the curl compatibility path
+  when available. An explicit `curl_path` also selects it. Multipart requests
+  always use the native transport. Native limits and `timeout_ms` do not apply
+  to the curl path, which retains its existing read/write-derived timeout.
+
+AbortSignal, native timeout, worker completion, and session close use the
+host-async first-terminal-event gate. Cancellation promptly ends JS waiting,
+but V's blocking HTTP API cannot immediately interrupt an in-flight socket or
+DNS lookup. A cancelled worker retains its admission slot until its underlying
+operation finishes; read/write timeouts still apply. The worker can safely
+outlive the session because it owns no JS values. Late results are discarded.
+This is asynchronous buffered HTTP, not incremental network-body streaming.
+
+See `tests/fetch_transport_validation_test.v` for real local-server coverage of
+parallel requests, timer progress, binary and multipart bodies, cancellation,
+timeouts, bounded admission, recovery, and close during in-flight I/O.
+
 ## Capability Discovery
 
 Use the CLI to check the selected runtime:
