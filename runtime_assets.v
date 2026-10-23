@@ -1,8 +1,6 @@
 module vjsx
 
-import compress.gzip
 import os
-import v.embed_file
 
 const runtime_asset_env_var = 'VJSX_ASSET_ROOT'
 const runtime_asset_dev_root = @VMODROOT
@@ -225,12 +223,6 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 	}
 }
 
-fn runtime_embedded_gzip_asset_source(asset &embed_file.EmbedFileData) !string {
-	bytes := asset.to_bytes()
-	decompressed := gzip.decompress(bytes)!
-	return decompressed.bytestr()
-}
-
 pub fn has_embedded_runtime_asset(rel_path string) bool {
 	trimmed := rel_path.trim_space()
 	if trimmed == '' {
@@ -297,19 +289,19 @@ fn (ctx &Context) runtime_module_source(rel_path string) !RuntimeModuleSource {
 	if override_path != '' {
 		return RuntimeModuleSource{
 			source: os.read_file(override_path)!
-			name: virtual_name
+			name:   virtual_name
 		}
 	}
 	source := runtime_embedded_asset_source(rel_path) or {
 		path := ctx.resolve_runtime_asset_path(rel_path)!
 		return RuntimeModuleSource{
 			source: os.read_file(path)!
-			name: virtual_name
+			name:   virtual_name
 		}
 	}
 	return RuntimeModuleSource{
 		source: source
-		name: virtual_name
+		name:   virtual_name
 	}
 }
 
@@ -380,10 +372,10 @@ pub fn (ctx &Context) resolve_runtime_asset_path(rel_path string) !string {
 @[manualfree]
 fn (ctx &Context) eval_runtime_source_custom_meta(source string, fname string, flag int, set_meta SetMeta) !Value {
 	return ctx.js_eval_core(
-		input: source.str
-		len: usize(source.len)
-		fname: fname.str
-		flag: flag
+		input:    source.str
+		len:      usize(source.len)
+		fname:    fname.str
+		flag:     flag
 		set_meta: set_meta
 	)!
 }
