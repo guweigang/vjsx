@@ -23,6 +23,9 @@ pub:
 	form_data   bool = true
 	fetch       bool = true
 	event       bool = true
+	websocket        bool = true
+	websocket_config vjsx.WebSocketConfig
+	policy           vjsx.HostPolicy = vjsx.host_policy_trusted()
 }
 
 // Full browser host preset.
@@ -45,6 +48,7 @@ pub fn browser_host_minimal() BrowserHostConfig {
 		form_data: false
 		fetch: false
 		event: false
+		websocket:   false
 	}
 }
 
@@ -73,6 +77,9 @@ fn normalize_browser_host_config(config BrowserHostConfig) BrowserHostConfig {
 		form_data: form_data
 		fetch: config.fetch
 		event: config.event
+		websocket:        config.websocket
+		websocket_config: config.websocket_config
+		policy:           config.policy
 	}
 }
 
@@ -202,6 +209,9 @@ pub fn inject_browser_host(ctx &Context, config BrowserHostConfig) {
 	}
 	if normalized.event {
 		eval_runtime_module_file(ctx, 'web/js/event.js')
+	}
+	if normalized.websocket {
+		ctx.try_install_websocket_globals_policy(normalized.websocket_config, normalized.policy) or { panic(err) }
 	}
 	glob.delete('__bootstrap')
 	glob.free()

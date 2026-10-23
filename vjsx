@@ -40,8 +40,8 @@ cd "$repo_root"
 if [ -n "$v_flags" ]; then
 	# shellcheck disable=SC2086
 	exec env VJS_QUICKJS_PATH="$quickjs_path" VJS_REPO_ROOT="$repo_root" VJS_CLI_CWD="$cli_cwd" VCACHE="${VCACHE:-/tmp/vcache}" \
-		"$vexe" $v_flags -d build_quickjs run ./cli_runner_bin "$@"
+		"$vexe" $v_flags -path "$repo_root/..|@vlib|@vmodules" -d build_quickjs run ./cli_runner_bin "$@"
 fi
 
 exec env VJS_QUICKJS_PATH="$quickjs_path" VJS_REPO_ROOT="$repo_root" VJS_CLI_CWD="$cli_cwd" VCACHE="${VCACHE:-/tmp/vcache}" \
-	"$vexe" -d build_quickjs run ./cli_runner_bin "$@"
+	"$vexe" -path "$repo_root/..|@vlib|@vmodules" -d build_quickjs run ./cli_runner_bin "$@"

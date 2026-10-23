@@ -93,7 +93,18 @@ struct RuntimeHostAsyncQueuedEvent {
 	completion RuntimeHostAsyncCompletion
 }
 
+// A stream worker can retain this notification-only state without retaining
+// the Promise/Value records in RuntimeHostAsyncState.
+struct RuntimeHostStreamReadyState {
+	guard &sync.Mutex = sync.new_mutex()
+mut:
+	closed     bool
+	session_id string
+	ready_fn   RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
+}
+
 struct RuntimeHostAsyncState {
+	stream_ready &RuntimeHostStreamReadyState = &RuntimeHostStreamReadyState{}
 	guard &sync.Mutex = sync.new_mutex()
 mut:
 	next_id    u64 = 1
@@ -369,6 +380,10 @@ fn (mut session RuntimeSession) close_host_async_operations() {
 		return
 	}
 	state.closed = true
+	mut stream_ready := state.stream_ready
+	stream_ready.guard.lock()
+	stream_ready.closed = true
+	stream_ready.guard.unlock()
 	records := state.operations.values()
 	queued := state.queued.clone()
 	state.operations = map[u64]RuntimeHostAsyncRecord{}
@@ -414,6 +429,11 @@ fn (mut session RuntimeSession) configure_host_async_ready(session_id string, re
 	state.session_id = session_id
 	state.ready_fn = ready_fn
 	state.guard.unlock()
+	mut stream_ready := state.stream_ready
+	stream_ready.guard.lock()
+	stream_ready.session_id = session_id
+	stream_ready.ready_fn = ready_fn
+	stream_ready.guard.unlock()
 }
 
 fn (session RuntimeSession) next_host_async_deadline() ?i64 {

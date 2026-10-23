@@ -65,6 +65,7 @@ pub fn new_runtime_session(config ContextConfig) RuntimeSession {
 	return RuntimeSession{
 		runtime: runtime
 		context: context
+		host_async_state: context.host_cleanup_state.host_async
 		bridge: RuntimeSessionBridge{}
 	}
 }

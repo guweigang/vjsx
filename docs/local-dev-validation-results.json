@@ -1,0 +1,365 @@
+{
+  "date": "2026-10-23",
+  "worktree": "/Users/guweigang/.codex/worktrees/65eb/vjsx",
+  "compiler": {
+    "path": "/Users/guweigang/local/v/v",
+    "branch": "local-dev",
+    "head": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef",
+    "version": "V 0.5.2 e21021d",
+    "binary_sha256": "af6e3006da64425f61c6baba5e9aa930ba56020f07570fec40db25f026d72d8e"
+  },
+  "build": {
+    "debug_cli": "/Users/guweigang/.codex/worktrees/65eb/vjsx/.build/local-dev/vjsx",
+    "production_cli": "/Users/guweigang/.codex/worktrees/65eb/vjsx/.build/local-dev/vjsx-release-final",
+    "production_cli_sha256": "8b9e084e127b9daf5e8a55d12c93e4fdc537d307d5a0a67defac330aa2f7099a",
+    "quickjs_mode": "locally rebuilt static archive, clang -O1; V link_quickjs",
+    "quickjs_source_readonly": "/Users/guweigang/Source/vjsx/.deps/quickjs",
+    "production_openssl": "statically linked OpenSSL 3.5.9",
+    "debug_openssl": "OpenSSL 4.0.3",
+    "dynamic_dependencies": [
+      ".build/local-dev/vjsx-release-final:",
+      "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+      "\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)"
+    ],
+    "debug_cli_sha256": "a88e6eccc5e3680abe92ff91772c124b18a4dbecca421d14ac66da163c32f76c"
+  },
+  "fixes": [
+    {
+      "file": "type.v",
+      "change": "Use JS_NewInt64 for a native V int so 64-bit values are not truncated to 32 bits.",
+      "failure_before": {
+        "input": "-4294967296",
+        "expected": "-4294967296",
+        "actual": "0"
+      },
+      "regression": "tests/local_dev_integer_compat_test.v"
+    },
+    {
+      "file": "web/web.v",
+      "change": "Remove WebSocket installation from delete_bootstrap; normalized is local to inject_browser_host.",
+      "failure_before": "web_intl_encoding_test.v did not compile: undefined ident normalized",
+      "regression": "tests/websocket_contract_test.v:test_browser_profile_websocket_survives_bootstrap_cleanup"
+    }
+  ],
+  "targeted_integer_tests": {
+    "status": "passed",
+    "files": [
+      "tests/local_dev_integer_compat_test.v",
+      "tests/type_test.v",
+      "tests/value_test.v"
+    ]
+  },
+  "targeted_browser_tests": {
+    "status": "passed",
+    "files": [
+      "tests/websocket_contract_test.v",
+      "tests/web_intl_encoding_test.v"
+    ]
+  },
+  "source_test_manifest": [
+    "artifact_abi_internal_test.v",
+    "cli_runner_bin/npm_install_parser_test.v",
+    "host_websocket_internal_test.v",
+    "runtimejs/module_graph_test.v",
+    "runtimejs/shared_test.v",
+    "tests/app_executable_test.v",
+    "tests/bundle_test.v",
+    "tests/bytecode_test.v",
+    "tests/cli_commands_test.v",
+    "tests/cli_host_test.v",
+    "tests/cli_javascript_test.v",
+    "tests/cli_runner_test.v",
+    "tests/cli_sqlite_test.v",
+    "tests/cli_typescript_test.v",
+    "tests/conformance_test.v",
+    "tests/eval_test.v",
+    "tests/fetch_abort_test.v",
+    "tests/host_fetch_deadline_test.v",
+    "tests/host_fetch_runtime_test.v",
+    "tests/host_http_runtime_test.v",
+    "tests/host_mysql_runtime_test.v",
+    "tests/local_dev_integer_compat_test.v",
+    "tests/main_test.v",
+    "tests/node_intl_encoding_test.v",
+    "tests/package_compatibility_test.v",
+    "tests/process_env_live_test.v",
+    "tests/project_bundle_test.v",
+    "tests/promise_test.v",
+    "tests/run_test.v",
+    "tests/runtime_assets_test.v",
+    "tests/runtime_compat_differential_test.v",
+    "tests/runtime_hosting_test.v",
+    "tests/runtime_interrupt_test.v",
+    "tests/runtime_policy_test.v",
+    "tests/runtime_session_sqlite_cleanup_test.v",
+    "tests/runtime_session_test.v",
+    "tests/ts_runtime_bootstrap_lifecycle_test.v",
+    "tests/type_test.v",
+    "tests/typeof_test.v",
+    "tests/value_test.v",
+    "tests/web_intl_encoding_test.v",
+    "tests/websocket_contract_test.v"
+  ],
+  "network": {
+    "results": [
+      {
+        "case": "ws fragmented text/binary",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "subprotocol",
+        "stdout": "PASS protocol"
+      },
+      {
+        "case": "reject",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "disconnect",
+        "stdout": "PASS disconnect"
+      },
+      {
+        "case": "invalid",
+        "stdout": "PASS invalid"
+      },
+      {
+        "case": "flood",
+        "stdout": "PASS flood"
+      },
+      {
+        "case": "cancel",
+        "stdout": "PASS cancel"
+      },
+      {
+        "case": "connecting-cancel",
+        "stdout": "PASS connecting-cancel"
+      },
+      {
+        "case": "wss trusted CA",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "wss untrusted rejected",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "wss hostname rejected",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "reconnect 0",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 1",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 2",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 3",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 4",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 5",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 6",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 7",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 8",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 9",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 10",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 11",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "same-session ws lifecycle and queue bounds",
+        "stdout": "PASS 128 same-session cycles, bounded queues, shutdown and fd recovery"
+      },
+      {
+        "case": "same-session wss lifecycle and explicit CA",
+        "stdout": "PASS 128 same-session cycles, bounded queues, shutdown and fd recovery"
+      },
+      {
+        "case": "ws real stalled handshake timeout",
+        "stdout": "PASS real TLS/upgrade timeout"
+      },
+      {
+        "case": "wss real stalled handshake timeout",
+        "stdout": "PASS real TLS/upgrade timeout"
+      }
+    ],
+    "wire_pongs": 201
+  },
+  "satori": {
+    "runs": [
+      {
+        "case": "Node same browser graph",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      },
+      {
+        "case": "CLI compile bundle",
+        "stdout": ""
+      },
+      {
+        "case": "CLI packaged .vjsx",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      },
+      {
+        "case": "CLI build native app",
+        "stdout": ""
+      },
+      {
+        "case": "native executable",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      }
+    ],
+    "fixture_log": [
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK",
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK",
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK"
+    ]
+  },
+  "unchanged_limits": [
+    "macOS arm64 only; Linux and Windows not executed.",
+    "The older .v-version pin was not changed or executed.",
+    "Synchronous OS DNS lookup cannot be interrupted mid-call.",
+    "No real Feishu credentials; only local protocol fixtures."
+  ],
+  "full_suite": {
+    "status": "passed",
+    "source_test_files": 42,
+    "runner_total": 44,
+    "runner_passed": 44,
+    "runner_failed": 0,
+    "passed_files": [
+      ".build/local-dev/vtmp/vfmt_01M5MGDBH797W0N3ZKCXA90EBW_local_dev_integer_compat_test.v",
+      ".build/local-dev/vtmp/vfmt_01M5MGEQ9PCRN543YE394HF7PY_local_dev_integer_compat_test.v",
+      "artifact_abi_internal_test.v",
+      "cli_runner_bin/npm_install_parser_test.v",
+      "host_websocket_internal_test.v",
+      "runtimejs/shared_test.v",
+      "runtimejs/module_graph_test.v",
+      "tests/app_executable_test.v",
+      "tests/bundle_test.v",
+      "tests/bytecode_test.v",
+      "tests/cli_commands_test.v",
+      "tests/cli_host_test.v",
+      "tests/cli_javascript_test.v",
+      "tests/cli_runner_test.v",
+      "tests/cli_typescript_test.v",
+      "tests/cli_sqlite_test.v",
+      "tests/eval_test.v",
+      "tests/conformance_test.v",
+      "tests/fetch_abort_test.v",
+      "tests/host_fetch_deadline_test.v",
+      "tests/host_fetch_runtime_test.v",
+      "tests/host_mysql_runtime_test.v",
+      "tests/host_http_runtime_test.v",
+      "tests/local_dev_integer_compat_test.v",
+      "tests/main_test.v",
+      "tests/node_intl_encoding_test.v",
+      "tests/package_compatibility_test.v",
+      "tests/process_env_live_test.v",
+      "tests/promise_test.v",
+      "tests/project_bundle_test.v",
+      "tests/run_test.v",
+      "tests/runtime_assets_test.v",
+      "tests/runtime_compat_differential_test.v",
+      "tests/runtime_hosting_test.v",
+      "tests/runtime_interrupt_test.v",
+      "tests/runtime_policy_test.v",
+      "tests/runtime_session_sqlite_cleanup_test.v",
+      "tests/runtime_session_test.v",
+      "tests/type_test.v",
+      "tests/typeof_test.v",
+      "tests/value_test.v",
+      "tests/web_intl_encoding_test.v",
+      "tests/ts_runtime_bootstrap_lifecycle_test.v",
+      "tests/websocket_contract_test.v"
+    ],
+    "extra_generated_files": [
+      ".build/local-dev/vtmp/vfmt_01M5MGDBH797W0N3ZKCXA90EBW_local_dev_integer_compat_test.v",
+      ".build/local-dev/vtmp/vfmt_01M5MGEQ9PCRN543YE394HF7PY_local_dev_integer_compat_test.v"
+    ],
+    "summary": "Summary for all V _test.v files: 44 passed, 44 total. Elapsed time: 404550 ms, on 2 parallel jobs. Comptime: 566914 ms. Runtime: 238769 ms.",
+    "log": "/Users/guweigang/.codex/worktrees/65eb/vjsx/.build/local-dev/logs/tests-final.log",
+    "command": "VJOBS=2 /Users/guweigang/local/v/v -no-retry-compilation -path \"<worktree>|<worktree>/.build/local-dev/vmodules|@vlib\" -cc clang -d link_quickjs -d use_openssl test ."
+  },
+  "readonly_verification": {
+    "v_checkout_unchanged": true,
+    "primary_checkout_snapshot_unchanged": false,
+    "primary_checkout_writes_by_this_task": false,
+    "note": "Other changes appeared in the primary checkout during this run; they were observed read-only and left untouched. Build/test module paths are isolated to this worktree.",
+    "before": {
+      "v": {
+        "head": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef",
+        "status": "",
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "binary_sha256": "af6e3006da64425f61c6baba5e9aa930ba56020f07570fec40db25f026d72d8e"
+      },
+      "main": {
+        "head": "06faf1dd2f7308210861132352d1d7d9184fde6b",
+        "status": " M host_fetch.v\n M promise.v\n M runtime_assets.v\n M runtimejs/ts_api.v\n?? runtime_asset_gzip.c.v\n?? runtime_asset_gzip.h\n?? runtime_asset_gzip_test.v\n",
+        "diff_sha256": "4e236db6463ec09d00c9d97c7edffc9e6813b518a718513966611a043e5b966a"
+      }
+    },
+    "after": {
+      "v": {
+        "head": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef",
+        "status": "",
+        "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "binary_sha256": "af6e3006da64425f61c6baba5e9aa930ba56020f07570fec40db25f026d72d8e"
+      },
+      "main": {
+        "head": "06faf1dd2f7308210861132352d1d7d9184fde6b",
+        "status": " M host_fetch.v\n M promise.v\n M runtime_assets.v\n M runtimejs/ts_api.v\n M tests/runtime_session_test.v\n?? runtime_asset_gzip.c.v\n?? runtime_asset_gzip.h\n?? runtime_asset_gzip_test.v\n?? tests/fetch_transport_validation_test.v\n",
+        "diff_sha256": "5db70b215ae4d21159e03751d8412296a41eacdbb24affa7ae8b674e3a299277"
+      }
+    }
+  },
+  "source_sha256": {
+    "type.v": "97abc2c62f8de30275545ef9b73ed163438d252731dee1cec76f3891fdc7361d",
+    "web/web.v": "8aa44b5bbcf372a1f3238df7faf5854d7ea60e2554807c1beb568940d31793db",
+    "tests/local_dev_integer_compat_test.v": "2ca0ffa0c89ad7d77b69f2d8b83c8c9da8db5bca1be6d0889c98bd2b41cd2740",
+    "tests/websocket_contract_test.v": "516e30ad47d7da91abdf1cb7d68c6b83de25771696e90247c923ee016d1b0ee6"
+  },
+  "status": "passed"
+}

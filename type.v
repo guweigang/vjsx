@@ -185,9 +185,11 @@ pub fn (ctx &Context) js_bool(data bool) Value {
 	return ctx.c_val(C.JS_NewBool(ctx.ref, if data { 1 } else { 0 }))
 }
 
-// Create JS Int.
+// Create a JS Number from a native V int. V int can be 64-bit, so the
+// 32-bit QuickJS constructor would truncate values before creating the Number.
+// JavaScript Number precision still applies; use js_big_int for exact i64 values.
 pub fn (ctx &Context) js_int(data int) Value {
-	return ctx.c_val(C.JS_NewInt32(ctx.ref, data))
+	return ctx.c_val(C.JS_NewInt64(ctx.ref, i64(data)))
 }
 
 // Create JS u32.

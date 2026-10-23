@@ -11,6 +11,7 @@ pub:
 	url      bool = true
 	encoding bool = true
 	intl     bool = true
+	navigator bool = true
 }
 
 // Full runtime globals preset.
@@ -48,6 +49,9 @@ pub fn (ctx &Context) try_install_runtime_globals(config RuntimeGlobalsConfig) !
 	}
 	if config.encoding {
 		ctx.try_install_encoding_globals()!
+	}
+	if config.navigator {
+		ctx.try_install_navigator_globals()!
 	}
 	if config.intl {
 		ctx.try_install_intl_globals()!

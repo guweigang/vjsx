@@ -1,0 +1,17 @@
+{
+  "name": "ads-satori-vjsx-validation",
+  "private": true,
+  "dependencies": {
+    "@satorijs/adapter-lark": "3.12.6",
+    "@satorijs/core": "4.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.4"
+  },
+  "overrides": {
+    "cordis": "3.18.1",
+    "@cordisjs/core": "3.18.1",
+    "@cordisjs/plugin-http": "0.6.3",
+    "protobufjs": "8.8.1"
+  }
+}

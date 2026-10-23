@@ -83,7 +83,7 @@ fn build_runner(runner string, sqlite bool) ! {
 	v_cache := os.join_path(runner_cache_dir, 'vcache')
 	os.mkdir_all(v_cache) or { panic(err) }
 	sqlite_flag := if sqlite { ' -d vjsx_sqlite' } else { '' }
-	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} ${quickjs_build_flags()} -d use_openssl${sqlite_flag}${compiler_flag()} -o ${shell_quote(partial)} ./cli_runner_bin'
+	command := 'cd ${shell_quote(@VMODROOT)} && VJS_QUICKJS_PATH=${shell_quote(quickjs_source_path)} VCACHE=${shell_quote(v_cache)} ${shell_quote(@VEXE)} ${quickjs_build_flags()} -path ${shell_quote(os.dir(@VMODROOT) + '|@vlib|@vmodules')} -d use_openssl${sqlite_flag}${compiler_flag()} -o ${shell_quote(partial)} ./cli_runner_bin'
 	result := os.execute(command)
 	if result.exit_code != 0 {
 		os.rm(partial) or {}

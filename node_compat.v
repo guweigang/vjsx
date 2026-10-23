@@ -14,6 +14,8 @@ pub:
 	http          bool = true
 	https         bool = true
 	fetch         bool = true
+	websocket        bool = true
+	websocket_config WebSocketConfig
 	child_process bool = true
 	process       bool = true
 	sqlite        bool = true
@@ -76,6 +78,9 @@ pub fn (ctx &Context) try_install_node_compat(config NodeCompatConfig) ! {
 	}
 	if config.zlib {
 		ctx.install_zlib_module()
+	}
+	if config.websocket && config.runtime.encoding && config.runtime.event && config.runtime.url {
+		ctx.try_install_websocket_globals(config.websocket_config)!
 	}
 	if config.fetch && config.policy.allow_network {
 		ctx.try_install_fetch_globals_policy(config.fetch_config, config.policy)!

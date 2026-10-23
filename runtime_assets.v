@@ -30,6 +30,7 @@ const runtime_asset_perf_js = $embed_file('web/js/perf.js')
 const runtime_asset_polyfill_stream_js = $embed_file('web/js/polyfill/stream.js')
 const runtime_asset_polyfill_url_pattern_js = $embed_file('web/js/polyfill/url_pattern.js')
 const runtime_asset_stream_js = $embed_file('web/js/stream.js')
+const runtime_asset_websocket_js = $embed_file('web/js/websocket.js')
 const runtime_asset_timer_js = $embed_file('web/js/timer.js')
 const runtime_asset_typed_array_js = $embed_file('web/js/typed_array.js')
 const runtime_asset_url_js = $embed_file('web/js/url.js')
@@ -201,6 +202,7 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'web/js/polyfill/stream.js' { runtime_asset_polyfill_stream_js.to_string() }
 		'web/js/polyfill/url_pattern.js' { runtime_asset_polyfill_url_pattern_js.to_string() }
 		'web/js/stream.js' { runtime_asset_stream_js.to_string() }
+		'web/js/websocket.js' { runtime_asset_websocket_js.to_string() }
 		'web/js/timer.js' { runtime_asset_timer_js.to_string() }
 		'web/js/typed_array.js' { runtime_asset_typed_array_js.to_string() }
 		'web/js/url.js' { runtime_asset_url_js.to_string() }
@@ -427,6 +429,7 @@ pub fn embedded_runtime_asset_paths() []string {
 		'web/js/polyfill/stream.js',
 		'web/js/polyfill/url_pattern.js',
 		'web/js/stream.js',
+		'web/js/websocket.js',
 		'web/js/timer.js',
 		'web/js/typed_array.js',
 		'web/js/url.js',

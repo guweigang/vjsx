@@ -1,0 +1,183 @@
+{
+  "date": "2026-10-23",
+  "base_commit": "06faf1dd2f7308210861132352d1d7d9184fde6b",
+  "worktree": "/Users/guweigang/.codex/worktrees/65eb/vjsx",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "compiler": "V 0.5.2 e21021d",
+  "network": {
+    "results": [
+      {
+        "case": "ws fragmented text/binary",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "subprotocol",
+        "stdout": "PASS protocol"
+      },
+      {
+        "case": "reject",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "disconnect",
+        "stdout": "PASS disconnect"
+      },
+      {
+        "case": "invalid",
+        "stdout": "PASS invalid"
+      },
+      {
+        "case": "flood",
+        "stdout": "PASS flood"
+      },
+      {
+        "case": "cancel",
+        "stdout": "PASS cancel"
+      },
+      {
+        "case": "connecting-cancel",
+        "stdout": "PASS connecting-cancel"
+      },
+      {
+        "case": "wss trusted CA",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "wss untrusted rejected",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "wss hostname rejected",
+        "stdout": "PASS reject"
+      },
+      {
+        "case": "reconnect 0",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 1",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 2",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 3",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 4",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 5",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 6",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 7",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 8",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 9",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 10",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "reconnect 11",
+        "stdout": "PASS echo"
+      },
+      {
+        "case": "same-session ws lifecycle and queue bounds",
+        "stdout": "PASS 128 same-session cycles, bounded queues, shutdown and fd recovery"
+      },
+      {
+        "case": "same-session wss lifecycle and explicit CA",
+        "stdout": "PASS 128 same-session cycles, bounded queues, shutdown and fd recovery"
+      },
+      {
+        "case": "ws real stalled handshake timeout",
+        "stdout": "PASS real TLS/upgrade timeout"
+      },
+      {
+        "case": "wss real stalled handshake timeout",
+        "stdout": "PASS real TLS/upgrade timeout"
+      }
+    ],
+    "wire_pongs": 201
+  },
+  "satori": {
+    "runs": [
+      {
+        "case": "Node same browser graph",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      },
+      {
+        "case": "CLI compile bundle",
+        "stdout": ""
+      },
+      {
+        "case": "CLI packaged .vjsx",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      },
+      {
+        "case": "CLI build native app",
+        "stdout": ""
+      },
+      {
+        "case": "native executable",
+        "stdout": "SATORI_CONSTRUCT lark function\n[I] adapter connect to server: ws://127.0.0.1:18881/gateway\n[I] lark received event: { header: { event_type: 'application.bot.menu_v6' }, event: { event_key: 'command:fixture-command', operator: { operator_id: { open_id: 'fixture-user' } } } }\nSATORI_EVENT fixture-command\nSATORI_STOP"
+      }
+    ],
+    "fixture_log": [
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK",
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK",
+      "FIXTURE_HTTP /callback/ws/endpoint",
+      "FIXTURE_WIRE_PONG fixture-ping",
+      "FIXTURE_HTTP /open-apis/auth/v3/tenant_access_token/internal",
+      "FIXTURE_HTTP /open-apis/bot/v3/info",
+      "FIXTURE_PROTOBUF_PING",
+      "FIXTURE_PROTOBUF_ACK"
+    ]
+  },
+  "regressions": {
+    "final_passed": [
+      "host_websocket_internal_test.v",
+      "tests/websocket_contract_test.v",
+      "tests/runtime_session_test.v"
+    ],
+    "additional_passed": [
+      "tests/runtime_interrupt_test.v",
+      "tests/runtime_policy_test.v",
+      "tests/runtime_assets_test.v",
+      "tests/main_test.v"
+    ]
+  },
+  "remaining_boundaries": [
+    "Synchronous OS DNS resolver cannot be interrupted during resolution.",
+    "Pinned .v-version compiler not executed; installed V 0.5.2 e21021d used.",
+    "Linux/Windows untested.",
+    "Real Feishu acceptance requires credentials/customer environment."
+  ]
+}

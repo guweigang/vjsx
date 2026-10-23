@@ -11,6 +11,7 @@ struct C.JSModuleDef {}
 // Context structure based on `JSContext` in qjs
 // and implemented into `ref`.
 struct HostCleanupState {
+	host_async &RuntimeHostAsyncState = new_runtime_host_async_state()
 mut:
 	cleanups          []HostCleanup
 	installed_modules map[string]bool
@@ -27,6 +28,7 @@ pub:
 	ref                &C.JSContext
 	rt                 Runtime
 	host_cleanup_state &HostCleanupState
+	websocket_host        &WebSocketHost         = &WebSocketHost{}
 mut:
 	asset_root      string
 	runtime_profile string
@@ -418,6 +420,7 @@ pub fn (ctx &Context) dup_context() &Context {
 		ref: ref
 		rt: ctx.rt
 		host_cleanup_state: ctx.host_cleanup_state
+		websocket_host:        ctx.websocket_host
 		asset_root: ctx.asset_root
 		runtime_profile: ctx.runtime_profile
 	}

@@ -133,3 +133,10 @@ pub fn (ctx &Context) try_install_intl_globals() ! {
 pub fn (ctx &Context) install_intl_globals() {
 	ctx.try_install_intl_globals() or { panic(err) }
 }
+
+// A truthful runtime identity for libraries selecting browser presentation code.
+// Only userAgent is provided; hardware, locale and browser features are not fabricated.
+pub fn (ctx &Context) try_install_navigator_globals() ! {
+	value := ctx.eval('if (typeof globalThis.navigator === "undefined") Object.defineProperty(globalThis, "navigator", {value: Object.freeze({userAgent: "vjsx/${version}"}), configurable: true});')!
+	value.free()
+}
