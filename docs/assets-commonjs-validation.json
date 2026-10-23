@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-23",
+  "base_main_commit": "d76f52c1fde38497f79416cccfd77804bc57b277",
+  "worktree": "/Users/guweigang/.codex/worktrees/65eb/vjsx",
+  "compiler": {
+    "path": "/Users/guweigang/local/v/v",
+    "branch": "local-dev",
+    "commit": "e21021d10433ad9fa7fd45fd63e2dee79ec612ef"
+  },
+  "review": {
+    "embedded_assets": "Use V-shipped miniz for bounded raw DEFLATE into an owned buffer; retain gzip header, CRC, length and exact input-consumption checks. Embedded assets only; filesystem overrides still use the existing source loader.",
+    "coverage": [
+      "9,112,572-byte embedded TypeScript asset matches reference gzip output",
+      "empty/binary payloads, corrupt headers/payloads/CRC/length, trailing and concatenated members, oversized declared lengths",
+      "owned results and 16 concurrent decoding threads",
+      "public CommonJS API called from an external module; CJS/ESM/plain source detection",
+      "detection neither resolves missing imports nor executes source",
+      "missing detector and unreadable file errors",
+      "64 repeated TypeScript context lifecycles plus idempotent install and embedded-asset fallback",
+      "CLI JavaScript/TypeScript, project bundling, source removal and native application builds"
+    ],
+    "api_contract": "Install the TypeScript runtime before calling runtimejs.is_commonjs_module; it delegates to the existing runtime source detector."
+  },
+  "tests": {
+    "passed": 11,
+    "total": 11,
+    "VJOBS": 2,
+    "elapsed_ms": 313750,
+    "files": [
+      "runtime_asset_gzip_test.v",
+      "runtimejs/module_graph_test.v",
+      "runtimejs/shared_test.v",
+      "tests/app_executable_test.v",
+      "tests/cli_commands_test.v",
+      "tests/cli_javascript_test.v",
+      "tests/cli_typescript_test.v",
+      "tests/commonjs_api_test.v",
+      "tests/runtime_assets_test.v",
+      "tests/project_bundle_test.v",
+      "tests/ts_runtime_bootstrap_lifecycle_test.v"
+    ],
+    "log": ".build/assets-commonjs/related-tests.log"
+  },
+  "benchmark": {
+    "description": "Five calls per path in an unoptimized local build after warming the embedded source. One local measurement, not a production performance guarantee.",
+    "results": {
+      "iterations": 5,
+      "decoded_bytes": 9112572,
+      "reference_total_ns": 1877328458,
+      "native_total_ns": 740647000,
+      "native_speedup_for_this_unoptimized_run": 2.53
+    },
+    "log": ".build/assets-commonjs/benchmark.json"
+  },
+  "source_sha256": {
+    "runtime_assets.v": "9f990a2d5509c6274072192ddbf7ac0eae56f8cf6a35b1e605c3e9e01d5809e6",
+    "runtime_asset_gzip.c.v": "e12699b05e2c9045022204d097f309ff56a5754af8380e4e6758cd5e91c4618c",
+    "runtime_asset_gzip.h": "9e1c0479bde00b6f51fe9872adec8851d9049e792304c1ac8cb6faba83902169",
+    "runtime_asset_gzip_test.v": "5ed3058d2437af2f08daaa3187f129609e8656f0805c5eae838c8b6c23cb071d",
+    "runtimejs/ts_api.v": "aec60732619bd76aade4268777bff18f0344937be91169b9f993a10f2de4f370",
+    "tests/commonjs_api_test.v": "40553d95348307a6cfb133dd79cf8ee61ba34594959e99bfad6f38f21da51383"
+  },
+  "planned_commits": [
+    "perf: decode embedded runtime assets with native inflater",
+    "feat: expose CommonJS source detection API"
+  ],
+  "remote_push_requested": false
+}
