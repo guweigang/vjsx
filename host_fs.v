@@ -1094,13 +1094,21 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	default_obj.set('rename', rename_fn)
 	default_obj.set('readJson', read_json_fn)
 	default_obj.set('writeJson', write_json_fn)
+	descriptors := ctx.fs_descriptor_exports(roots)
+	for name in ['openSync', 'writeSync', 'fsyncSync', 'closeSync', 'renameSync'] {
+		value := descriptors.get(name)
+		fs.export(name, value)
+		default_obj.set(name, value)
+		value.free()
+	}
+	descriptors.free()
 	fs.export_default(default_obj)
 	fs.create()
 	mut node_fs := ctx.js_module('node:fs')
 	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat', 'chmod',
 		'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync',
 		'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream',
-		'rename', 'readJson', 'writeJson'] {
+		'rename', 'readJson', 'writeJson', 'openSync', 'writeSync', 'fsyncSync', 'closeSync', 'renameSync'] {
 		node_fs.export(name, fs.get(name))
 	}
 	node_fs.export_default(default_obj)

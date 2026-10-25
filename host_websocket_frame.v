@@ -1,5 +1,5 @@
 // Adapted from V net.websocket frame_decoder.v, MIT (V contributors),
-// source revision e21021d10433ad9fa7fd45fd63e2dee79ec612ef. Client framing only.
+// source revision e21021d10433ad9fa7fd45fd63e2dee79ec612ef. Client/server framing.
 module vjsx
 
 import encoding.utf8
@@ -27,12 +27,13 @@ pub:
 	reason     string
 }
 
-// WebSocketFrameDecoder incrementally decodes unmasked server frames without socket
-// I/O. Keep incomplete input and append more bytes before retrying decode.
+// WebSocketFrameDecoder incrementally decodes server frames, or masked client
+// frames when expect_mask is enabled, without socket I/O. Keep incomplete input and append more bytes before retrying decode.
 // One instance belongs to one connection and must not be shared concurrently.
 struct WebSocketFrameDecoder {
 pub:
 	max_message_bytes int = 16384
+	expect_mask       bool
 mut:
 	fragment        []u8
 	fragment_opcode u8
@@ -106,7 +107,14 @@ fn (mut decoder WebSocketFrameDecoder) decode(mut input []u8) WebSocketDecodedFr
 	first, second := input[0], input[1]
 	opcode := first & 15
 	fin := first & 128 != 0
-	if first & 112 != 0 || second & 128 != 0 || opcode !in [u8(0), 1, 2, 8, 9, 10]
+	if first & 112 != 0 || (second & 128 != 0) != decoder.expect_mask || opcode !in [
+		u8(0),
+		1,
+		2,
+		8,
+		9,
+		10,
+	]
 		|| (opcode >= 8 && (!fin || second & 127 > 125)) {
 		return decoder.fail(1002, 'Invalid frame header')
 	}
@@ -135,11 +143,14 @@ fn (mut decoder WebSocketFrameDecoder) decode(mut input []u8) WebSocketDecodedFr
 			return decoder.fail(1009, 'Message too large')
 		}
 	}
-	header := 2 + extra
+	header := 2 + extra + if decoder.expect_mask { 4 } else { 0 }
 	if input.len < header || length > u64(input.len - header) { return WebSocketDecodedFrame{} }
 	end := header + int(length)
 	// Both slices are contained in the complete, bounded input frame.
-	mut payload := unsafe { input[header..end] }
+	mut payload := input[header..end].clone()
+	if decoder.expect_mask {
+		for i in 0 .. payload.len { payload[i] ^= input[header - 4 + i % 4] }
+	}
 	if opcode >= 8 {
 		if opcode == 8 {
 			if payload.len == 1 { return decoder.fail(1002, 'Invalid close payload') }

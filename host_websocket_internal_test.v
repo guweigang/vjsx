@@ -38,3 +38,16 @@ fn test_websocket_queue_reserves_terminal_and_fences_late_events() {
 	worker.stop()
 	assert !worker.emit(WebSocketEvent{ kind: 'close' })
 }
+
+fn test_server_websocket_masked_frame_contract() {
+	mut decoder := WebSocketFrameDecoder{ expect_mask: true, max_message_bytes: 32 }
+	mut partial := [u8(0x81), 0x82, 1, 2, 3, 4, u8(`o`) ^ 1]
+	assert decoder.decode(mut partial).kind == .need_more
+	partial << u8(`k`) ^ 2
+	result := decoder.decode(mut partial)
+	assert result.kind == .message
+	assert result.payload.bytestr() == 'ok'
+	assert result.consumed == 8
+	mut unmasked := [u8(0x81), 1, `x`]
+	assert decoder.decode(mut unmasked).kind == .failure
+}

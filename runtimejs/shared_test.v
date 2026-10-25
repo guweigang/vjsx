@@ -16,3 +16,10 @@ fn test_mirrored_runtime_path_uses_relative_mirror_base() {
 	assert !normalized.contains('/_drive_c/')
 	assert !normalized.contains('/Users/a/Documents/AI Data Studio/')
 }
+
+fn test_http_module_aliases_are_native_builtins() {
+	for name in ['http', 'node:http', 'https', 'node:https'] {
+		assert is_node_builtin_module_specifier(name)
+	}
+	assert !is_node_builtin_module_specifier('node:http/not-supported')
+}

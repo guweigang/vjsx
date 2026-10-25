@@ -12,6 +12,8 @@ if [ -z "$quickjs_path" ]; then
   quickjs_path=$(VJS_QUICKJS_WORK_ROOT="${VJS_QUICKJS_WORK_ROOT:-$repo_root}" "$repo_root/scripts/ensure-quickjs.sh")
 fi
 
+bash "$repo_root/scripts/patch-quickjs.sh" "$quickjs_path"
+
 mkdir -p "$(dirname "$out")"
 
 find_libcrypto_a() {

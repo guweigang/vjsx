@@ -39,9 +39,9 @@ fn (mut handler HostHttpHandler) handle(req http.Request) http.Response {
 
 fn test_host_http_runtime_download_and_pipe() {
 	mut server := &http.Server{
-		accept_timeout: 200 * time.millisecond
-		addr: '127.0.0.1:18197'
-		handler: HostHttpHandler{}
+		accept_timeout:       200 * time.millisecond
+		addr:                 '127.0.0.1:18197'
+		handler:              HostHttpHandler{}
 		show_startup_message: false
 	}
 	server_thread := spawn server.listen_and_serve()
@@ -52,13 +52,17 @@ fn test_host_http_runtime_download_and_pipe() {
 	}
 
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
-		fs_roots: [@VMODROOT]
+		fs_roots:     [@VMODROOT]
 		process_args: ['host_http_runtime.mjs', 'http://127.0.0.1:18197']
 	})
 	defer {
 		session.close()
 	}
 	ctx := session.context()
+	assert ctx.has_runtime_module('node:http')
+	assert ctx.has_runtime_module('node:https')
+	assert vjsx.runtime_profile_snapshot(ctx).has_capability('node:http')
+	assert vjsx.runtime_profile_snapshot(ctx).has_capability('node:https')
 	value := ctx.run_file('./tests/host_http_runtime.mjs', vjsx.type_module) or { panic(err) }
 	value.free()
 
@@ -72,4 +76,24 @@ fn test_host_http_runtime_download_and_pipe() {
 	target_path := target.to_string()
 	assert os.read_bytes(target_path) or { panic(err) } == host_http_payload()
 	os.rmdir_all(os.dir(target_path)) or {}
+}
+
+fn test_host_http_aliases_respect_network_policy() {
+	mut session := vjsx.new_runtime_session()
+	defer { session.close() }
+	ctx := session.context()
+	ctx.install_http_module_policy(vjsx.host_policy_safe())
+	value := ctx.js_eval('
+		import http from "http";
+		import nodeHttp, { get } from "node:http";
+		globalThis.__denied = false;
+		if (http !== nodeHttp || http.get !== get) throw new Error("alias mismatch");
+		get("http://127.0.0.1:1").on("error", error => {
+			globalThis.__denied = error.message.includes("network");
+		});
+	', 'http-policy.mjs', vjsx.type_module) or { panic(err) }
+	value.free()
+	denied := ctx.js_global('__denied')
+	defer { denied.free() }
+	assert denied.to_bool()
 }

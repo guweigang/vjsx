@@ -1,9 +1,14 @@
 import fs from "fs";
 import http from "http";
 import https from "https";
+import nodeHttp, { get as nodeGet } from "node:http";
+import nodeHttps, { get as nodeSecureGet } from "node:https";
 import os from "os";
 import path from "path";
 
+if (http !== nodeHttp || https !== nodeHttps || http.get !== nodeGet || https.get !== nodeSecureGet) {
+  throw new Error("HTTP module aliases must share their native exports");
+}
 const base = process.argv[1];
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vjsx-http-"));
 const target = path.join(tmpDir, "payload.bin");
@@ -18,7 +23,7 @@ await new Promise((resolve, reject) => {
       file.close();
       resolve();
     });
-    http.get(`${base}${res.headers.location}`, (finalRes) => {
+    nodeGet(`${base}${res.headers.location}`, (finalRes) => {
       lines.push(String(finalRes.statusCode));
       finalRes.pipe(file);
     }).on("error", reject);

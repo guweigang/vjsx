@@ -53,6 +53,9 @@ if ([string]::IsNullOrWhiteSpace($QuickjsPath)) {
   }
 }
 
+& bash (Join-Path $RepoRoot "scripts\patch-quickjs.sh") $QuickjsPath
+if ($LASTEXITCODE -ne 0) { throw "failed to patch QuickJS poll dispatch" }
+
 $outDir = Split-Path -Parent $Out
 if (![string]::IsNullOrWhiteSpace($outDir)) {
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null

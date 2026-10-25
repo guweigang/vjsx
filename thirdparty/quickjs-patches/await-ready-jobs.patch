@@ -1,0 +1,11 @@
+--- a/quickjs-libc.c
++++ b/quickjs-libc.c
+@@ -4915,7 +4915,7 @@
+             }
+             if (err == 0)
+                 js_std_promise_rejection_check(ctx);
+-            if (ts->can_js_os_poll)
++            if (err == 0 && ts->can_js_os_poll)
+                 js_os_poll(ctx);
+         } else {
+             /* not a promise */

@@ -133,3 +133,21 @@ fn test_module_graph_cycle_is_finite_and_cache_key_is_repeatable() {
 	assert first.cache_key == second.cache_key
 	assert first.nodes.all(it.imports.len == 1)
 }
+
+fn test_module_graph_resolves_http_aliases_as_native_builtins() {
+	root := os.join_path(os.temp_dir(), 'vjsx_http_alias_graph_${os.getpid()}')
+	os.mkdir_all(root) or { panic(err) }
+	defer { os.rmdir_all(root) or {} }
+	entry := os.join_path(root, 'main.mts')
+	os.write_file(entry, 'import http from "http"; import { get } from "node:http"; import https from "https"; import { get as secureGet } from "node:https"; export const clients = [http, get, https, secureGet];') or { panic(err) }
+	mut session := vjsx.new_runtime_session()
+	defer { session.close() }
+	graph := resolve_module_graph(session.context(), entry, 'node') or { panic(err) }
+	assert graph.nodes.len == 1
+	assert graph.nodes[0].imports.len == 4
+	for edge in graph.nodes[0].imports {
+		assert edge.builtin
+		assert edge.phase == 'builtin'
+		assert edge.resolved == edge.specifier
+	}
+}

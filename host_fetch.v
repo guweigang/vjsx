@@ -13,6 +13,9 @@ pub:
 	max_retries         int = 5
 	curl_proxy_fallback bool
 	curl_path           string
+	// Explicit transport config; environment lookup additionally needs allow_env_read.
+	proxy_url      string
+	proxy_from_env bool
 	// Bounds outstanding native workers, including cancelled requests still
 	// finishing in the underlying blocking V transport. Zero disables admission.
 	max_concurrent_requests int = 16
@@ -31,6 +34,7 @@ struct FetchCoreRequest {
 	max_retries         int
 	curl_proxy_fallback bool
 	allow_redirect      bool
+	proxy_url           string
 }
 
 struct FetchCoreResult {
@@ -192,6 +196,12 @@ fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
 			return FetchCoreResult{ message: err.msg() }
 		}
 	}
+	proxy := http.new_http_proxy(request.proxy_url) or {
+		if request.proxy_url != '' {
+			return FetchCoreResult{ message: 'invalid HTTP proxy configuration' }
+		}
+		unsafe { nil }
+	}
 	// FormData is already serialized by the JS body layer. Send it through the
 	// same transport so timeout, redirect and single-attempt rules apply too.
 	resp := http.fetch(
@@ -205,6 +215,7 @@ fn fetch_core_run_native(request FetchCoreRequest) FetchCoreResult {
 		// Never replay a possibly side-effecting request automatically.
 		max_retries:    1
 		allow_redirect: request.allow_redirect
+		proxy:          proxy
 	) or {
 		return FetchCoreResult{
 			message: err.msg()
@@ -691,6 +702,13 @@ fn fetch_core_with_config(state &FetchCoreConfigState, this Value, args []Value)
 	} else {
 		body = raw_body.str()
 	}
+	proxy_url := fetch_proxy_for(fetch_config, policy, url) or {
+		js_error := ctx.js_error(message: err.msg(), name: 'SecurityError')
+		call_result := ctx.call(reject, js_error) or { ctx.js_undefined() }
+		call_result.free()
+		js_error.free()
+		return noop_cancel
+	}
 	request := FetchCoreRequest{
 		url:                 url
 		method:              request_method
@@ -703,6 +721,7 @@ fn fetch_core_with_config(state &FetchCoreConfigState, this Value, args []Value)
 		max_retries:         fetch_config.max_retries
 		curl_proxy_fallback: fetch_config.curl_proxy_fallback
 		allow_redirect:      policy.network_hosts.len == 0
+		proxy_url:           proxy_url
 	}
 	if (request.curl_proxy_fallback || fetch_config.curl_path != '') && request.boundary == '' {
 		curl_path := if fetch_config.curl_path != '' {

@@ -177,10 +177,10 @@ fn parse_env_options() ?CliOptions {
 		fail('browser runtime requires module mode\nuse --module with --runtime browser')
 	}
 	return CliOptions{
-		command: 'run'
-		script_file: file
-		script_args: read_env_script_args(args_file)
-		as_module: validate_script_type(file, as_module)
+		command:         'run'
+		script_file:     file
+		script_args:     read_env_script_args(args_file)
+		as_module:       validate_script_type(file, as_module)
 		runtime_profile: runtime_profile
 	}
 }
@@ -275,11 +275,11 @@ fn parse_args(args []string) CliOptions {
 			fail('bundle output must use the .vjsx extension')
 		}
 		return CliOptions{
-			command: command
-			script_file: input_file
-			output_file: output_file
-			entry_only: entry_only
-			bundle: bundle
+			command:         command
+			script_file:     input_file
+			output_file:     output_file
+			entry_only:      entry_only
+			bundle:          bundle
 			runtime_profile: runtime_profile
 		}
 	}
@@ -332,9 +332,9 @@ fn parse_args(args []string) CliOptions {
 			fail('missing build output path; use -o <app>')
 		}
 		return CliOptions{
-			command: command
-			script_file: input_file
-			output_file: output_file
+			command:         command
+			script_file:     input_file
+			output_file:     output_file
 			runtime_profile: runtime_profile
 		}
 	}
@@ -436,14 +436,14 @@ fn parse_args(args []string) CliOptions {
 			i++
 		}
 		return CliOptions{
-			command: command
-			install_specs: specs
+			command:          command
+			install_specs:    specs
 			install_registry: registry
-			install_dev: install_dev
-			list_depth: list_depth
-			list_omit: list_omit
-			list_json: list_json
-			runtime_profile: 'node'
+			install_dev:      install_dev
+			list_depth:       list_depth
+			list_omit:        list_omit
+			list_json:        list_json
+			runtime_profile:  'node'
 		}
 	}
 
@@ -477,7 +477,7 @@ fn parse_args(args []string) CliOptions {
 			fail('unknown runtime profile: ${runtime_profile}\nexpected one of: node, script, browser')
 		}
 		return CliOptions{
-			command: command
+			command:         command
 			runtime_profile: runtime_profile
 		}
 	}
@@ -531,7 +531,7 @@ fn parse_args(args []string) CliOptions {
 	}
 	if command == 'check-runtime' {
 		return CliOptions{
-			command: command
+			command:         command
 			runtime_profile: runtime_profile
 		}
 	}
@@ -544,12 +544,12 @@ fn parse_args(args []string) CliOptions {
 	}
 	as_module = validate_script_type(script_file, as_module)
 	return CliOptions{
-		command: command
-		script_file: script_file
-		script_args: script_args
-		as_module: as_module
+		command:         command
+		script_file:     script_file
+		script_args:     script_args
+		as_module:       as_module
 		runtime_profile: runtime_profile
-		json_output: json_output
+		json_output:     json_output
 	}
 }
 
@@ -572,13 +572,14 @@ fn install_runtime(ctx &vjsx.Context, runtime_profile string, script_dir string,
 	match runtime_profile {
 		'node' {
 			ctx.install_node_runtime(
-				fs_roots: [script_dir, script_parent, prev_dir]
+				fetch_config: vjsx.FetchGlobalsConfig{ proxy_from_env: true }
+				fs_roots:     [script_dir, script_parent, prev_dir]
 				process_args: process_args
 			)
 		}
 		'script' {
 			ctx.install_script_runtime(
-				fs_roots: [script_dir, script_parent, prev_dir]
+				fs_roots:     [script_dir, script_parent, prev_dir]
 				process_args: process_args
 			)
 		}
@@ -755,7 +756,7 @@ fn diagnostic_from_message(message string) CliDiagnostic {
 	prefix := '[module-resolution] importer='
 	if !message.starts_with(prefix) {
 		return CliDiagnostic{
-			phase: 'execution'
+			phase:  'execution'
 			reason: message
 		}
 	}
@@ -770,10 +771,10 @@ fn diagnostic_from_message(message string) CliDiagnostic {
 		return CliDiagnostic{ phase: 'resolution', reason: message }
 	}
 	return CliDiagnostic{
-		importer: message[prefix.len..spec_pos]
+		importer:  message[prefix.len..spec_pos]
 		specifier: message[spec_pos + spec_marker.len..phase_pos]
-		phase: message[phase_pos + phase_marker.len..reason_pos]
-		reason: message[reason_pos + reason_marker.len..]
+		phase:     message[phase_pos + phase_marker.len..reason_pos]
+		reason:    message[reason_pos + reason_marker.len..]
 	}
 }
 
@@ -791,19 +792,19 @@ fn check_script_json(opts CliOptions) string {
 	])
 	runtimejs.check_runtime_module_graph(ctx, entry, opts.runtime_profile) or {
 		result := CheckJsonResult{
-			ok: false
-			command: 'check'
-			entry: entry
-			runtime: opts.runtime_profile
+			ok:         false
+			command:    'check'
+			entry:      entry
+			runtime:    opts.runtime_profile
 			diagnostic: diagnostic_from_message(err.msg())
 		}
 		println(json2.encode(result, escape_unicode: true))
 		exit(1)
 	}
 	return json2.encode(CheckJsonResult{
-		ok: true
+		ok:      true
 		command: 'check'
-		entry: entry
+		entry:   entry
 		runtime: opts.runtime_profile
 	},
 		escape_unicode: true
@@ -862,14 +863,14 @@ fn compile_script(opts CliOptions) !string {
 		}
 		app_name := os.file_name(output_path).all_before_last('.')
 		bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
-			app_name: app_name
+			app_name:        app_name
 			runtime_profile: opts.runtime_profile
 		)!
 		os.write_file_array(output_path, bundle)!
 	} else {
 		source := os.read_file(input_path)!
 		bytecode := vjsx.compile_module(source,
-			filename: input_path
+			filename:        input_path
 			runtime_profile: opts.runtime_profile
 		)!
 		os.write_file_array(output_path, bytecode)!
@@ -894,7 +895,7 @@ fn build_app(opts CliOptions) !string {
 	}
 	app_name := os.file_name(output_path).all_before_last('.')
 	bundle := runtimejs.compile_project_bundle(compiler.context(), input_path,
-		app_name: app_name
+		app_name:        app_name
 		runtime_profile: opts.runtime_profile
 	)!
 	vjsx.pack_app_executable(base_executable_path, bundle, output_path)!
@@ -935,10 +936,10 @@ fn main() {
 			inspect_module_graph(opts) or {
 				if opts.json_output {
 					println(json2.encode(CheckJsonResult{
-						ok: false
-						command: 'inspect'
-						entry: os.real_path(opts.script_file)
-						runtime: opts.runtime_profile
+						ok:         false
+						command:    'inspect'
+						entry:      os.real_path(opts.script_file)
+						runtime:    opts.runtime_profile
 						diagnostic: diagnostic_from_message(err.msg())
 					},
 						escape_unicode: true

@@ -17,7 +17,7 @@ fn http_request_object(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		if args[0].str() != 'error' {
@@ -48,7 +48,7 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 		if args.len == 0 || !args[0].is_object() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		dest := args[0]
@@ -57,7 +57,7 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 			path_value.free()
 			return ctx.js_throw(ctx.js_error(
 				message: 'unsupported write stream destination'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		target := path_value.str()
@@ -84,7 +84,6 @@ fn http_response_object(ctx &Context, response http.Response, body_bytes []u8) V
 }
 
 fn install_http_like_module(ctx &Context, name string, policy HostPolicy) {
-	mut http_mod := ctx.js_module(name)
 	get_fn := ctx.js_function(fn [ctx, policy] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'url is required', name: 'TypeError'))
@@ -96,8 +95,8 @@ fn install_http_like_module(ctx &Context, name string, policy HostPolicy) {
 			return request
 		}
 		response := http.fetch(
-			method: .get
-			url: url
+			method:         .get
+			url:            url
 			allow_redirect: false
 		) or {
 			request.set('_vjsxPendingError', ctx.js_error(message: err.msg()))
@@ -115,11 +114,29 @@ fn install_http_like_module(ctx &Context, name string, policy HostPolicy) {
 		}
 		return request
 	})
-	http_mod.export('get', get_fn)
+	server_exports := if name == 'http' {
+		ctx.http_server_exports(policy) or { panic(err) }
+	} else {
+		ctx.js_undefined()
+	}
+	defer { server_exports.free() }
+	// Both specifiers expose the same native implementation and default object.
 	default_obj := ctx.js_object()
 	default_obj.set('get', get_fn)
-	http_mod.export_default(default_obj)
-	http_mod.create()
+	for module_name in [name, 'node:' + name] {
+		mut http_mod := ctx.js_module(module_name)
+		http_mod.export('get', get_fn)
+		if name == 'http' {
+			for key in ['createServer', 'Server', 'IncomingMessage', 'ServerResponse', 'STATUS_CODES'] {
+				value := server_exports.get(key)
+				http_mod.export(key, value)
+				default_obj.set(key, value)
+				value.free()
+			}
+		}
+		http_mod.export_default(default_obj)
+		http_mod.create()
+	}
 	default_obj.free()
 	get_fn.free()
 }

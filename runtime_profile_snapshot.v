@@ -108,8 +108,8 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'node:fs/promises' { snapshot.has_node_fs_promises }
 		'fs' { snapshot.has_fs_module }
 		'path' { snapshot.has_path_module }
-		'http' { snapshot.has_http_module }
-		'https' { snapshot.has_https_module }
+		'http', 'node:http' { snapshot.has_http_module }
+		'https', 'node:https' { snapshot.has_https_module }
 		'os' { snapshot.has_os_module }
 		'child_process' { snapshot.has_child_process_module }
 		'sqlite' { snapshot.has_sqlite_module }

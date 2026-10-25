@@ -56,6 +56,8 @@ if ! is_quickjs_ng_checkout "$quickjs_dir"; then
   exit 1
 fi
 
+bash "$repo_root/scripts/patch-quickjs.sh" "$quickjs_dir"
+
 echo "$quickjs_dir"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
