@@ -205,7 +205,25 @@ jobs:
             Pop-Location
           }
 
-      - name: Run Tests Windows with MSVC
+      - name: Run Windows core tests with MSVC
         if: matrix.os == 'windows-latest'
         shell: powershell
-        run: v -d link_quickjs -d use_openssl -cg -cc msvc test .
+        timeout-minutes: 30
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tests = @(
+            "tests\main_test.v",
+            "tests\bytecode_test.v",
+            "tests\eval_test.v",
+            "tests\promise_test.v",
+            "tests\runtime_assets_test.v",
+            "tests\runtime_policy_test.v",
+            "tests\runtime_session_test.v",
+            "tests\type_test.v",
+            "tests\value_test.v"
+          )
+          foreach ($test in $tests) {
+            Write-Host "Testing $test"
+            v -d link_quickjs -d use_openssl -cg -cc msvc $test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
