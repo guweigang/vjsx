@@ -22,6 +22,7 @@ fn test_embedded_runtime_asset_registry_covers_web_js_assets() {
 	mut disk_assets := collect_runtime_js_assets(@VMODROOT, root)
 	disk_assets << [
 		'thirdparty/typescript/lib/typescript.js',
+		'thirdparty/typescript/lib/vjs_commonjs_detect.js',
 		'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
 		'thirdparty/typescript/lib/vjs_ts_commonjs.js',
 		'thirdparty/typescript/lib/vjs_ts_resolver.js',
