@@ -147,6 +147,21 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")
 
+          # The pinned V revision has unquoted, hard-coded "Program Files"
+          # OpenSSL flags. MSVC treats the remaining path components as input
+          # files, so rely on the vcpkg INCLUDE/LIB paths configured above.
+          $vRoot = Split-Path -Parent (Get-Command v -CommandType Application).Source
+          $opensslFlagFiles = @(
+            (Join-Path $vRoot "vlib\net\openssl\openssl.c.v"),
+            (Join-Path $vRoot "vlib\crypto\ecdsa\ecdsa_d_use_openssl.c.v")
+          )
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          foreach ($flagFile in $opensslFlagFiles) {
+            $content = Get-Content -LiteralPath $flagFile
+            $content = $content | Where-Object { $_ -notmatch '^#flag windows -[IL]C:/Program Files/OpenSSL' }
+            [System.IO.File]::WriteAllLines($flagFile, [string[]]$content, $utf8NoBom)
+          }
+
       - name: Setup Unix OpenSSL SDK
         if: matrix.shell == 'bash' && startsWith(matrix.os, 'ubuntu')
         shell: bash
@@ -164,7 +179,7 @@ jobs:
         if: matrix.shell == 'powershell'
         shell: powershell
         run: |
-          .\scripts\build-vjsx.ps1 -Out "$PWD\dist\${{ matrix.binary }}"
+          .\scripts\build-vjsx.ps1 -Out "$PWD\dist\${{ matrix.binary }}" -VFlags "-new-compiler"
 
       - name: Stage Windows runtime DLLs
         if: matrix.shell == 'powershell'
