@@ -14,15 +14,15 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 		os.rm(outside) or {}
 	}
 	policy := vjsx.HostPolicy{
-		allow_fs_read: true
+		allow_fs_read:  true
 		allow_fs_write: true
-		fs_read_roots: [root]
+		fs_read_roots:  [root]
 		fs_write_roots: [root]
 	}
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fs_roots: [root]
-		fetch: false
-		policy: policy
+		fetch:    false
+		policy:   policy
 	})
 	defer { session.close() }
 	ctx := session.context()

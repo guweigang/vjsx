@@ -25,7 +25,7 @@ mut:
 // ```
 pub fn (ctx &Context) js_module(name string) Module {
 	return Module{
-		ctx: ctx
+		ctx:  ctx
 		name: name
 	}
 }

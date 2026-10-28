@@ -22,10 +22,10 @@ fn append_identity_source_map(generated string, source string, source_path strin
 		segments << if index == 0 { 'AAAA' } else { 'AACA' }
 	}
 	source_map := InlineSourceMap{
-		file: os.file_name(source_path)
-		sources: [source_path.replace('\\', '/')]
+		file:            os.file_name(source_path)
+		sources:         [source_path.replace('\\', '/')]
 		sources_content: [source]
-		mappings: ';'.repeat(prefix_lines) + segments.join(';')
+		mappings:        ';'.repeat(prefix_lines) + segments.join(';')
 	}
 	encoded := base64.encode_str(json2.encode(source_map, escape_unicode: true))
 	return generated + '\n//# sourceMappingURL=data:application/json;base64,${encoded}'
@@ -158,8 +158,8 @@ fn graph_node_rewrites(node ModuleGraphNode, root string, mirror_base string) []
 	mut rewrites := []ModuleRewrite{cap: node.imports.len}
 	for edge in node.imports {
 		rewrites << ModuleRewrite{
-			from: edge.specifier
-			to: if edge.builtin {
+			from:     edge.specifier
+			to:       if edge.builtin {
 				edge.specifier
 			} else if edge.kind == 'json' {
 				file_relative_specifier(mirrored_runtime_path_from(root, node.path, mirror_base), mirrored_runtime_path_from(root, edge.resolved, mirror_base) + '.mjs')

@@ -18,9 +18,9 @@ mut:
 // host context object/value.
 pub fn new_bound_script_module(path string, host_api HostValueBuilder, module_handle ScriptModule) BoundScriptModule {
 	return BoundScriptModule{
-		host_api: host_api
+		host_api:    host_api
 		script_path: path
-		module: module_handle
+		module:      module_handle
 	}
 }
 

@@ -6,9 +6,10 @@ fn test_fetch_deadline_returns_before_host_watchdog() {
 	sw := time.new_stopwatch()
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fetch_config: vjsx.FetchGlobalsConfig{
-			read_timeout: 1 * time.millisecond
+			read_timeout:  1 * time.millisecond
 			write_timeout: 1 * time.millisecond
-			max_retries: 0
+			max_retries:   0
+			timeout_ms:    100
 		}
 	})
 	defer {
@@ -54,11 +55,11 @@ fn test_fetch_uses_configured_curl() {
 	}
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		fetch_config: vjsx.FetchGlobalsConfig{
-			read_timeout: 1 * time.second
-			write_timeout: 1 * time.second
-			max_retries: 0
+			read_timeout:        1 * time.second
+			write_timeout:       1 * time.second
+			max_retries:         0
 			curl_proxy_fallback: true
-			curl_path: curl_path
+			curl_path:           curl_path
 		}
 	})
 	defer {

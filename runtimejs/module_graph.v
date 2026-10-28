@@ -103,21 +103,21 @@ fn collect_module_graph(ctx &vjsx.Context, source_path string, config_json strin
 	source := os.read_file(canonical)!
 	// Reserve the node before descending so cycles terminate.
 	nodes[canonical] = ModuleGraphNode{
-		path: canonical
-		kind: module_source_kind(canonical)
+		path:        canonical
+		kind:        module_source_kind(canonical)
 		source_hash: sha256.hexhash(source)
-		line_count: source.count('\n') + 1
+		line_count:  source.count('\n') + 1
 	}
 	mut edges := []ModuleResolution{}
 	for specifier in list_module_imports(ctx, canonical)! {
 		if is_node_builtin_module_specifier(specifier) {
 			edges << ModuleResolution{
-				importer: canonical
+				importer:  canonical
 				specifier: specifier
-				resolved: specifier
-				phase: 'builtin'
-				kind: 'builtin'
-				builtin: true
+				resolved:  specifier
+				phase:     'builtin'
+				kind:      'builtin'
+				builtin:   true
 			}
 			continue
 		}
@@ -130,21 +130,21 @@ fn collect_module_graph(ctx &vjsx.Context, source_path string, config_json strin
 			return module_resolution_error(canonical, specifier, phase, 'unsupported module type: ${os.file_ext(resolved)}')
 		}
 		edges << ModuleResolution{
-			importer: canonical
+			importer:  canonical
 			specifier: specifier
-			resolved: resolved
-			phase: phase
-			kind: kind
+			resolved:  resolved
+			phase:     phase
+			kind:      kind
 		}
 		if kind != 'json' {
 			collect_module_graph(ctx, resolved, config_json, mut nodes)!
 		} else if resolved !in nodes {
 			json_source := os.read_file(resolved)!
 			nodes[resolved] = ModuleGraphNode{
-				path: resolved
-				kind: 'json'
+				path:        resolved
+				kind:        'json'
 				source_hash: sha256.hexhash(json_source)
-				line_count: json_source.count('\n') + 1
+				line_count:  json_source.count('\n') + 1
 			}
 		}
 	}
@@ -152,15 +152,15 @@ fn collect_module_graph(ctx &vjsx.Context, source_path string, config_json strin
 		return a.specifier.compare(b.specifier)
 	})
 	nodes[canonical] = ModuleGraphNode{
-		path: canonical
-		kind: if is_commonjs_module(ctx, canonical) or { false } {
+		path:        canonical
+		kind:        if is_commonjs_module(ctx, canonical) or { false } {
 			'commonjs'
 		} else {
 			module_source_kind(canonical)
 		}
 		source_hash: sha256.hexhash(source)
-		line_count: source.count('\n') + 1
-		imports: edges
+		line_count:  source.count('\n') + 1
+		imports:     edges
 	}
 }
 
@@ -205,11 +205,11 @@ pub fn resolve_module_graph(ctx &vjsx.Context, entry_path string, runtime_profil
 		nodes << by_path[path]
 	}
 	mut graph := ModuleGraph{
-		entry: entry
+		entry:           entry
 		runtime_profile: runtime_profile
-		tsconfig_path: config_path
-		tsconfig_hash: if config_json == '' { '' } else { sha256.hexhash(config_json) }
-		nodes: nodes
+		tsconfig_path:   config_path
+		tsconfig_hash:   if config_json == '' { '' } else { sha256.hexhash(config_json) }
+		nodes:           nodes
 	}
 	graph = ModuleGraph{
 		...graph

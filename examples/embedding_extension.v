@@ -4,15 +4,15 @@ import vjsx
 
 fn demo_host_api() vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
-		name: 'app'
+		name:  'app'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name: 'name'
+			name:  'name'
 			value: vjsx.host_value('demo-host')
 		})
 	}, vjsx.HostObjectField{
-		name: 'logger'
+		name:  'logger'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name: 'prefix'
+			name:  'prefix'
 			value: vjsx.host_value('log')
 		})
 	})
@@ -22,15 +22,15 @@ fn demo_host_config() vjsx.HostApiConfig {
 	return vjsx.HostApiConfig{
 		globals: [
 			vjsx.HostGlobalBinding{
-				name: 'appName'
+				name:  'appName'
 				value: vjsx.host_value('demo-host')
 			},
 		]
 		modules: [
 			vjsx.HostModuleBinding{
-				name: 'host-tools'
+				name:    'host-tools'
 				install: vjsx.host_module_object(vjsx.HostObjectField{
-					name: 'version'
+					name:  'version'
 					value: vjsx.host_value('v1')
 				})
 			},

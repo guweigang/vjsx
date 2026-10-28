@@ -5,24 +5,24 @@ import vjsx { Context }
 @[params]
 pub struct BrowserHostConfig {
 pub:
-	asset_root  string
-	window      bool = true
-	dom         bool = true
-	atob        bool = true
-	btoa        bool = true
-	console     bool = true
-	navigator   bool = true
-	intl        bool = true
-	crypto      bool = true
-	encoding    bool = true
-	performance bool = true
-	timer       bool = true
-	url         bool = true
-	stream      bool = true
-	blob        bool = true
-	form_data   bool = true
-	fetch       bool = true
-	event       bool = true
+	asset_root       string
+	window           bool = true
+	dom              bool = true
+	atob             bool = true
+	btoa             bool = true
+	console          bool = true
+	navigator        bool = true
+	intl             bool = true
+	crypto           bool = true
+	encoding         bool = true
+	performance      bool = true
+	timer            bool = true
+	url              bool = true
+	stream           bool = true
+	blob             bool = true
+	form_data        bool = true
+	fetch            bool = true
+	event            bool = true
 	websocket        bool = true
 	websocket_config vjsx.WebSocketConfig
 	policy           vjsx.HostPolicy = vjsx.host_policy_trusted()
@@ -37,17 +37,17 @@ pub fn browser_host_full() BrowserHostConfig {
 // Keeps the common browser-like globals but skips heavier Web APIs.
 pub fn browser_host_minimal() BrowserHostConfig {
 	return BrowserHostConfig{
-		dom: false
-		navigator: false
-		intl: false
-		crypto: false
-		encoding: false
+		dom:         false
+		navigator:   false
+		intl:        false
+		crypto:      false
+		encoding:    false
 		performance: false
-		stream: false
-		blob: false
-		form_data: false
-		fetch: false
-		event: false
+		stream:      false
+		blob:        false
+		form_data:   false
+		fetch:       false
+		event:       false
 		websocket:   false
 	}
 }
@@ -59,24 +59,24 @@ fn normalize_browser_host_config(config BrowserHostConfig) BrowserHostConfig {
 	blob := config.blob || config.fetch
 	form_data := config.form_data || config.fetch
 	return BrowserHostConfig{
-		asset_root: config.asset_root
-		window: config.window
-		dom: config.dom
-		atob: config.atob
-		btoa: config.btoa
-		console: config.console
-		navigator: config.navigator
-		intl: config.intl
-		crypto: config.crypto
-		encoding: encoding
-		performance: config.performance
-		timer: config.timer
-		url: url
-		stream: stream
-		blob: blob
-		form_data: form_data
-		fetch: config.fetch
-		event: config.event
+		asset_root:       config.asset_root
+		window:           config.window
+		dom:              config.dom
+		atob:             config.atob
+		btoa:             config.btoa
+		console:          config.console
+		navigator:        config.navigator
+		intl:             config.intl
+		crypto:           config.crypto
+		encoding:         encoding
+		performance:      config.performance
+		timer:            config.timer
+		url:              url
+		stream:           stream
+		blob:             blob
+		form_data:        form_data
+		fetch:            config.fetch
+		event:            config.event
 		websocket:        config.websocket
 		websocket_config: config.websocket_config
 		policy:           config.policy

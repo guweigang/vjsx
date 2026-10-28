@@ -181,11 +181,11 @@ fn parse_bytecode_artifact(data []u8) !BytecodeArtifact {
 		return error('invalid vjsx bytecode: checksum mismatch')
 	}
 	return BytecodeArtifact{
-		profile: profile
-		qjs_abi: qjs_abi
+		profile:     profile
+		qjs_abi:     qjs_abi
 		runtime_abi: runtime_abi
-		filename: filename
-		payload: payload
+		filename:    filename
+		payload:     payload
 	}
 }
 
@@ -308,9 +308,9 @@ pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
 		return error('invalid CommonJS bytecode: module.exports is undefined')
 	}
 	return ScriptModule{
-		ctx: unsafe { ctx }
+		ctx:     unsafe { ctx }
 		exports: exports
-		state: &ScriptModuleState{}
+		state:   &ScriptModuleState{}
 	}
 }
 

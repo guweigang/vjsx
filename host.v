@@ -39,15 +39,15 @@ pub fn host_policy_safe() HostPolicy {
 // behavior. Only use it for code that is trusted as much as the embedder.
 pub fn host_policy_trusted() HostPolicy {
 	return HostPolicy{
-		allow_env_read: true
-		allow_env_write: true
-		allow_subprocess: true
-		allow_shell: true
-		allow_fs_read: true
-		allow_fs_write: true
-		allow_network: true
+		allow_env_read:      true
+		allow_env_write:     true
+		allow_subprocess:    true
+		allow_shell:         true
+		allow_fs_read:       true
+		allow_fs_write:      true
+		allow_network:       true
 		allow_process_chdir: true
-		allow_process_exit: true
+		allow_process_exit:  true
 	}
 }
 
@@ -110,9 +110,9 @@ pub:
 	process_args  []string
 	asset_root    string
 	fetch_config  FetchGlobalsConfig = FetchGlobalsConfig{}
-	policy        HostPolicy = host_policy_trusted()
-	log_fn        HostLogFn = default_host_log
-	error_fn      HostLogFn = default_host_error
+	policy        HostPolicy         = host_policy_trusted()
+	log_fn        HostLogFn          = default_host_log
+	error_fn      HostLogFn          = default_host_error
 }
 
 fn default_host_log(line string) {

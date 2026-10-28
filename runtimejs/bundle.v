@@ -72,13 +72,13 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	match options.runtime_profile {
 		'node' {
 			ctx.try_install_node_runtime(
-				fs_roots: fs_roots
+				fs_roots:     fs_roots
 				process_args: [entry]
 			)!
 		}
 		'script' {
 			ctx.try_install_script_runtime(
-				fs_roots: fs_roots
+				fs_roots:     fs_roots
 				process_args: [entry]
 			)!
 		}
@@ -110,7 +110,7 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 	for path in files {
 		name := bundle_module_name(app_name, temp_root, path)!
 		modules << vjsx.BundleSourceModule{
-			name: name
+			name:   name
 			source: os.read_file(path)!
 		}
 		if os.real_path(path) == os.real_path(emitted_entry) {
@@ -121,10 +121,10 @@ pub fn compile_project_bundle(ctx &vjsx.Context, entry_path string, options Comp
 		return error('emitted bundle entry was not found in module graph: ${emitted_entry}')
 	}
 	return ctx.compile_bundle(modules,
-		app_name: app_name
-		entry: canonical_entry
+		app_name:        app_name
+		entry:           canonical_entry
 		runtime_profile: options.runtime_profile
-		strip_source: options.strip_source
-		strip_debug: options.strip_debug
+		strip_source:    options.strip_source
+		strip_debug:     options.strip_debug
 	)
 }

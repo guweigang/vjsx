@@ -43,9 +43,9 @@ pub:
 @[params]
 pub struct RuntimeSessionScheduler {
 pub:
-	schedule_wakeup      RuntimeSessionWakeFn = runtime_session_default_wake
+	schedule_wakeup      RuntimeSessionWakeFn       = runtime_session_default_wake
 	cancel_wakeup        RuntimeSessionCancelWakeFn = runtime_session_default_cancel_wake
-	schedule_async_ready RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
+	schedule_async_ready RuntimeHostAsyncReadyFn    = runtime_host_async_default_ready
 }
 
 // RuntimeSessionEventLoopConfig defines the host/runtime boundary for event
@@ -58,10 +58,10 @@ pub:
 @[params]
 pub struct RuntimeSessionEventLoopConfig {
 pub:
-	now_fn               RuntimeSessionNowFn = runtime_session_default_now
-	wake_fn              RuntimeSessionWakeFn = runtime_session_default_wake
+	now_fn               RuntimeSessionNowFn        = runtime_session_default_now
+	wake_fn              RuntimeSessionWakeFn       = runtime_session_default_wake
 	cancel_wake_fn       RuntimeSessionCancelWakeFn = runtime_session_default_cancel_wake
-	async_ready_fn       RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
+	async_ready_fn       RuntimeHostAsyncReadyFn    = runtime_host_async_default_ready
 	runtime_owned_timers bool
 	session_id           string
 }
@@ -116,9 +116,9 @@ pub:
 
 fn new_runtime_session_event_loop_state() &RuntimeSessionEventLoopState {
 	return &RuntimeSessionEventLoopState{
-		config: RuntimeSessionEventLoopConfig{}
+		config:             RuntimeSessionEventLoopConfig{}
 		timer_wakeup_hints: map[string]i64{}
-		owned_timers: map[u64]RuntimeOwnedTimer{}
+		owned_timers:       map[u64]RuntimeOwnedTimer{}
 	}
 }
 
@@ -157,12 +157,12 @@ pub fn (mut session RuntimeSession) set_scheduler(scheduler RuntimeSessionSchedu
 	}
 	current := session.event_loop_state.config
 	session.configure_event_loop(RuntimeSessionEventLoopConfig{
-		now_fn: current.now_fn
-		wake_fn: scheduler.schedule_wakeup
-		cancel_wake_fn: scheduler.cancel_wakeup
-		async_ready_fn: scheduler.schedule_async_ready
+		now_fn:               current.now_fn
+		wake_fn:              scheduler.schedule_wakeup
+		cancel_wake_fn:       scheduler.cancel_wakeup
+		async_ready_fn:       scheduler.schedule_async_ready
 		runtime_owned_timers: current.runtime_owned_timers
-		session_id: current.session_id
+		session_id:           current.session_id
 	})
 }
 
@@ -226,7 +226,7 @@ pub fn (mut session RuntimeSession) request_wakeup_at(wake_at_ms i64, reason str
 		session_id: state.config.session_id
 		wake_at_ms: wake_at_ms
 		generation: state.wakeup_generation
-		reason: reason
+		reason:     reason
 	})
 }
 
@@ -380,11 +380,11 @@ fn (mut session RuntimeSession) create_runtime_timer(callback Value, delay_ms in
 	id := state.next_timer_id
 	state.next_timer_id++
 	state.owned_timers[id] = RuntimeOwnedTimer{
-		id: id
-		due_at_ms: session.now_ms() + i64(normalized_delay)
+		id:          id
+		due_at_ms:   session.now_ms() + i64(normalized_delay)
 		interval_ms: normalized_delay
-		repeating: repeating
-		callback: callback.dup_value()
+		repeating:   repeating
+		callback:    callback.dup_value()
 	}
 	session.reschedule_timer_wakeup('runtime-timer')
 	return id
@@ -513,66 +513,66 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 		session.memory_usage()
 	}
 	return RuntimeSessionDebugSnapshot{
-		session_id: state.config.session_id
-		closed: session.closed || state.closed
-		runtime_owned_timers: state.config.runtime_owned_timers
-		has_ready_task: has_ready
-		has_pending_wakeup: has_pending
+		session_id:                       state.config.session_id
+		closed:                           session.closed || state.closed
+		runtime_owned_timers:             state.config.runtime_owned_timers
+		has_ready_task:                   has_ready
+		has_pending_wakeup:               has_pending
 		needs_wakeup:                     has_ready || has_pending || (session.pending_host_async_event_count() > 0 || session.pending_websocket_event_count() > 0)
-		next_wakeup_at_ms: next_wakeup_at_ms
-		wakeup_generation: if has_pending { state.wakeup_generation } else { u64(0) }
-		timer_wakeup_hint_count: if session.closed || state.closed {
+		next_wakeup_at_ms:                next_wakeup_at_ms
+		wakeup_generation:                if has_pending { state.wakeup_generation } else { u64(0) }
+		timer_wakeup_hint_count:          if session.closed || state.closed {
 			0
 		} else {
 			state.timer_wakeup_hints.len
 		}
-		runtime_owned_timer_count: if session.closed || state.closed {
+		runtime_owned_timer_count:        if session.closed || state.closed {
 			0
 		} else {
 			state.owned_timers.len
 		}
-		pending_host_async_count: if session.closed || state.closed {
+		pending_host_async_count:         if session.closed || state.closed {
 			0
 		} else {
 			session.pending_host_async_operation_count()
 		}
-		next_timer_wakeup_at_ms: if session.closed || state.closed || !has_next_timer {
+		next_timer_wakeup_at_ms:          if session.closed || state.closed || !has_next_timer {
 			i64(-1)
 		} else {
 			next_timer_wakeup_at_ms
 		}
-		async_error_count: if session.closed || state.closed {
+		async_error_count:                if session.closed || state.closed {
 			0
 		} else {
 			session.diagnostic_error_count()
 		}
-		last_error_message: if session.closed || state.closed {
+		last_error_message:               if session.closed || state.closed {
 			''
 		} else {
 			last_error.message
 		}
-		dropped_diagnostic_count: if session.closed || state.closed {
+		dropped_diagnostic_count:         if session.closed || state.closed {
 			0
 		} else {
 			session.dropped_diagnostic_count()
 		}
-		timer_wakeup_hint_limit: session.limit_state.config.max_timer_wakeup_hints
+		timer_wakeup_hint_limit:          session.limit_state.config.max_timer_wakeup_hints
 		rejected_timer_wakeup_hint_count: if session.closed || state.closed {
 			0
 		} else {
 			session.rejected_timer_wakeup_hint_count()
 		}
-		phase: lifecycle.phase
-		in_flight_turns: lifecycle.in_flight_turns
-		completed_turns: lifecycle.completed_turns
-		rejected_turns: lifecycle.rejected_turns
-		observation_count: if session.closed || state.closed {
+		phase:                            lifecycle.phase
+		in_flight_turns:                  lifecycle.in_flight_turns
+		completed_turns:                  lifecycle.completed_turns
+		rejected_turns:                   lifecycle.rejected_turns
+		observation_count:                if session.closed || state.closed {
 			0
 		} else {
 			session.observation_count()
 		}
-		dropped_observation_count: session.dropped_observation_count()
-		memory: memory
+		dropped_observation_count:        session.dropped_observation_count()
+		memory:                           memory
 	}
 }
 
@@ -583,7 +583,7 @@ pub fn (mut session RuntimeSession) clear_wakeup_request() {
 		state.config.cancel_wake_fn(RuntimeSessionWakeCancelRequest{
 			session_id: state.config.session_id
 			generation: state.wakeup_generation
-			reason: 'cleared'
+			reason:     'cleared'
 		})
 	}
 	state.has_pending_wakeup = false

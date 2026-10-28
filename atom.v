@@ -122,7 +122,7 @@ pub fn (v Value) property_names() ![]PropertyEnum {
 			ref: prop.atom
 		}
 		props << PropertyEnum{
-			atom: atom
+			atom:          atom
 			is_enumerable: prop.is_enumerable
 		}
 	}

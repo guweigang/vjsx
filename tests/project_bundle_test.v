@@ -14,7 +14,7 @@ fn test_project_bundle_transpiles_typescript_and_json_without_runtime_sources() 
 
 	mut compiler := vjsx.new_runtime_session()
 	bundle := runtimejs.compile_project_bundle(compiler.context(), os.join_path(root, 'main.mts'),
-		app_name: 'typed-demo'
+		app_name:        'typed-demo'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()
@@ -47,7 +47,7 @@ fn test_project_bundle_preserves_commonjs_require_and_exports() {
 
 	mut compiler := vjsx.new_runtime_session()
 	bundle := runtimejs.compile_project_bundle(compiler.context(), os.join_path(root, 'main.cjs'),
-		app_name: 'cjs-demo'
+		app_name:        'cjs-demo'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()
@@ -83,7 +83,7 @@ fn test_project_bundle_includes_static_node_modules_dependencies() {
 
 	mut compiler := vjsx.new_runtime_session()
 	bundle := runtimejs.compile_project_bundle(compiler.context(), os.join_path(root, 'main.mts'),
-		app_name: 'package-demo'
+		app_name:        'package-demo'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()
@@ -117,7 +117,7 @@ fn test_project_bundle_strips_esm_shebang_and_resolves_node_builtin() {
 
 	mut compiler := vjsx.new_runtime_session()
 	bundle := runtimejs.compile_project_bundle(compiler.context(), os.join_path(root, 'main.mjs'),
-		app_name: 'esm-shebang-demo'
+		app_name:        'esm-shebang-demo'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	compiler.close()

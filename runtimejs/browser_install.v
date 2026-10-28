@@ -24,8 +24,7 @@ pub fn try_install_cli_browser_runtime(ctx &vjsx.Context, config CliBrowserRunti
 	cli_browser_intl_boot(ctx, boot)
 	cli_browser_fetch_boot(ctx, boot)
 	for asset in ['web/js/crypto.js', 'web/js/stream.js', 'web/js/encoding.js', 'web/js/intl.js',
-		'web/js/blob.js', 'web/js/form_data.js', 'web/js/event.js', 'web/js/abort.js',
-		'web/js/fetch.js'] {
+		'web/js/blob.js', 'web/js/form_data.js', 'web/js/event.js', 'web/js/abort.js', 'web/js/fetch.js'] {
 		value := ctx.eval_runtime_file(asset, vjsx.type_module)!
 		value.free()
 	}

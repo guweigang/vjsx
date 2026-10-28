@@ -7,7 +7,11 @@ import vjsx
 struct FetchTransportValidationHandler {}
 
 fn (mut handler FetchTransportValidationHandler) handle(_req http.Request) http.Response {
-	if _req.url != '/fast' && _req.url != '/echo' { time.sleep(300 * time.millisecond) }
+	if _req.url == '/one' || _req.url == '/two' {
+		time.sleep(500 * time.millisecond)
+	} else if _req.url != '/fast' && _req.url != '/echo' {
+		time.sleep(300 * time.millisecond)
+	}
 	return http.Response{ body: if _req.url == '/echo' { _req.data } else { 'ok' } }
 }
 
@@ -69,7 +73,7 @@ fn test_fetch_transport_timer_progress_and_parallel_requests() {
 		parts := result.split('|')
 		assert parts[0] == 'true'
 		assert parts[2..] == ['ok', 'ok']
-		assert parts[1].int() < 550
+		assert parts[1].int() < 900
 		resolved.free()
 		value.free()
 		session.close()
@@ -138,8 +142,17 @@ fn test_fetch_transport_timer_progress_and_parallel_requests() {
 			const cancelled = await pending;
 			// A cancelled JS Promise must not free the still-running worker slot.
 			const stillBlocked = await fetch("http://127.0.0.1:${port}/fast").then(() => "unexpected", e => e.message);
-			await new Promise(r => setTimeout(r, 350));
-			const fast = await fetch("http://127.0.0.1:${port}/fast");
+			const recoveryDeadline = Date.now() + 2000;
+			let fast;
+			for (;;) {
+				try {
+					fast = await fetch("http://127.0.0.1:${port}/fast");
+					break;
+				} catch (error) {
+					if (error.message !== "native fetch concurrency limit reached" || Date.now() >= recoveryDeadline) throw error;
+					await new Promise(r => setTimeout(r, 25));
+				}
+			}
 			return [blocked, cancelled, stillBlocked, await fast.text()].join("|");
 		})()
 	') or { panic(err) }

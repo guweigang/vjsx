@@ -152,10 +152,15 @@ fn runner_is_current(runner string) bool {
 }
 
 fn cli_runner_sources() []string {
-	mut sources := os.walk_ext(@VMODROOT, '.v')
+	mut sources := os.walk_ext(@VMODROOT, '.v').filter(!has_hidden_path_component(it))
 	sources << os.walk_ext(os.join_path(@VMODROOT, 'web'), '.js')
 	sources << os.walk_ext(os.join_path(@VMODROOT, 'thirdparty', 'typescript', 'lib'), '.js')
 	return sources
+}
+
+fn has_hidden_path_component(path string) bool {
+	relative := os.path_rel(@VMODROOT, path) or { return false }
+	return relative.split(os.path_separator).any(it.starts_with('.'))
 }
 
 fn shell_quote(value string) string {

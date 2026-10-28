@@ -27,7 +27,7 @@ pub fn try_new_script_extension_session(ctx_config vjsx.ContextConfig, runtime_c
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api
-		session: session
+		session:  session
 	}
 }
 
@@ -44,7 +44,7 @@ pub fn try_new_node_extension_session(ctx_config vjsx.ContextConfig, runtime_con
 	session.context().install_host_api(host_config)
 	return ExtensionSession{
 		host_api: host_api
-		session: session
+		session:  session
 	}
 }
 
@@ -116,8 +116,8 @@ pub fn (extension ExtensionSession) load_extension(path string, hooks vjsx.Scrip
 	plugin := extension.session.bind_plugin(module_binding.path(), module_binding.module_handle(), resolved_hooks)!
 	return ExtensionHandle{
 		services: manifest.services.clone()
-		module: module_binding
-		plugin: vjsx.new_bound_script_plugin(extension.host_api, plugin)
+		module:   module_binding
+		plugin:   vjsx.new_bound_script_plugin(extension.host_api, plugin)
 	}
 }
 

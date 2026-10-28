@@ -79,6 +79,21 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "LIB=$opensslLibDir;$env:LIB"
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $sdkRoot "bin")
 
+          # This pinned V revision has unquoted, hard-coded "Program Files"
+          # OpenSSL flags. MSVC receives the second path component as an input
+          # file, so rely on the vcpkg INCLUDE/LIB paths configured above.
+          $vRoot = Split-Path -Parent (Get-Command v -CommandType Application).Source
+          $opensslFlagFiles = @(
+            (Join-Path $vRoot "vlib\net\openssl\openssl.c.v"),
+            (Join-Path $vRoot "vlib\crypto\ecdsa\ecdsa_d_use_openssl.c.v")
+          )
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          foreach ($flagFile in $opensslFlagFiles) {
+            $content = Get-Content -LiteralPath $flagFile
+            $content = $content | Where-Object { $_ -notmatch '^#flag windows -[IL]C:/Program Files/OpenSSL' }
+            [System.IO.File]::WriteAllLines($flagFile, [string[]]$content, $utf8NoBom)
+          }
+
       - name: Prepare Ubuntu OpenSSL
         if: startsWith(matrix.os, 'ubuntu')
         shell: bash

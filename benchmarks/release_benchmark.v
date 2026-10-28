@@ -31,7 +31,7 @@ fn main() {
 	mut bytecode := []u8{}
 	for _ in 0 .. count {
 		bytecode = compiler.context().compile_module_bytecode('module.exports = { add: (a, b) => a + b };',
-			filename: 'benchmark.js'
+			filename:        'benchmark.js'
 			runtime_profile: 'node'
 		) or { panic(err) }
 	}
@@ -39,12 +39,12 @@ fn main() {
 
 	bundle := compiler.context().compile_bundle([
 		vjsx.BundleSourceModule{
-			name: 'vjsx-bundle/benchmark/main.mjs'
+			name:   'vjsx-bundle/benchmark/main.mjs'
 			source: 'export function add(a, b) { return a + b; }'
 		},
 	],
-		app_name: 'benchmark'
-		entry: 'vjsx-bundle/benchmark/main.mjs'
+		app_name:        'benchmark'
+		entry:           'vjsx-bundle/benchmark/main.mjs'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	started = time.ticks()

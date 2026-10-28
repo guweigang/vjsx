@@ -14,7 +14,7 @@ mut:
 	env       map[string]string
 	env_set   bool
 	stdio     ChildProcessStdioMode = .pipe
-	encoding  string = 'utf8'
+	encoding  string                = 'utf8'
 	shell     string
 	use_shell bool
 }
@@ -203,9 +203,9 @@ fn child_process_fork_invocation(args []Value) !ChildProcessForkInvocation {
 	}
 	mut invocation := ChildProcessForkInvocation{
 		module_path: args[0].str()
-		options: ChildProcessSyncOptions{}
-		exec_path: ''
-		exec_argv: []string{}
+		options:     ChildProcessSyncOptions{}
+		exec_path:   ''
+		exec_argv:   []string{}
 	}
 	mut options_index := -1
 	if args.len > 1 && !args[1].is_undefined() && !args[1].is_null() {
@@ -362,7 +362,7 @@ fn child_process_event_emitter(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		listeners := child_process_event_bucket(ctx, this, args[0].str())
@@ -378,7 +378,7 @@ fn child_process_event_emitter(ctx &Context) Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		listeners := child_process_event_bucket(ctx, this, args[0].str())
@@ -504,7 +504,7 @@ fn child_process_stream_object(ctx &Context) Value {
 		if args.len == 0 || !args[0].is_object() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		end_destination := if args.len > 1 {
@@ -534,7 +534,7 @@ fn child_process_stream_object(ctx &Context) Value {
 			pipe_dests.free()
 			return ctx.js_throw(ctx.js_error(
 				message: 'destination stream is required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		mut next_dests := ctx.js_array()
@@ -1086,7 +1086,7 @@ fn child_process_run(command string, args []string, options ChildProcessSyncOpti
 	}
 	return ChildProcessRunResult{
 		status: status
-		pid: pid
+		pid:    pid
 		stdout: stdout
 		stderr: stderr
 	}
@@ -1347,7 +1347,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			} else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'args must be an array or options object'
-					name: 'TypeError'
+					name:    'TypeError'
 				))
 			}
 		}
@@ -1410,7 +1410,7 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			} else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'args must be an array or options object'
-					name: 'TypeError'
+					name:    'TypeError'
 				))
 			}
 		}

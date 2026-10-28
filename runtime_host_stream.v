@@ -26,7 +26,7 @@ pub fn new_runtime_host_stream_mailbox(capacity int) RuntimeHostStreamMailbox {
 	return RuntimeHostStreamMailbox{
 		state: &RuntimeHostStreamState{
 			capacity: if capacity < 1 { 1 } else { capacity }
-			frames: []RuntimeHostStreamFrame{}
+			frames:   []RuntimeHostStreamFrame{}
 		}
 	}
 }

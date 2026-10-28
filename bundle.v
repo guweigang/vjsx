@@ -232,21 +232,21 @@ pub fn (ctx &Context) compile_bundle(modules []BundleSourceModule, options Compi
 			return error('bundle module was not compiled: ${source.name}')
 		}
 		manifest_modules << BundleManifestModule{
-			name: source.name
+			name:   source.name
 			offset: u64(payload.len)
 			length: u64(module_payload.len)
 		}
 		payload << module_payload
 	}
 	manifest := BundleManifest{
-		format_version: int(bundle_format_version)
-		vjsx_version: version
-		runtime_abi: artifact_abi
-		quickjs_abi: quickjs_abi_fingerprint()
+		format_version:  int(bundle_format_version)
+		vjsx_version:    version
+		runtime_abi:     artifact_abi
+		quickjs_abi:     quickjs_abi_fingerprint()
 		runtime_profile: options.runtime_profile
-		app_name: options.app_name
-		entry: options.entry
-		modules: manifest_modules
+		app_name:        options.app_name
+		entry:           options.entry
+		modules:         manifest_modules
 	}
 	manifest_bytes := json2.encode(manifest, escape_unicode: true).bytes()
 	mut out := []u8{cap: bundle_fixed_header_size + manifest_bytes.len + payload.len}
@@ -322,7 +322,7 @@ fn parse_bundle(data []u8) !ParsedBundle {
 	}
 	return ParsedBundle{
 		manifest: manifest
-		modules: modules
+		modules:  modules
 	}
 }
 
@@ -330,19 +330,19 @@ fn parse_bundle(data []u8) !ParsedBundle {
 pub fn bundle_info(data []u8) !BundleInfo {
 	parsed := parse_bundle(data)!
 	return BundleInfo{
-		app_name: parsed.manifest.app_name
-		entry: parsed.manifest.entry
+		app_name:        parsed.manifest.app_name
+		entry:           parsed.manifest.entry
 		runtime_profile: parsed.manifest.runtime_profile
-		module_count: parsed.manifest.modules.len
-		format_version: parsed.manifest.format_version
-		vjsx_version: parsed.manifest.vjsx_version
-		runtime_abi: if parsed.manifest.runtime_abi == ''
+		module_count:    parsed.manifest.modules.len
+		format_version:  parsed.manifest.format_version
+		vjsx_version:    parsed.manifest.vjsx_version
+		runtime_abi:     if parsed.manifest.runtime_abi == ''
 			&& artifact_runtime_abi_compatible(parsed.manifest.vjsx_version) {
 			artifact_abi
 		} else {
 			parsed.manifest.runtime_abi
 		}
-		quickjs_abi: parsed.manifest.quickjs_abi
+		quickjs_abi:     parsed.manifest.quickjs_abi
 	}
 }
 
@@ -421,9 +421,9 @@ pub fn (ctx &Context) load_bundle(data []u8) !ScriptModule {
 		return ctx.execution_error()
 	}
 	return ScriptModule{
-		ctx: unsafe { ctx }
+		ctx:     unsafe { ctx }
 		exports: namespace
-		state: &ScriptModuleState{}
+		state:   &ScriptModuleState{}
 	}
 }
 

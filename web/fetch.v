@@ -28,10 +28,10 @@ fn fetch(this Value, args []Value) Value {
 	mut resp := Response{}
 	if boundary.is_undefined() {
 		resp = http.fetch(
-			url: url
+			url:    url
 			method: Method.from(method) or { Method.get }
 			header: hd
-			data: body
+			data:   body
 		) or {
 			error = this.ctx.js_error(message: err.msg())
 			unsafe {

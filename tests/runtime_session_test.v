@@ -72,7 +72,7 @@ fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		session_id: 'async-session'
+		session_id:     'async-session'
 		async_ready_fn: runtime_session_test_record_async_ready
 	})
 	operation := session.start_host_async_operation(kind: 'worker') or { panic(err) }
@@ -85,7 +85,7 @@ fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
 		panic(err)
 	}
 	setup.free()
-	done := chan bool{ cap: 1 }
+	done := chan bool{cap: 1}
 	worker := spawn runtime_session_test_complete_async(operation.completion, done)
 	completed := <-done
 	assert completed
@@ -272,9 +272,9 @@ fn test_runtime_owned_timer_fires_from_host_wakeup() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: runtime_session_test_now_from_env
+		now_fn:               runtime_session_test_now_from_env
 		runtime_owned_timers: true
-		session_id: 'owned-timer'
+		session_id:           'owned-timer'
 	})
 	ctx := session.context()
 	ctx.install_timer_globals()
@@ -413,7 +413,7 @@ fn test_runtime_session_records_async_job_diagnostics() {
 	}
 	session.set_diagnostic_handler(runtime_session_test_record_diagnostic)
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:     fn () i64 {
 			return 12345
 		}
 		session_id: 'diagnostic-session'
@@ -482,7 +482,7 @@ fn test_runtime_session_timer_wakeup_hints_are_bounded() {
 		max_timer_wakeup_hints: 1
 	})
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:     fn () i64 {
 			return 8000
 		}
 		session_id: 'limit-session'
@@ -510,13 +510,13 @@ fn test_runtime_session_event_loop_config_tracks_wakeup_contract() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:               fn () i64 {
 			return 4242
 		}
-		wake_fn: runtime_session_test_record_wake
-		cancel_wake_fn: runtime_session_test_record_wake_cancel
+		wake_fn:              runtime_session_test_record_wake
+		cancel_wake_fn:       runtime_session_test_record_wake_cancel
 		runtime_owned_timers: true
-		session_id: 'session-a'
+		session_id:           'session-a'
 	})
 	assert session.runtime_owns_timers() == true
 	assert session.now_ms() == 4242
@@ -587,12 +587,12 @@ fn test_runtime_session_timer_wrapper_tracks_quickjs_wakeup_hints() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:         fn () i64 {
 			return 1000
 		}
-		wake_fn: runtime_session_test_record_wake
+		wake_fn:        runtime_session_test_record_wake
 		cancel_wake_fn: runtime_session_test_record_wake_cancel
-		session_id: 'timer-session'
+		session_id:     'timer-session'
 	})
 	ctx := session.context()
 	ctx.install_timer_globals()
@@ -634,12 +634,12 @@ fn test_runtime_session_close_clears_event_loop_wakeup_state() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:         fn () i64 {
 			return 5000
 		}
-		wake_fn: runtime_session_test_record_wake
+		wake_fn:        runtime_session_test_record_wake
 		cancel_wake_fn: runtime_session_test_record_wake_cancel
-		session_id: 'closing-session'
+		session_id:     'closing-session'
 	})
 	session.request_timer_wakeup_after('timer-a', 25)
 	assert session.has_pending_wakeup()
@@ -663,11 +663,11 @@ fn test_runtime_session_debug_snapshot_reports_async_state() {
 		session.close()
 	}
 	session.configure_event_loop(vjsx.RuntimeSessionEventLoopConfig{
-		now_fn: fn () i64 {
+		now_fn:               fn () i64 {
 			return 7000
 		}
 		runtime_owned_timers: true
-		session_id: 'debug-session'
+		session_id:           'debug-session'
 	})
 	ctx := session.context()
 	value := ctx.eval('Promise.resolve().then(() => {})') or { panic(err) }
@@ -959,7 +959,7 @@ fn test_runtime_session_plugin_metadata_helpers() {
 		session.close()
 	}
 	mut plugin := session.load_plugin('./tests/runtime_session_plugin.mjs', vjsx.ScriptPluginHooks{
-		name: 'demo-plugin'
+		name:         'demo-plugin'
 		capabilities: ['serve', 'reload']
 	}) or { panic(err) }
 	defer {
@@ -981,10 +981,10 @@ fn test_runtime_session_close_auto_disposes_plugin() {
 
 	mut session := runtimejs.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
-		fs_roots: [base_dir]
+		fs_roots:     [base_dir]
 	})
 	mut plugin := session.load_plugin('./tests/runtime_session_plugin_cleanup.mjs', vjsx.ScriptPluginHooks{
-		name: 'cleanup-plugin'
+		name:         'cleanup-plugin'
 		capabilities: ['cleanup']
 	}) or { panic(err) }
 	activate := plugin.activate(dispose_path) or { panic(err) }
@@ -1006,21 +1006,21 @@ fn test_runtime_session_close_auto_disposes_plugin() {
 
 fn runtime_session_test_host_api() vjsx.HostValueBuilder {
 	return vjsx.host_object(vjsx.HostObjectField{
-		name: 'app'
+		name:  'app'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name: 'name'
+			name:  'name'
 			value: vjsx.host_value('host-app')
 		})
 	}, vjsx.HostObjectField{
-		name: 'logger'
+		name:  'logger'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name: 'prefix'
+			name:  'prefix'
 			value: vjsx.host_value('log')
 		})
 	}, vjsx.HostObjectField{
-		name: 'math'
+		name:  'math'
 		value: vjsx.host_object(vjsx.HostObjectField{
-			name: 'add'
+			name:  'add'
 			value: fn (ctx &vjsx.Context) vjsx.Value {
 				return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 					return ctx.js_int(args[0].to_int() + args[1].to_int())
@@ -1034,18 +1034,18 @@ fn runtime_session_test_host_config() vjsx.HostApiConfig {
 	return vjsx.HostApiConfig{
 		globals: [
 			vjsx.HostGlobalBinding{
-				name: 'appName'
+				name:  'appName'
 				value: vjsx.host_value('embedder')
 			},
 		]
 		modules: [
 			vjsx.HostModuleBinding{
-				name: 'host-tools'
+				name:    'host-tools'
 				install: vjsx.host_module_object(vjsx.HostObjectField{
-					name: 'version'
+					name:  'version'
 					value: vjsx.host_value('v1')
 				}, vjsx.HostObjectField{
-					name: 'ping'
+					name:  'ping'
 					value: fn (ctx &vjsx.Context) vjsx.Value {
 						return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 							return ctx.js_string('pong:' + args[0].str())
@@ -1180,7 +1180,7 @@ fn test_runtime_session_bound_plugin_helper() {
 	}
 	host_api := runtime_session_test_host_api()
 	mut plugin := session.load_plugin_with_host('./tests/runtime_session_plugin_host.mjs', vjsx.ScriptPluginHooks{
-		name: 'bound-plugin'
+		name:         'bound-plugin'
 		capabilities: ['lifecycle']
 	}, host_api) or { panic(err) }
 	defer {
@@ -1256,7 +1256,7 @@ fn test_extension_session_applies_safe_node_host_policy() {
 	key := 'VJSX_EXTENSION_POLICY_${os.getpid()}'
 	mut extension := runtimejs.new_node_extension_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{
 		process_args: ['inline.js']
-		policy: vjsx.host_policy_safe()
+		policy:       vjsx.host_policy_safe()
 	}, vjsx.HostApiConfig{}, runtime_session_test_host_api())
 	defer {
 		extension.close()
@@ -1300,7 +1300,7 @@ fn test_extension_session_bound_plugin_lifecycle() {
 		extension.close()
 	}
 	mut plugin := extension.load_plugin('./tests/runtime_session_plugin_host.mjs', vjsx.ScriptPluginHooks{
-		name: 'extension-plugin'
+		name:         'extension-plugin'
 		capabilities: ['hosted']
 	}) or { panic(err) }
 	defer {
@@ -1335,7 +1335,7 @@ fn test_extension_session_load_extension_contract() {
 		extension_session.close()
 	}
 	mut extension := extension_session.load_extension('./tests/runtimejs_extension_handle.mjs', vjsx.ScriptPluginHooks{
-		name: 'demo-extension'
+		name:         'demo-extension'
 		capabilities: ['serve', 'handle']
 	}) or { panic(err) }
 	defer {
