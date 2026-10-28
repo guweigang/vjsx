@@ -1,3 +1,4 @@
+import json2
 import os
 import runtimejs
 import vjsx
@@ -9,6 +10,7 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 	os.rm(outside) or {}
 	os.mkdir_all(root) or { panic(err) }
 	os.write_file(outside, 'secret') or { panic(err) }
+	outside_js := json2.encode(outside, escape_unicode: true, time_as_unix: true)
 	defer {
 		os.rmdir_all(root) or {}
 		os.rm(outside) or {}
@@ -32,8 +34,8 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 		fs.writeFileSync("inside.txt", "ok");
 		let outsideRead = "allowed";
 		let outsideWrite = "allowed";
-		try { fs.readFileSync("${outside}"); } catch (err) { outsideRead = String(err.message); }
-		try { fs.writeFileSync("${outside}", "bad"); } catch (err) { outsideWrite = String(err.message); }
+		try { fs.readFileSync(${outside_js}); } catch (err) { outsideRead = String(err.message); }
+		try { fs.writeFileSync(${outside_js}, "bad"); } catch (err) { outsideWrite = String(err.message); }
 		globalThis.__policyResult = [fs.readFileSync("inside.txt", "utf8"), outsideRead, outsideWrite].join("|");
 	', vjsx.type_module) or { panic(err) }
 	value.free()
