@@ -9,6 +9,7 @@ fn test_fetch_deadline_returns_before_host_watchdog() {
 			read_timeout:  1 * time.millisecond
 			write_timeout: 1 * time.millisecond
 			max_retries:   0
+			timeout_ms:    100
 		}
 	})
 	defer {
