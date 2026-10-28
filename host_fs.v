@@ -218,22 +218,29 @@ fn temp_prefix_target(prefix string, roots []string, policy HostPolicy) !string 
 	return target
 }
 
+// Stats methods are ordinary JS closures over an immutable type snapshot.
+// Creating native closures here would retain one V trampoline and its captured
+// os.Stat for every stat call, even after JS has discarded the Stats object.
+fn (ctx &Context) fs_stat_factory() !Value {
+	mut state := ctx.host_cleanup_state
+	if factory := state.fs_stat_factory { return factory }
+	factory := ctx.eval('(file, directory, link) => ({ isFile: () => file, isDirectory: () => directory, isSymbolicLink: () => link })')!
+	state.fs_stat_factory = factory
+	ctx.register_host_cleanup(fn [factory] () { factory.free() })
+	return factory
+}
+
 fn stat_object(ctx &Context, st os.Stat, path string) Value {
-	obj := ctx.js_object()
+	factory := ctx.fs_stat_factory() or { return ctx.js_throw(ctx.js_error(message: err.msg())) }
+	kind := st.get_filetype()
+	obj := ctx.call(factory, kind == .regular, kind == .directory, kind == .symbolic_link) or {
+		return ctx.js_throw(ctx.js_error(message: err.msg()))
+	}
 	obj.set('path', path)
 	obj.set('size', int(st.size))
 	obj.set('mtime', st.mtime)
 	obj.set('ctime', st.ctime)
 	obj.set('atime', st.atime)
-	obj.set('isFile', ctx.js_function(fn [ctx, st] (args []Value) Value {
-		return ctx.js_bool(st.get_filetype() == .regular)
-	}))
-	obj.set('isDirectory', ctx.js_function(fn [ctx, st] (args []Value) Value {
-		return ctx.js_bool(st.get_filetype() == .directory)
-	}))
-	obj.set('isSymbolicLink', ctx.js_function(fn [ctx, st] (args []Value) Value {
-		return ctx.js_bool(st.get_filetype() == .symbolic_link)
-	}))
 	return obj
 }
 

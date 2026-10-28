@@ -13,6 +13,7 @@ struct C.JSModuleDef {}
 struct HostCleanupState {
 	host_async &RuntimeHostAsyncState = new_runtime_host_async_state()
 mut:
+	fs_stat_factory   ?Value
 	cleanups          []HostCleanup
 	installed_modules map[string]bool
 	bundle_modules    map[string][]u8

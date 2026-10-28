@@ -37,6 +37,7 @@ const runtime_asset_url_pattern_js = $embed_file('web/js/url_pattern.js')
 const runtime_asset_util_js = $embed_file('web/js/util.js')
 const runtime_asset_typescript_js_gz = $embed_file('thirdparty/typescript/lib/typescript.js.gz')
 const runtime_asset_vjs_ts_bootstrap_js = $embed_file('thirdparty/typescript/lib/vjs_ts_bootstrap.js')
+const runtime_asset_vjs_commonjs_detect_js = $embed_file('thirdparty/typescript/lib/vjs_commonjs_detect.js')
 const runtime_asset_vjs_ts_commonjs_js = $embed_file('thirdparty/typescript/lib/vjs_ts_commonjs.js')
 const runtime_asset_vjs_ts_resolver_js = $embed_file('thirdparty/typescript/lib/vjs_ts_resolver.js')
 const runtime_asset_vjs_ts_scan_js = $embed_file('thirdparty/typescript/lib/vjs_ts_scan.js')
@@ -214,6 +215,7 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'thirdparty/typescript/lib/vjs_ts_bootstrap.js' {
 			runtime_asset_vjs_ts_bootstrap_js.to_string()
 		}
+		'thirdparty/typescript/lib/vjs_commonjs_detect.js' { runtime_asset_vjs_commonjs_detect_js.to_string() }
 		'thirdparty/typescript/lib/vjs_ts_commonjs.js' {
 			runtime_asset_vjs_ts_commonjs_js.to_string()
 		}
@@ -432,6 +434,7 @@ pub fn embedded_runtime_asset_paths() []string {
 		'web/js/util.js',
 		'thirdparty/typescript/lib/typescript.js',
 		'thirdparty/typescript/lib/vjs_ts_bootstrap.js',
+		'thirdparty/typescript/lib/vjs_commonjs_detect.js',
 		'thirdparty/typescript/lib/vjs_ts_commonjs.js',
 		'thirdparty/typescript/lib/vjs_ts_resolver.js',
 		'thirdparty/typescript/lib/vjs_ts_scan.js',

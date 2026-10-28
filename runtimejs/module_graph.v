@@ -73,6 +73,12 @@ fn module_resolution_error(importer string, specifier string, phase string, reas
 }
 
 fn inferred_runtime_profile(ctx &vjsx.Context) string {
+	// Compiler-only contexts declare the target profile without installing the
+	// business runtime or its native host modules.
+	profile := ctx.runtime_profile()
+	if profile in ['script', 'node', 'browser'] {
+		return profile
+	}
 	browser := ctx.eval('typeof window === "object" && globalThis.window === globalThis', vjsx.type_global) or { return 'node' }
 	is_browser := browser.to_bool()
 	browser.free()

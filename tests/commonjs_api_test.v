@@ -27,14 +27,20 @@ fn test_public_commonjs_detector_reads_without_resolving_or_executing() {
 	assert executed.is_undefined()
 }
 
-fn test_public_commonjs_detector_reports_missing_runtime() {
-	mut session := vjsx.new_runtime_session()
-	defer { session.close() }
-	if _ := runtimejs.is_commonjs_module(session.context(), os.join_path(@VMODROOT, 'tests', 'cjs_runtime.cjs')) {
-		assert false, 'expected missing detector error'
-	} else {
-		assert err.msg() == 'CommonJS detector is not installed'
-	}
+fn test_public_commonjs_detector_installs_without_loading_typescript() ! {
+ mut session := vjsx.new_runtime_session()
+ defer { session.close() }
+ ctx := session.context()
+ assert runtimejs.is_commonjs_module(ctx, os.join_path(@VMODROOT, 'tests', 'cjs_runtime.cjs'))!
+ detector := ctx.js_global('__vjs_is_commonjs')
+ defer { detector.free() }
+ assert detector.is_function()
+ compiler := ctx.js_global('ts')
+ defer { compiler.free() }
+ assert compiler.is_undefined(), 'CommonJS detection must not load the TypeScript compiler'
+ ready := ctx.js_global('__vjs_typescript_runtime_ready')
+ defer { ready.free() }
+ assert ready.is_undefined()
 }
 
 fn test_public_commonjs_detector_reports_unreadable_source() {

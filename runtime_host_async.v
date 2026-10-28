@@ -105,15 +105,16 @@ mut:
 
 struct RuntimeHostAsyncState {
 	stream_ready &RuntimeHostStreamReadyState = &RuntimeHostStreamReadyState{}
-	guard &sync.Mutex = sync.new_mutex()
+	guard        &sync.Mutex                  = sync.new_mutex()
 mut:
-	next_id    u64 = 1
-	operations map[u64]RuntimeHostAsyncRecord
-	queued     []RuntimeHostAsyncQueuedEvent
-	terminal   map[u64]bool
-	closed     bool
-	session_id string
-	ready_fn   RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
+	cancel_factory ?Value
+	next_id        u64 = 1
+	operations     map[u64]RuntimeHostAsyncRecord
+	queued         []RuntimeHostAsyncQueuedEvent
+	terminal       map[u64]bool
+	closed         bool
+	session_id     string
+	ready_fn       RuntimeHostAsyncReadyFn = runtime_host_async_default_ready
 }
 
 fn new_runtime_host_async_state() &RuntimeHostAsyncState {
@@ -189,8 +190,8 @@ pub fn (port RuntimeHostAsyncCompletionPort) cancel(reason string) bool {
 // busy. This shares the same first-terminal gate as completion and cancellation.
 pub fn (port RuntimeHostAsyncCompletionPort) timeout() bool {
 	return port.submit(RuntimeHostAsyncCompletion{
-		outcome: .timed_out
-		text: 'host operation timed out'
+		outcome:    .timed_out
+		text:       'host operation timed out'
 		error_name: 'TimeoutError'
 	})
 }
@@ -253,6 +254,7 @@ fn (ctx &Context) start_context_host_async_operation(options RuntimeHostAsyncOpt
 	closed := state.closed
 	state.guard.unlock()
 	if closed { return error('runtime session is not accepting host operations') }
+	cancel_factory := ctx.host_async_cancel_factory()!
 	capability := ctx.js_promise_capability()
 	token := RuntimeHostAsyncCancelToken{
 		state: &RuntimeHostAsyncCancelState{}
@@ -274,14 +276,7 @@ fn (ctx &Context) start_context_host_async_operation(options RuntimeHostAsyncOpt
 	}
 	state.guard.unlock()
 	port := RuntimeHostAsyncCompletionPort{ operation_id: id, state: state, token: token }
-	cancel_fn := ctx.js_function(fn [ctx, port] (args []Value) Value {
-		reason := if args.len > 0 && args[0].is_string() {
-			args[0].str()
-		} else {
-			'This operation was aborted'
-		}
-		return ctx.js_bool(port.cancel(reason))
-	})
+	cancel_fn := ctx.call(cancel_factory, id.str())!
 	capability.promise.set('__vjsxCancel', cancel_fn)
 	cancel_fn.free()
 	return RuntimeHostAsyncOperation{
@@ -485,4 +480,36 @@ fn (session RuntimeSession) next_host_async_deadline() ?i64 {
 		return none
 	}
 	return deadline
+}
+
+// One native dispatcher per context. Each operation receives a regular JS
+// closure carrying its id, so completing a request does not leave a new native
+// trampoline and its captured cancellation state in V's closure registry.
+fn (ctx &Context) host_async_cancel_factory() !Value {
+	mut state := ctx.host_cleanup_state.host_async
+	if factory := state.cancel_factory { return factory }
+	dispatcher := ctx.js_function(fn [ctx, mut state] (args []Value) Value {
+		if args.len < 2 { return ctx.js_bool(false) }
+		id := args[0].to_string().u64()
+		reason := if args[1].is_string() {
+			args[1].to_string()
+		} else {
+			'This operation was aborted'
+		}
+		state.guard.lock()
+		record := state.operations[id] or {
+			state.guard.unlock()
+			return ctx.js_bool(false)
+		}
+		state.guard.unlock()
+		port := RuntimeHostAsyncCompletionPort{ operation_id: id, state: state, token: record.token }
+		return ctx.js_bool(port.cancel(reason))
+	})
+	defer { dispatcher.free() }
+	builder := ctx.eval('(cancel) => (id) => (reason) => cancel(id, reason)')!
+	defer { builder.free() }
+	factory := ctx.call(builder, dispatcher)!
+	state.cancel_factory = factory
+	ctx.register_host_cleanup(fn [factory] () { factory.free() })
+	return factory
 }

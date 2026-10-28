@@ -8,7 +8,7 @@ const typescript_runtime_ready_key = '__vjs_typescript_runtime_ready'
 fn install_typescript_host_bridge(ctx &vjsx.Context) {
 	global := ctx.js_global()
 	host := ctx.js_object()
-	host.set('readFile', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	set_typescript_host_function(ctx, host, 'readFile', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_undefined()
 		}
@@ -17,21 +17,21 @@ fn install_typescript_host_bridge(ctx &vjsx.Context) {
 			return ctx.js_undefined()
 		}
 		return ctx.js_string(os.read_file(path) or { return ctx.js_undefined() })
-	}))
-	host.set('fileExists', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'fileExists', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_bool(false)
 		}
 		path := args[0].str()
 		return ctx.js_bool(os.exists(path) && !os.is_dir(path))
-	}))
-	host.set('directoryExists', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'directoryExists', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_bool(false)
 		}
 		return ctx.js_bool(os.is_dir(args[0].str()))
-	}))
-	host.set('getDirectories', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'getDirectories', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_array()
 		}
@@ -49,8 +49,8 @@ fn install_typescript_host_bridge(ctx &vjsx.Context) {
 			}
 		}
 		return arr
-	}))
-	host.set('readDirectory', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'readDirectory', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_array()
 		}
@@ -75,8 +75,8 @@ fn install_typescript_host_bridge(ctx &vjsx.Context) {
 			}
 		}
 		return arr
-	}))
-	host.set('realpath', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'realpath', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		if args.len == 0 {
 			return ctx.js_string('')
 		}
@@ -85,16 +85,16 @@ fn install_typescript_host_bridge(ctx &vjsx.Context) {
 			return ctx.js_string(path)
 		}
 		return ctx.js_string(os.real_path(path))
-	}))
-	host.set('getCurrentDirectory', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'getCurrentDirectory', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		return ctx.js_string(os.getwd())
-	}))
-	host.set('useCaseSensitiveFileNames', ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
+	})
+	set_typescript_host_function(ctx, host, 'useCaseSensitiveFileNames', fn [ctx] (args []vjsx.Value) vjsx.Value {
 		$if windows {
 			return ctx.js_bool(false)
 		}
 		return ctx.js_bool(true)
-	}))
+	})
 	global.set('__vjs_host', host)
 	host.free()
 	global.free()
@@ -132,7 +132,14 @@ pub fn install_typescript_runtime(ctx &vjsx.Context) ! {
 	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/typescript.js', 'TypeScript runtime')!
 	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_bootstrap.js', 'TypeScript bootstrap helper')!
 	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_scan.js', 'TypeScript scan helper')!
+	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_commonjs_detect.js', 'CommonJS detector')!
 	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_commonjs.js', 'TypeScript CommonJS helper')!
 	run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_ts_resolver.js', 'TypeScript resolver helper')!
 	mark_typescript_runtime_installed(ctx)
+}
+
+fn set_typescript_host_function(ctx &vjsx.Context, host vjsx.Value, name string, callback vjsx.JSFunction) {
+	value := ctx.js_function(callback)
+	host.set(name, value)
+	value.free()
 }

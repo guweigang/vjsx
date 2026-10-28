@@ -81,16 +81,6 @@ function __vjs_collect_commonjs_export_targets(sourceFile) {
 	return targets;
 }
 
-globalThis.__vjs_is_commonjs = function(input) {
-	const hasEsmSyntax = /^\s*import\s/m.test(input)
-		|| /^\s*export\s/m.test(input)
-		|| /\bimport\.meta\b/.test(input);
-	if (hasEsmSyntax) {
-		return false;
-	}
-	return /module\.exports\s*=|exports\.[A-Za-z_$]|Object\.defineProperty\(exports,|require\s*\(/.test(input);
-};
-
 globalThis.__vjs_list_commonjs_exports = function(input) {
 	const values = new Set();
 	const sourceFile = ts.createSourceFile("vjsx_commonjs_scan.js", input, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);

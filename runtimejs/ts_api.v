@@ -81,11 +81,16 @@ pub fn normalize_interactive_javascript(ctx &vjsx.Context, source string, script
 	return output.to_string()
 }
 
-// is_commonjs_module uses the installed runtime detector without resolving dependencies.
-// Call install_typescript_runtime first. Detection reads source without executing it.
+// Detect CommonJS without loading the TypeScript compiler or executing source.
+// Only graph scanning and transpilation need the full compiler runtime.
 pub fn is_commonjs_module(ctx &vjsx.Context, script_path string) !bool {
 	source := os.read_file(script_path)!
-	check_fn := ctx.js_global('__vjs_is_commonjs')
+	mut check_fn := ctx.js_global('__vjs_is_commonjs')
+	if check_fn.is_undefined() {
+		check_fn.free()
+		run_typescript_runtime_asset(ctx, 'thirdparty/typescript/lib/vjs_commonjs_detect.js', 'CommonJS detector')!
+		check_fn = ctx.js_global('__vjs_is_commonjs')
+	}
 	defer {
 		check_fn.free()
 	}

@@ -114,10 +114,11 @@ pub fn (v Value) is_function() bool {
 // Example: assert val.instanceof('Promise') == true
 @[manualfree]
 pub fn (v Value) instanceof(key string) bool {
-	glob := v.ctx.js_global().get(key)
-	stat := C.JS_IsInstanceOf(v.ctx.ref, v.ref, glob.ref) == 1
-	glob.free()
-	return stat
+	global := v.ctx.js_global()
+	defer { global.free() }
+	glob := global.get(key)
+	defer { glob.free() }
+	return C.JS_IsInstanceOf(v.ctx.ref, v.ref, glob.ref) == 1
 }
 
 // Check typeof name value.
