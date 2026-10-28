@@ -111,7 +111,7 @@ fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options Co
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, int(payload_len))
 	}
 	return payload
 }
@@ -176,7 +176,7 @@ fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, 
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, int(payload_len))
 	}
 	C.js_free(c_ctx, payload_ptr)
 	ctx.store_bundle_compiled_bytecode(name, payload)

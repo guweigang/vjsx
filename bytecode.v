@@ -228,7 +228,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, int(payload_len))
 	}
 	return wrap_bytecode_artifact(payload, options)
 }
