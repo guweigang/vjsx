@@ -12,7 +12,7 @@ fn collect_runtime_js_assets(root string, dir string) []string {
 		if !name.ends_with('.js') {
 			continue
 		}
-		assets << path[root.len + 1..]
+		assets << path[root.len + 1..].replace('\\', '/')
 	}
 	return assets
 }
