@@ -64,11 +64,11 @@ fn install_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry: normalize_registry(opts.install_registry)!
-		root: root
-		install_root: staging_root
-		dev: opts.install_dev
-		installed: map[string]bool{}
+		registry:      normalize_registry(opts.install_registry)!
+		root:          root
+		install_root:  staging_root
+		dev:           opts.install_dev
+		installed:     map[string]bool{}
 		package_names: map[string]bool{}
 	}
 	installer.workspaces = load_workspaces(installer.root)!
@@ -136,10 +136,10 @@ fn repair_packages(opts CliOptions) !string {
 		os.rmdir_all(staging_root) or {}
 	}
 	mut installer := Installer{
-		registry: normalize_registry(opts.install_registry)!
-		root: root
-		install_root: staging_root
-		installed: map[string]bool{}
+		registry:      normalize_registry(opts.install_registry)!
+		root:          root
+		install_root:  staging_root
+		installed:     map[string]bool{}
 		package_names: map[string]bool{}
 	}
 	installer.workspaces = load_workspaces(root)!
@@ -163,7 +163,7 @@ fn repair_packages(opts CliOptions) !string {
 			return error('package is not present in package-lock.json: ${name}')
 		}
 		installer.install_spec(PackageSpec{
-			name: name
+			name:    name
 			version: lock_pkg.version
 		})!
 	}
@@ -584,7 +584,7 @@ fn parse_package_spec(input string) !PackageSpec {
 			name := spec[..slash + 1 + at]
 			validate_package_name(name)!
 			return PackageSpec{
-				name: name
+				name:    name
 				version: rest[at + 1..]
 			}
 		}
@@ -598,7 +598,7 @@ fn parse_package_spec(input string) !PackageSpec {
 			name := spec[..at]
 			validate_package_name(name)!
 			return PackageSpec{
-				name: name
+				name:    name
 				version: spec[at + 1..]
 			}
 		}
@@ -649,16 +649,16 @@ fn (mut installer Installer) install_spec(spec PackageSpec) ! {
 	}
 	deps := any_object_optional(version_info, 'dependencies')
 	installer.lock_package(spec.name, LockPackage{
-		version: version
-		resolved: tarball
-		integrity: integrity
+		version:      version
+		resolved:     tarball
+		integrity:    integrity
 		dependencies: any_string_map(deps)
 	})
 	installer.warn_peer_dependencies(spec.name, version_info)
 	for dep_name, dep_range_any in deps {
 		if dep_range_any is string {
 			installer.install_spec(PackageSpec{
-				name: dep_name
+				name:    dep_name
 				version: dep_range_any
 			})!
 		}
@@ -681,16 +681,16 @@ fn (mut installer Installer) install_workspace(spec PackageSpec, workspace Works
 		os.symlink(workspace.path, target)!
 	}
 	installer.lock_package(spec.name, LockPackage{
-		version: workspace.version
-		resolved: workspace.path
-		link: true
+		version:      workspace.version
+		resolved:     workspace.path
+		link:         true
 		dependencies: any_string_map(deps)
 	})
 	installer.warn_peer_dependencies(spec.name, manifest)
 	for dep_name, dep_range_any in deps {
 		if dep_range_any is string {
 			installer.install_spec(PackageSpec{
-				name: dep_name
+				name:    dep_name
 				version: dep_range_any
 			})!
 		}
@@ -713,7 +713,7 @@ fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg L
 		}
 		for dep_name, dep_range in lock_pkg.dependencies {
 			installer.install_spec(PackageSpec{
-				name: dep_name
+				name:    dep_name
 				version: dep_range
 			})!
 		}
@@ -728,7 +728,7 @@ fn (mut installer Installer) install_locked_package(spec PackageSpec, lock_pkg L
 	}
 	for dep_name, dep_range in lock_pkg.dependencies {
 		installer.install_spec(PackageSpec{
-			name: dep_name
+			name:    dep_name
 			version: dep_range
 		})!
 	}
@@ -808,11 +808,11 @@ fn (mut installer Installer) fetch_url(url string, kind string) ![]u8 {
 		return os.read_bytes(body_path)
 	}
 	resp := http.fetch(
-		url: url
-		method: .get
-		read_timeout: 30 * time.second
+		url:           url
+		method:        .get
+		read_timeout:  30 * time.second
 		write_timeout: 30 * time.second
-		max_retries: 0
+		max_retries:   0
 	)!
 	if resp.status_code < 200 || resp.status_code >= 300 {
 		return error('${kind} request failed: HTTP ${resp.status_code}')
@@ -1041,9 +1041,9 @@ fn load_workspaces(root string) !map[string]WorkspacePackage {
 				continue
 			}
 			workspaces[name] = WorkspacePackage{
-				name: name
+				name:    name
 				version: any_string_field_optional(pkg_map, 'version')
-				path: os.real_path(path)
+				path:    os.real_path(path)
 			}
 		}
 	}
@@ -1124,13 +1124,13 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 	}
 	lock_path := os.join_path(root, 'package-lock.json')
 	mut lockfile := Lockfile{
-		name: name
-		version: version
-		root_dependencies: root_dependencies
-		root_dev_dependencies: root_dev_dependencies
+		name:                       name
+		version:                    version
+		root_dependencies:          root_dependencies
+		root_dev_dependencies:      root_dev_dependencies
 		root_optional_dependencies: root_optional_dependencies
-		root_peer_dependencies: root_peer_dependencies
-		packages: map[string]LockPackage{}
+		root_peer_dependencies:     root_peer_dependencies
+		packages:                   map[string]LockPackage{}
 	}
 	if !os.exists(lock_path) {
 		return lockfile
@@ -1176,10 +1176,10 @@ fn load_or_init_lockfile(root string, include_dev bool) !Lockfile {
 			continue
 		}
 		lockfile.packages[path] = LockPackage{
-			version: any_string_field_optional(pkg_map, 'version')
-			resolved: any_string_field_optional(pkg_map, 'resolved')
-			integrity: any_string_field_optional(pkg_map, 'integrity')
-			link: any_bool_field_optional(pkg_map, 'link')
+			version:      any_string_field_optional(pkg_map, 'version')
+			resolved:     any_string_field_optional(pkg_map, 'resolved')
+			integrity:    any_string_field_optional(pkg_map, 'integrity')
+			link:         any_bool_field_optional(pkg_map, 'link')
 			dependencies: any_string_map(any_object_optional(pkg_any, 'dependencies'))
 		}
 	}

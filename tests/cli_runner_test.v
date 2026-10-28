@@ -12,8 +12,8 @@ fn test_install_host_compat() {
 	ctx := session.context()
 	ctx.install_host(
 		console: false
-		fs: false
-		path: false
+		fs:      false
+		path:    false
 		process: false
 	)
 	assert true
@@ -27,8 +27,8 @@ fn test_install_runtime_globals_profile() {
 	ctx := session.context()
 	ctx.install_runtime_globals(
 		binary: true
-		timer: false
-		url: true
+		timer:  false
+		url:    true
 	)
 	value := ctx.eval('typeof atob + "|" + typeof Buffer + "|" + typeof URL + "|" + typeof setTimeout') or {
 		panic(err)
@@ -219,9 +219,9 @@ fn test_install_script_runtime_profile() {
 
 fn test_script_runtime_can_disable_host_identity_capabilities() {
 	mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{
-		fetch: false
-		path: false
-		os: false
+		fetch:   false
+		path:    false
+		os:      false
 		process: false
 	})
 	defer {
@@ -372,11 +372,11 @@ fn test_install_host_api_registers_globals_and_modules() {
 	ctx.install_host_api(
 		globals: [
 			vjsx.HostGlobalBinding{
-				name: 'appName'
+				name:  'appName'
 				value: vjsx.host_value('embedder')
 			},
 			vjsx.HostGlobalBinding{
-				name: 'hostMultiply'
+				name:  'hostMultiply'
 				value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
 					return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 						if args.len < 2 {
@@ -389,12 +389,12 @@ fn test_install_host_api_registers_globals_and_modules() {
 		]
 		modules: [
 			vjsx.HostModuleBinding{
-				name: 'host-tools'
+				name:    'host-tools'
 				install: vjsx.host_module_exports(vjsx.HostModuleExport{
-					name: 'answer'
+					name:  'answer'
 					value: vjsx.host_value(42)
 				}, vjsx.HostModuleExport{
-					name: 'describe'
+					name:  'describe'
 					value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
 						return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 							if args.len == 0 {
@@ -436,14 +436,14 @@ fn test_install_host_api_registers_host_objects() {
 	ctx.install_host_api(
 		globals: [
 			vjsx.HostGlobalBinding{
-				name: 'host'
+				name:  'host'
 				value: vjsx.host_object(vjsx.HostObjectField{
-					name: 'name'
+					name:  'name'
 					value: vjsx.host_value('embedder')
 				}, vjsx.HostObjectField{
-					name: 'math'
+					name:  'math'
 					value: vjsx.host_object(vjsx.HostObjectField{
-						name: 'add'
+						name:  'add'
 						value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
 							return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 								return ctx.js_int(args[0].to_int() + args[1].to_int())
@@ -455,21 +455,21 @@ fn test_install_host_api_registers_host_objects() {
 		]
 		modules: [
 			vjsx.HostModuleBinding{
-				name: 'host-service'
+				name:    'host-service'
 				install: vjsx.host_module_object(vjsx.HostObjectField{
-					name: 'version'
+					name:  'version'
 					value: vjsx.host_value('v1')
 				}, vjsx.HostObjectField{
-					name: 'greet'
+					name:  'greet'
 					value: fn [ctx] (ctx2 &vjsx.Context) vjsx.Value {
 						return ctx.js_function(fn [ctx] (args []vjsx.Value) vjsx.Value {
 							return ctx.js_string('hello:' + args[0].str())
 						})
 					}
 				}, vjsx.HostObjectField{
-					name: 'nested'
+					name:  'nested'
 					value: vjsx.host_object(vjsx.HostObjectField{
-						name: 'flag'
+						name:  'flag'
 						value: vjsx.host_value(true)
 					})
 				})

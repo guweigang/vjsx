@@ -38,7 +38,7 @@ pub fn load_runtime_module(ctx &vjsx.Context, script_path string, temp_root stri
 
 pub fn runtime_session_bridge() vjsx.RuntimeSessionBridge {
 	return vjsx.RuntimeSessionBridge{
-		run: run_runtime_entry
+		run:         run_runtime_entry
 		load_module: load_runtime_module
 	}
 }

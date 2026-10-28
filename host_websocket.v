@@ -153,10 +153,12 @@ fn (ctx &Context) try_install_websocket_host(config WebSocketConfig, mut host We
 			))
 		}
 		raw := args[0].str()
-		host_policy_allows_url(policy, raw) or { return ctx.js_throw(ctx.js_error(
-			message: err.msg()
-			name:    'SecurityError'
-		)) }
+		host_policy_allows_url(policy, raw) or {
+			return ctx.js_throw(ctx.js_error(
+				message: err.msg()
+				name:    'SecurityError'
+			))
+		}
 		parsed := urllib.parse(raw) or { return ctx.js_throw(err.msg()) }
 		if parsed.scheme !in ['ws', 'wss'] || parsed.hostname() == '' {
 			return ctx.js_throw('invalid WebSocket URL')

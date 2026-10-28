@@ -383,7 +383,7 @@ fn fs_create_write_stream(ctx &Context, roots []string, path string) !Value {
 		if args.len < 2 || !args[1].is_function() {
 			return ctx.js_throw(ctx.js_error(
 				message: 'event name and callback are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		if args[0].str() != 'finish' {
@@ -706,7 +706,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			return promise.reject(ctx.js_error(
 				message: 'path and mode are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
@@ -722,7 +722,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			copy_err = ctx.js_error(
 				message: 'source and destination are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			)
 			unsafe {
 				goto reject
@@ -784,7 +784,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'path and data are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
@@ -918,7 +918,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'source and destination are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		src := resolve_existing_path(args[0].str(), roots, ctx.capability_policy()) or {
@@ -934,7 +934,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'path and mode are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		target := writable_target_path(args[0].str(), roots, ctx.capability_policy()) or {
@@ -959,7 +959,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len < 2 {
 			rename_err = ctx.js_error(
 				message: 'source and destination are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			)
 			unsafe {
 				goto reject
@@ -1112,18 +1112,19 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	fs.export_default(default_obj)
 	fs.create()
 	mut node_fs := ctx.js_module('node:fs')
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat', 'chmod',
-		'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync',
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
+		'chmod', 'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync',
 		'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream',
-		'rename', 'readJson', 'writeJson', 'openSync', 'writeSync', 'fsyncSync', 'closeSync', 'renameSync'] {
+		'rename', 'readJson', 'writeJson', 'openSync', 'writeSync', 'fsyncSync', 'closeSync',
+		'renameSync'] {
 		node_fs.export(name, fs.get(name))
 	}
 	node_fs.export_default(default_obj)
 	node_fs.create()
 
 	mut promises_obj := ctx.js_object()
-	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat', 'chmod',
-		'copyFile', 'rename', 'readJson', 'writeJson'] {
+	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
+		'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
 		promises_obj.set(name, fs.get(name))
 	}
 	for module_name in ['fs/promises', 'node:fs/promises'] {

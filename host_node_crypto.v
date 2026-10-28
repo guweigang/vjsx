@@ -19,7 +19,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 		if args.len < 2 {
 			return ctx.js_throw(ctx.js_error(
 				message: 'algorithm and data are required'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		bytes := args[1].to_bytes()
@@ -33,7 +33,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 			else {
 				return ctx.js_throw(ctx.js_error(
 					message: 'Digest method not supported: ${args[0].str()}'
-					name: 'TypeError'
+					name:    'TypeError'
 				))
 			}
 		}
@@ -56,7 +56,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 		if args.len == 0 || args[0].byte_len() != ed25519.seed_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 private key seed must be 32 bytes'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		private_key := ed25519.new_key_from_seed(args[0].to_bytes())
@@ -66,7 +66,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 		if args.len == 0 || args[0].byte_len() != ed25519.private_key_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 private key must be 64 bytes'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		private_key := ed25519.PrivateKey(args[0].to_bytes())
@@ -76,7 +76,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 		if args.len < 2 || args[0].byte_len() != ed25519.private_key_size {
 			return ctx.js_throw(ctx.js_error(
 				message: 'Ed25519 signing requires a 64-byte private key'
-				name: 'TypeError'
+				name:    'TypeError'
 			))
 		}
 		signature := ed25519.sign(ed25519.PrivateKey(args[0].to_bytes()), args[1].to_bytes()) or {
@@ -97,8 +97,8 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 	installed.free()
 
 	helpers := ctx.js_global('__vjsxNodeCrypto')
-	export_names := ['KeyObject', 'createHash', 'createPrivateKey', 'createPublicKey',
-		'generateKeyPair', 'generateKeyPairSync', 'randomUUID', 'sign', 'verify']
+	export_names := ['KeyObject', 'createHash', 'createPrivateKey', 'createPublicKey', 'generateKeyPair',
+		'generateKeyPairSync', 'randomUUID', 'sign', 'verify']
 	for module_name in ['crypto', 'node:crypto'] {
 		mut crypto_mod := ctx.js_module(module_name)
 		default_obj := ctx.js_object()

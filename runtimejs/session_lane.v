@@ -52,7 +52,7 @@ mut:
 
 pub fn new_session_lane(session vjsx.RuntimeSession, config SessionLaneConfig) &SessionLane {
 	return &SessionLane{
-		config: config
+		config:  config
 		session: session
 	}
 }
@@ -82,8 +82,8 @@ fn (lane &SessionLane) reserve_waiter() ! {
 		state.guard.unlock()
 	}
 	decision := decide_session_lane_admission(SessionLaneLoad{
-		queued: state.queued
-		running: state.running
+		queued:   state.queued
+		running:  state.running
 		draining: state.draining
 	}, lane.config)
 	match decision {
@@ -156,8 +156,8 @@ pub fn (lane &SessionLane) run_turn(options vjsx.RuntimeSessionTurnOptions, acti
 	queue_wait_ms := lane.acquire_turn()!
 	completed_before := lane.session.lifecycle_snapshot().completed_turns
 	result := lane.session.run_turn(vjsx.RuntimeSessionTurnOptions{
-		kind: options.kind
-		timeout_ms: options.timeout_ms
+		kind:          options.kind
+		timeout_ms:    options.timeout_ms
 		queue_wait_ms: queue_wait_ms
 	}, action) or {
 		completed := lane.session.lifecycle_snapshot().completed_turns > completed_before
@@ -181,14 +181,14 @@ pub fn (lane &SessionLane) snapshot() SessionLaneSnapshot {
 	mut state := lane.state
 	state.guard.lock()
 	snapshot := SessionLaneSnapshot{
-		queued: state.queued
-		running: state.running
-		draining: state.draining
-		completed: state.completed
-		rejected_full: state.rejected_full
-		rejected_timeout: state.rejected_timeout
+		queued:            state.queued
+		running:           state.running
+		draining:          state.draining
+		completed:         state.completed
+		rejected_full:     state.rejected_full
+		rejected_timeout:  state.rejected_timeout
 		rejected_draining: state.rejected_draining
-		session: lane.session.lifecycle_snapshot()
+		session:           lane.session.lifecycle_snapshot()
 	}
 	state.guard.unlock()
 	return snapshot

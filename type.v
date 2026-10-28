@@ -45,7 +45,7 @@ fn (ctx &Context) c_val(ref C.JSValue) Value {
 fn (ctx &Context) c_tag(tag int) Value {
 	return ctx.c_val(C.JSValue{
 		tag: tag
-		u: &C.JSValueUnion{}
+		u:   &C.JSValueUnion{}
 	})
 }
 

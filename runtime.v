@@ -96,7 +96,7 @@ pub fn new_runtime() Runtime {
 		panic('failed to allocate QuickJS interrupt state')
 	}
 	rt := Runtime{
-		ref: ref
+		ref:             ref
 		interrupt_state: interrupt_state
 	}
 	C.JS_SetCanBlock(rt.ref, 1)
@@ -117,14 +117,14 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 	if status < 0 {
 		if !isnil(job_ctx) {
 			return (&Context{
-				ref: job_ctx
-				rt: rt
+				ref:                job_ctx
+				rt:                 rt
 				host_cleanup_state: &HostCleanupState{
-					cleanups: []HostCleanup{}
+					cleanups:          []HostCleanup{}
 					installed_modules: map[string]bool{}
-					bundle_modules: map[string][]u8{}
-					bundle_sources: map[string]string{}
-					bundle_compiled: map[string][]u8{}
+					bundle_modules:    map[string][]u8{}
+					bundle_sources:    map[string]string{}
+					bundle_compiled:   map[string][]u8{}
 				}
 			}).execution_error()
 		}

@@ -18,13 +18,13 @@ fn install_embedded_app_runtime(ctx &vjsx.Context, profile string, executable_pa
 	match profile {
 		'node' {
 			ctx.try_install_node_runtime(
-				fs_roots: fs_roots
+				fs_roots:     fs_roots
 				process_args: process_args
 			)!
 		}
 		'script' {
 			ctx.try_install_script_runtime(
-				fs_roots: fs_roots
+				fs_roots:     fs_roots
 				process_args: process_args
 			)!
 		}

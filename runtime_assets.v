@@ -215,7 +215,9 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'thirdparty/typescript/lib/vjs_ts_bootstrap.js' {
 			runtime_asset_vjs_ts_bootstrap_js.to_string()
 		}
-		'thirdparty/typescript/lib/vjs_commonjs_detect.js' { runtime_asset_vjs_commonjs_detect_js.to_string() }
+		'thirdparty/typescript/lib/vjs_commonjs_detect.js' {
+			runtime_asset_vjs_commonjs_detect_js.to_string()
+		}
 		'thirdparty/typescript/lib/vjs_ts_commonjs.js' {
 			runtime_asset_vjs_ts_commonjs_js.to_string()
 		}

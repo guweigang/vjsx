@@ -9,7 +9,7 @@ class Parser {
 module.exports = { Parser };
 '
 	bytecode := vjsx.compile_module(source,
-		filename: 'parser.umd.js'
+		filename:        'parser.umd.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{})
@@ -48,7 +48,7 @@ module.exports = { Parser };
 
 fn test_bytecode_rejects_incompatible_profile_before_quickjs_load() {
 	bytecode := vjsx.compile_module('module.exports = { value: 42 };',
-		filename: 'value.js'
+		filename:        'value.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut session := vjsx.new_script_runtime_session(vjsx.ContextConfig{}, vjsx.ScriptRuntimeConfig{})
@@ -64,7 +64,7 @@ fn test_bytecode_rejects_incompatible_profile_before_quickjs_load() {
 
 fn test_bytecode_rejects_corruption_before_quickjs_load() {
 	mut bytecode := vjsx.compile_module('module.exports = { value: 42 };',
-		filename: 'value.js'
+		filename:        'value.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	bytecode[bytecode.len - 1] ^= 0xff
@@ -81,7 +81,7 @@ fn test_bytecode_rejects_corruption_before_quickjs_load() {
 
 fn test_bytecode_rejects_format_and_quickjs_abi_mismatches() {
 	bytecode := vjsx.compile_module('module.exports = { value: 42 };',
-		filename: 'value.js'
+		filename:        'value.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut session := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{})
@@ -106,7 +106,7 @@ fn test_bytecode_rejects_format_and_quickjs_abi_mismatches() {
 
 fn test_bytecode_rejects_artifact_abi_mismatch_independently() {
 	bytecode := vjsx.compile_module('module.exports = { value: 42 };',
-		filename: 'value.js'
+		filename:        'value.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut bad_abi := bytecode.clone()
@@ -124,7 +124,7 @@ fn test_bytecode_rejects_artifact_abi_mismatch_independently() {
 
 fn test_bytecode_parser_rejects_every_truncated_prefix() {
 	bytecode := vjsx.compile_module('module.exports = 42;',
-		filename: 'truncation-seed.js'
+		filename:        'truncation-seed.js'
 		runtime_profile: 'node'
 	) or { panic(err) }
 	mut session := vjsx.try_new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{}) or {

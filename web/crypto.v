@@ -53,34 +53,34 @@ fn ecdsa_signer_opts_from_hash_name(name string) !ecdsa.SignerOpts {
 	return match name {
 		'SHA-1' {
 			ecdsa.SignerOpts{
-				hash_config: .with_custom_hash
-				allow_custom_hash: true
+				hash_config:        .with_custom_hash
+				allow_custom_hash:  true
 				allow_smaller_size: true
-				custom_hash: sha1.new()
+				custom_hash:        sha1.new()
 			}
 		}
 		'SHA-256' {
 			ecdsa.SignerOpts{
-				hash_config: .with_custom_hash
-				allow_custom_hash: true
+				hash_config:        .with_custom_hash
+				allow_custom_hash:  true
 				allow_smaller_size: true
-				custom_hash: sha256.new()
+				custom_hash:        sha256.new()
 			}
 		}
 		'SHA-384' {
 			ecdsa.SignerOpts{
-				hash_config: .with_custom_hash
-				allow_custom_hash: true
+				hash_config:        .with_custom_hash
+				allow_custom_hash:  true
 				allow_smaller_size: true
-				custom_hash: sha512.new384()
+				custom_hash:        sha512.new384()
 			}
 		}
 		'SHA-512' {
 			ecdsa.SignerOpts{
-				hash_config: .with_custom_hash
-				allow_custom_hash: true
+				hash_config:        .with_custom_hash
+				allow_custom_hash:  true
 				allow_smaller_size: true
-				custom_hash: sha512.new()
+				custom_hash:        sha512.new()
 			}
 		}
 		else { error('unsupported ECDSA hash: ${name}') }

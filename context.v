@@ -29,7 +29,7 @@ pub:
 	ref                &C.JSContext
 	rt                 Runtime
 	host_cleanup_state &HostCleanupState
-	websocket_host        &WebSocketHost         = &WebSocketHost{}
+	websocket_host     &WebSocketHost = &WebSocketHost{}
 mut:
 	asset_root      string
 	runtime_profile string
@@ -194,17 +194,17 @@ pub fn (rt Runtime) new_context(config ContextConfig) &Context {
 	C.js_std_init_handlers(rt.ref)
 	ref := new_context(rt.ref)
 	ctx := &Context{
-		ref: ref
-		rt: rt
+		ref:                ref
+		rt:                 rt
 		host_cleanup_state: &HostCleanupState{
-			cleanups: []HostCleanup{}
+			cleanups:          []HostCleanup{}
 			installed_modules: map[string]bool{}
-			bundle_modules: map[string][]u8{}
-			bundle_sources: map[string]string{}
-			bundle_compiled: map[string][]u8{}
+			bundle_modules:    map[string][]u8{}
+			bundle_sources:    map[string]string{}
+			bundle_compiled:   map[string][]u8{}
 		}
-		asset_root: config.asset_root
-		runtime_profile: 'bare'
+		asset_root:         config.asset_root
+		runtime_profile:    'bare'
 	}
 	C.JS_SetContextOpaque(ref, ctx)
 	C.JS_SetModuleLoaderFunc(rt.ref, &vjsx_runtime_module_normalize, &vjsx_runtime_module_loader, C.NULL)
@@ -262,10 +262,10 @@ pub fn (ctx &Context) has_exception() bool {
 
 pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 	return ctx.js_eval_core(
-		input: input.str
-		len: usize(input.len)
-		fname: fname.str
-		flag: flag
+		input:    input.str
+		len:      usize(input.len)
+		fname:    fname.str
+		flag:     flag
 		set_meta: fn (ctx Context, ref JSValueConst) {}
 	)!
 }
@@ -348,10 +348,10 @@ pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta Set
 		return error('${fname} file not found')
 	}
 	val := ctx.js_eval_core(
-		input: buf
-		len: buf_len
-		fname: c_fname
-		flag: flag
+		input:    buf
+		len:      buf_len
+		fname:    c_fname
+		flag:     flag
 		set_meta: set_meta
 	)!
 	C.js_free(ctx.ref, buf)
@@ -418,12 +418,12 @@ pub fn (ctx &Context) call(val Value, args ...AnyValue) !Value {
 pub fn (ctx &Context) dup_context() &Context {
 	ref := C.JS_DupContext(ctx.ref)
 	return &Context{
-		ref: ref
-		rt: ctx.rt
+		ref:                ref
+		rt:                 ctx.rt
 		host_cleanup_state: ctx.host_cleanup_state
-		websocket_host:        ctx.websocket_host
-		asset_root: ctx.asset_root
-		runtime_profile: ctx.runtime_profile
+		websocket_host:     ctx.websocket_host
+		asset_root:         ctx.asset_root
+		runtime_profile:    ctx.runtime_profile
 	}
 }
 

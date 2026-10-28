@@ -138,12 +138,12 @@ pub fn (v Value) to_error() &JSError {
 		'JavaScript exception'
 	}
 	err := &JSError{
-		name: name
-		message: display_message
-		stack: stack
+		name:     name
+		message:  display_message
+		stack:    stack
 		location: location
 		expected: expected
-		found: found
+		found:    found
 	}
 	return err
 }

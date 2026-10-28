@@ -49,7 +49,7 @@ $if vjsx_sqlite ? {
 	fn sqlite_error_value(ctx &Context, message string, name string) Value {
 		return ctx.js_error(
 			message: message
-			name: name
+			name:    name
 		)
 	}
 
@@ -261,7 +261,7 @@ $if vjsx_sqlite ? {
 			return error('options.busyTimeout must be a number')
 		}
 		return HostSqliteOpenConfig{
-			path: path_value.to_string()
+			path:         path_value.to_string()
 			busy_timeout: if busy_value.is_undefined() || busy_value.is_null() {
 				0
 			} else {
@@ -896,9 +896,9 @@ $if vjsx_sqlite ? {
 				}
 			}
 			mut stmt := &HostSqliteStmt{
-				conn: conn
+				conn:       conn
 				query_text: args[0].to_string()
-				obj_ref: ctx.js_undefined()
+				obj_ref:    ctx.js_undefined()
 			}
 			conn.stmts << stmt
 			return promise.resolve(sqlite_stmt_object(ctx, mut stmt))
@@ -928,10 +928,10 @@ $if vjsx_sqlite ? {
 				conn.cached_stmts.delete(query_text)
 			}
 			mut stmt := &HostSqliteStmt{
-				conn: conn
+				conn:       conn
 				query_text: query_text
-				obj_ref: ctx.js_undefined()
-				cache_key: query_text
+				obj_ref:    ctx.js_undefined()
+				cache_key:  query_text
 			}
 			conn.stmts << stmt
 			stmt_obj := sqlite_stmt_object(ctx, mut stmt)
@@ -1012,7 +1012,7 @@ $if vjsx_sqlite ? {
 				db.busy_timeout(config.busy_timeout)
 			}
 			mut conn := &HostSqliteConn{
-				db: db
+				db:   db
 				path: target
 			}
 			ctx.register_host_cleanup(fn [mut conn] () {

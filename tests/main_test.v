@@ -46,20 +46,20 @@ fn test_node_policy_can_disable_process_env_writes() {
 	ctx := session.context()
 	key := 'VJSX_POLICY_ENV_${os.getpid()}'
 	ctx.install_node_compat(vjsx.NodeCompatConfig{
-		console: false
-		timers: false
-		fs: false
-		path: false
-		os: false
-		http: false
-		https: false
-		fetch: false
+		console:       false
+		timers:        false
+		fs:            false
+		path:          false
+		os:            false
+		http:          false
+		https:         false
+		fetch:         false
 		child_process: false
-		process: true
-		sqlite: false
-		mysql: false
-		process_args: ['inline.js']
-		policy: vjsx.HostPolicy{
+		process:       true
+		sqlite:        false
+		mysql:         false
+		process_args:  ['inline.js']
+		policy:        vjsx.HostPolicy{
 			allow_env_write: false
 		}
 	})
@@ -77,21 +77,21 @@ fn test_node_policy_can_disable_shell_execution() {
 	}
 	ctx := session.context()
 	ctx.install_node_compat(vjsx.NodeCompatConfig{
-		console: false
-		timers: false
-		fs: false
-		path: false
-		os: false
-		http: false
-		https: false
-		fetch: false
+		console:       false
+		timers:        false
+		fs:            false
+		path:          false
+		os:            false
+		http:          false
+		https:         false
+		fetch:         false
 		child_process: true
-		process: false
-		sqlite: false
-		mysql: false
-		policy: vjsx.HostPolicy{
+		process:       false
+		sqlite:        false
+		mysql:         false
+		policy:        vjsx.HostPolicy{
 			allow_subprocess: true
-			allow_shell: false
+			allow_shell:      false
 		}
 	})
 	ctx.eval('
