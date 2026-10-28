@@ -5,6 +5,10 @@ import runtimejs
 const runtime_session_test_wake_log_env = 'VJSX_RUNTIME_SESSION_TEST_WAKE_LOG'
 const runtime_session_test_now_env = 'VJSX_RUNTIME_SESSION_TEST_NOW'
 
+fn runtime_session_test_normalize_path(path string) string {
+	return path.replace('\\', '/')
+}
+
 fn runtime_session_test_now_from_env() i64 {
 	return os.getenv(runtime_session_test_now_env).i64()
 }
@@ -925,8 +929,8 @@ fn test_runtime_session_plugin_lifecycle_helper() {
 	defer {
 		plugin.close()
 	}
-	assert plugin.name().ends_with('tests/runtime_session_plugin.mjs')
-	assert plugin.path().ends_with('tests/runtime_session_plugin.mjs')
+	assert runtime_session_test_normalize_path(plugin.name()).ends_with('tests/runtime_session_plugin.mjs')
+	assert runtime_session_test_normalize_path(plugin.path()).ends_with('tests/runtime_session_plugin.mjs')
 	assert plugin.capabilities().len == 0
 	assert plugin.has_capability('worker') == false
 	activate := plugin.activate('host-app') or { panic(err) }
@@ -966,7 +970,7 @@ fn test_runtime_session_plugin_metadata_helpers() {
 		plugin.close()
 	}
 	assert plugin.name() == 'demo-plugin'
-	assert plugin.path().ends_with('tests/runtime_session_plugin.mjs')
+	assert runtime_session_test_normalize_path(plugin.path()).ends_with('tests/runtime_session_plugin.mjs')
 	assert plugin.capabilities() == ['serve', 'reload']
 	assert plugin.has_capability('serve')
 	assert plugin.has_capability('reload')
@@ -1118,7 +1122,7 @@ fn test_runtime_session_bound_module_helper() {
 	defer {
 		module_binding.close()
 	}
-	assert module_binding.path().ends_with('tests/runtime_session_module_host.mjs')
+	assert runtime_session_test_normalize_path(module_binding.path()).ends_with('tests/runtime_session_module_host.mjs')
 	assert module_binding.has_export('greet')
 	assert module_binding.has_export('missing') == false
 	greet := module_binding.call_export('greet', 'bound-a') or { panic(err) }
@@ -1187,7 +1191,7 @@ fn test_runtime_session_bound_plugin_helper() {
 		plugin.close()
 	}
 	assert plugin.name() == 'bound-plugin'
-	assert plugin.path().ends_with('tests/runtime_session_plugin_host.mjs')
+	assert runtime_session_test_normalize_path(plugin.path()).ends_with('tests/runtime_session_plugin_host.mjs')
 	assert plugin.capabilities() == ['lifecycle']
 	assert plugin.has_capability('lifecycle')
 	assert plugin.has_capability('missing') == false
@@ -1342,7 +1346,7 @@ fn test_extension_session_load_extension_contract() {
 		extension.close()
 	}
 	assert extension.name() == 'demo-extension'
-	assert extension.path().ends_with('tests/runtimejs_extension_handle.mjs')
+	assert runtime_session_test_normalize_path(extension.path()).ends_with('tests/runtimejs_extension_handle.mjs')
 	assert extension.capabilities() == ['serve', 'handle']
 	assert extension.has_capability('serve')
 	assert extension.has_capability('missing') == false
@@ -1396,7 +1400,7 @@ fn test_extension_session_describe_extension_manifest() {
 	manifest := extension_session.describe_extension('./tests/runtimejs_extension_manifest.mjs') or {
 		panic(err)
 	}
-	assert manifest.path.ends_with('tests/runtimejs_extension_manifest.mjs')
+	assert runtime_session_test_normalize_path(manifest.path).ends_with('tests/runtimejs_extension_manifest.mjs')
 	assert manifest.name == 'manifest-extension'
 	assert manifest.capabilities == ['search', 'index']
 	assert manifest.services.len == 3
