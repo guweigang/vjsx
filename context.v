@@ -59,7 +59,7 @@ pub:
 @[params]
 pub struct EvalCoreConfig {
 	input    &char
-	len      usize
+	len      uint
 	fname    &char
 	flag     int
 	set_meta SetMeta @[required]
@@ -117,7 +117,7 @@ fn C.js_std_dump_error(&C.JSContext)
 
 fn C.js_free(&C.JSContext, voidptr)
 
-fn C.vjsx_js_eval_out(&C.JSContext, &char, usize, &char, int, &C.JSValue)
+fn C.vjsx_js_eval_out(&C.JSContext, &char, uint, &char, int, &C.JSValue)
 
 fn C.JS_DupContext(&C.JSContext) &C.JSContext
 
@@ -147,7 +147,7 @@ fn C.js_std_free_handlers(&C.JSRuntime)
 
 fn C.js_std_add_helpers(&C.JSContext, int, &&char)
 
-fn C.js_load_file(&C.JSContext, &usize, &char) &u8
+fn C.js_load_file(&C.JSContext, &uint, &char) &u8
 
 fn C.js_module_set_import_meta(&C.JSContext, JSValueConst, bool, bool) int
 
@@ -263,7 +263,7 @@ pub fn (ctx &Context) has_exception() bool {
 pub fn (ctx &Context) js_eval(input string, fname string, flag int) !Value {
 	return ctx.js_eval_core(
 		input: input.str
-		len: usize(input.len)
+		len: uint(input.len)
 		fname: fname.str
 		flag: flag
 		set_meta: fn (ctx Context, ref JSValueConst) {}
@@ -308,7 +308,7 @@ pub fn (ctx &Context) eval_module(input string, fname string) !Value {
 pub fn (ctx &Context) compile_module(input string, fname string) ! {
 	ctx.rt.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, input.str, usize(input.len), fname.str, type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(ctx.ref, input.str, uint(input.len), fname.str, type_module | type_compile_only, &ref)
 	value := ctx.c_val(ref)
 	defer {
 		value.free()
@@ -342,7 +342,7 @@ pub fn (ctx &Context) run_module(input string, fname string) !Value {
 @[manualfree]
 pub fn (ctx &Context) eval_file_custom_meta(fname string, flag int, set_meta SetMeta) !Value {
 	c_fname := fname.str
-	mut buf_len := usize(0)
+	mut buf_len := uint(0)
 	buf := C.js_load_file(ctx.ref, &buf_len, c_fname)
 	if isnil(buf) {
 		return error('${fname} file not found')

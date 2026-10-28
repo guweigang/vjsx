@@ -53,13 +53,13 @@ fn C.JS_FreeRuntime(&C.JSRuntime)
 
 fn C.JS_RunGC(&C.JSRuntime)
 
-fn C.JS_SetMaxStackSize(&C.JSRuntime, usize)
+fn C.JS_SetMaxStackSize(&C.JSRuntime, uint)
 
 fn C.JS_UpdateStackTop(&C.JSRuntime)
 
-fn C.JS_SetGCThreshold(&C.JSRuntime, usize)
+fn C.JS_SetGCThreshold(&C.JSRuntime, uint)
 
-fn C.JS_SetMemoryLimit(&C.JSRuntime, usize)
+fn C.JS_SetMemoryLimit(&C.JSRuntime, uint)
 
 fn C.JS_IsJobPending(&C.JSRuntime) bool
 
@@ -135,21 +135,21 @@ pub fn (rt Runtime) execute_pending_job() !bool {
 
 // Set limit memory. (default to unlimited)
 pub fn (rt Runtime) set_memory_limit(limit u32) {
-	rt.set_memory_limit_bytes(usize(limit))
+	rt.set_memory_limit_bytes(uint(limit))
 }
 
 // Set the memory limit without the legacy u32 size ceiling.
-pub fn (rt Runtime) set_memory_limit_bytes(limit usize) {
+pub fn (rt Runtime) set_memory_limit_bytes(limit uint) {
 	C.JS_SetMemoryLimit(rt.ref, limit)
 }
 
 // Set maximum stack size in bytes.
 pub fn (rt Runtime) set_max_stack_size(stack_size u32) {
-	rt.set_max_stack_size_bytes(usize(stack_size))
+	rt.set_max_stack_size_bytes(uint(stack_size))
 }
 
 // Set maximum stack size in bytes without the legacy u32 size ceiling.
-pub fn (rt Runtime) set_max_stack_size_bytes(stack_size usize) {
+pub fn (rt Runtime) set_max_stack_size_bytes(stack_size uint) {
 	C.JS_SetMaxStackSize(rt.ref, stack_size)
 }
 
@@ -162,11 +162,11 @@ pub fn (rt Runtime) update_stack_top() {
 
 // Set gc threshold.
 pub fn (rt Runtime) set_gc_threshold(th i64) {
-	C.JS_SetGCThreshold(rt.ref, usize(th))
+	C.JS_SetGCThreshold(rt.ref, uint(th))
 }
 
 // Set the GC threshold using the host's native size type.
-pub fn (rt Runtime) set_gc_threshold_bytes(th usize) {
+pub fn (rt Runtime) set_gc_threshold_bytes(th uint) {
 	C.JS_SetGCThreshold(rt.ref, th)
 }
 

@@ -298,7 +298,7 @@ fn fs_write_bytes(path string, bytes []u8, mode int, exclusive bool) ! {
 	mut offset := 0
 	for offset < bytes.len {
 		data_ptr := unsafe { &u8(bytes.data) + offset }
-		written := $if windows { C._write(fd, data_ptr, bytes.len - offset) } $else { int(C.write(fd, data_ptr, usize(bytes.len - offset))) }
+		written := $if windows { C._write(fd, data_ptr, bytes.len - offset) } $else { int(C.write(fd, data_ptr, uint(bytes.len - offset))) }
 		if written <= 0 {
 			return error('failed to write file: ${path}')
 		}

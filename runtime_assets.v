@@ -315,7 +315,7 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 	if !isnil(owner_ctx) {
 		if bytecode := owner_ctx.bundle_module_bytecode(name) {
 			mut ref := C.JSValue{}
-			C.vjsx_js_read_bytecode_out(ctx, &bytecode[0], usize(bytecode.len), &ref)
+			C.vjsx_js_read_bytecode_out(ctx, &bytecode[0], uint(bytecode.len), &ref)
 			if C.JS_IsException(ref) == 1 {
 				return unsafe { nil }
 			}
@@ -346,7 +346,7 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 	}
 	module_source := owner_ctx.runtime_module_source(rel_path) or { return unsafe { nil } }
 	mut ref := C.JSValue{}
-	C.vjsx_js_eval_out(ctx, module_source.source.str, usize(module_source.source.len), module_source.name.str, type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(ctx, module_source.source.str, uint(module_source.source.len), module_source.name.str, type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return unsafe { nil }
 	}
@@ -377,7 +377,7 @@ pub fn (ctx &Context) resolve_runtime_asset_path(rel_path string) !string {
 fn (ctx &Context) eval_runtime_source_custom_meta(source string, fname string, flag int, set_meta SetMeta) !Value {
 	return ctx.js_eval_core(
 		input:    source.str
-		len:      usize(source.len)
+		len:      uint(source.len)
 		fname:    fname.str
 		flag:     flag
 		set_meta: set_meta

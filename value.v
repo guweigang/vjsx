@@ -61,7 +61,7 @@ fn C.JS_Call(&C.JSContext, JSValueConst, JSValueConst, int, &JSValueConst) C.JSV
 
 fn C.JS_DupValue(&C.JSContext, JSValueConst) C.JSValue
 
-fn C.JS_GetArrayBuffer(&C.JSContext, &usize, JSValueConst) byteptr
+fn C.JS_GetArrayBuffer(&C.JSContext, &uint, JSValueConst) byteptr
 
 fn C.JS_DeleteProperty(&C.JSContext, JSValueConst, C.JSAtom, int) int
 
@@ -96,7 +96,7 @@ pub fn (v Value) to_string() string {
 // Convert Value to `V` []u8
 pub fn (v Value) to_bytes() []u8 {
 	len := v.byte_len()
-	size := usize(len)
+	size := uint(len)
 	data := C.JS_GetArrayBuffer(v.ctx.ref, &size, v.ref)
 	mut bytes := []u8{cap: len}
 	for i in 0 .. len {

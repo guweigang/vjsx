@@ -13,9 +13,9 @@ import time
 #flag -I @VMODROOT
 #include "runtime_asset_gzip.h"
 
-fn C.vjsx_inflate_embedded_asset(input voidptr, input_size usize, output voidptr, output_capacity usize, output_size &usize) i32
+fn C.vjsx_inflate_embedded_asset(input voidptr, input_size uint, output voidptr, output_capacity uint, output_size &uint) i32
 
-fn C.vjsx_embedded_asset_crc32(bytes voidptr, size usize) u32
+fn C.vjsx_embedded_asset_crc32(bytes voidptr, size uint) u32
 
 fn runtime_embedded_gzip_asset_source(asset &embed_file.EmbedFileData) !string {
 	started := time.sys_mono_now()
@@ -39,12 +39,12 @@ fn decode_embedded_gzip_asset(bytes []u8) !string {
 		return error('invalid embedded gzip asset: size exceeds supported limit')
 	}
 	mut data := []u8{len: if expected_size == 0 { 1 } else { int(expected_size) }}
-	mut decoded_len := usize(0)
-	if C.vjsx_inflate_embedded_asset(payload.data, usize(payload.len), data.data,
-		usize(data.len), &decoded_len) != 1 {
+	mut decoded_len := uint(0)
+	if C.vjsx_inflate_embedded_asset(payload.data, uint(payload.len), data.data,
+		uint(data.len), &decoded_len) != 1 {
 		return error('invalid embedded gzip asset: DEFLATE decode failed')
 	}
-	if decoded_len != usize(expected_size) {
+	if decoded_len != uint(expected_size) {
 		return error('invalid embedded gzip asset: size mismatch')
 	}
 	// Borrow only until bytestr copies the result into its own string storage.
