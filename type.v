@@ -32,9 +32,9 @@ fn C.JS_GetException(&C.JSContext) C.JSValue
 
 fn C.JS_Throw(&C.JSContext, C.JSValue) C.JSValue
 
-fn C.JS_ParseJSON(&C.JSContext, &char, usize, &char) C.JSValue
+fn C.JS_ParseJSON(&C.JSContext, &char, uint, &char) C.JSValue
 
-fn C.JS_NewArrayBufferCopy(&C.JSContext, &u8, usize) C.JSValue
+fn C.JS_NewArrayBufferCopy(&C.JSContext, &u8, uint) C.JSValue
 
 fn C.JS_CallConstructor(&C.JSContext, JSValueConst, int, &JSValueConst) C.JSValue
 
@@ -131,7 +131,7 @@ pub fn (ctx &Context) json_parse(str string) Value {
 	len := str.len
 	c_str := str.str
 	c_fname := c''
-	return ctx.c_val(C.JS_ParseJSON(ctx.ref, c_str, usize(len), c_fname))
+	return ctx.c_val(C.JS_ParseJSON(ctx.ref, c_str, uint(len), c_fname))
 }
 
 // JS Throw Error.
@@ -207,7 +207,7 @@ pub fn (ctx &Context) js_array_buffer(data []u8) Value {
 	if data.len == 0 {
 		return ctx.c_val(C.JS_NewArrayBufferCopy(ctx.ref, unsafe { nil }, 0))
 	}
-	return ctx.c_val(C.JS_NewArrayBufferCopy(ctx.ref, &data[0], usize(data.len)))
+	return ctx.c_val(C.JS_NewArrayBufferCopy(ctx.ref, &data[0], uint(data.len)))
 }
 
 // Create JS Big Uint.

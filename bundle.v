@@ -90,7 +90,7 @@ fn bundle_checksum(manifest []u8, payload []u8) []u8 {
 
 fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options CompileBundleOptions) ![]u8 {
 	mut compiled_ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, source.source.str, usize(source.source.len), source.name.str, type_module | type_compile_only, &compiled_ref)
+	C.vjsx_js_eval_out(ctx.ref, source.source.str, uint(source.source.len), source.name.str, type_module | type_compile_only, &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	defer {
 		compiled.free()
@@ -101,7 +101,7 @@ fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options Co
 	if C.vjsx_js_value_is_module(compiled.ref) == 0 {
 		return error('QuickJS did not compile an ES module: ${source.name}')
 	}
-	mut payload_len := usize(0)
+	mut payload_len := uint(0)
 	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref, int(options.strip_source), int(options.strip_debug))
 	if isnil(payload_ptr) {
 		return ctx.execution_error()
@@ -111,7 +111,7 @@ fn compile_es_module_payload(ctx &Context, source BundleSourceModule, options Co
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, payload.len)
 	}
 	return payload
 }
@@ -159,7 +159,7 @@ fn (ctx &Context) store_bundle_compiled_bytecode(name string, bytecode []u8) {
 
 fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, source string) !&C.JSModuleDef {
 	mut ref := C.JSValue{}
-	C.vjsx_js_eval_out(c_ctx, source.str, usize(source.len), name.str, type_module | type_compile_only, &ref)
+	C.vjsx_js_eval_out(c_ctx, source.str, uint(source.len), name.str, type_module | type_compile_only, &ref)
 	if C.JS_IsException(ref) == 1 {
 		return error('failed to compile bundle dependency: ${name}')
 	}
@@ -167,7 +167,7 @@ fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, 
 		C.JS_FreeValue(c_ctx, ref)
 		return error('bundle dependency is not an ES module: ${name}')
 	}
-	mut payload_len := usize(0)
+	mut payload_len := uint(0)
 	state := ctx.host_cleanup_state
 	payload_ptr := C.vjsx_js_write_bytecode(c_ctx, &payload_len, ref, int(state.bundle_strip_src), int(state.bundle_strip_dbg))
 	if isnil(payload_ptr) {
@@ -176,7 +176,7 @@ fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, 
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, payload.len)
 	}
 	C.js_free(c_ctx, payload_ptr)
 	ctx.store_bundle_compiled_bytecode(name, payload)
@@ -388,7 +388,7 @@ pub fn (ctx &Context) load_bundle(data []u8) !ScriptModule {
 	ctx.register_bundle_modules(parsed.modules)
 	entry_bytecode := parsed.modules[parsed.manifest.entry]
 	mut entry_ref := ctx.js_undefined().ref
-	C.vjsx_js_read_bytecode_out(ctx.ref, &entry_bytecode[0], usize(entry_bytecode.len), &entry_ref)
+	C.vjsx_js_read_bytecode_out(ctx.ref, &entry_bytecode[0], uint(entry_bytecode.len), &entry_ref)
 	entry := ctx.c_val(entry_ref)
 	if entry.is_exception() {
 		return ctx.execution_error()

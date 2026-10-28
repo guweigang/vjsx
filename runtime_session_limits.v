@@ -10,9 +10,9 @@ pub const default_runtime_session_max_observations = 256
 @[params]
 pub struct RuntimeEngineLimits {
 pub:
-	memory_limit_bytes      usize
-	max_stack_size_bytes    usize
-	gc_threshold_bytes      usize
+	memory_limit_bytes      uint
+	max_stack_size_bytes    uint
+	gc_threshold_bytes      uint
 	default_turn_timeout_ms u64
 }
 

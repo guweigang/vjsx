@@ -11,9 +11,9 @@ const bytecode_profile_node = u8(1)
 const bytecode_profile_script = u8(2)
 const bytecode_profile_browser = u8(3)
 
-fn C.vjsx_js_write_bytecode(&C.JSContext, &usize, JSValueConst, int, int) &u8
+fn C.vjsx_js_write_bytecode(&C.JSContext, &uint, JSValueConst, int, int) &u8
 
-fn C.vjsx_js_read_bytecode_out(&C.JSContext, &u8, usize, &C.JSValue)
+fn C.vjsx_js_read_bytecode_out(&C.JSContext, &u8, uint, &C.JSValue)
 
 fn C.vjsx_quickjs_version() &char
 
@@ -210,7 +210,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 	ctx.rt.ensure_executable()!
 	factory_source := commonjs_factory_source(source)
 	mut compiled_ref := ctx.js_undefined().ref
-	C.vjsx_js_eval_out(ctx.ref, factory_source.str, usize(factory_source.len), options.filename.str, type_global | type_compile_only, &compiled_ref)
+	C.vjsx_js_eval_out(ctx.ref, factory_source.str, uint(factory_source.len), options.filename.str, type_global | type_compile_only, &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	defer {
 		compiled.free()
@@ -218,7 +218,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 	if compiled.is_exception() {
 		return ctx.execution_error()
 	}
-	mut payload_len := usize(0)
+	mut payload_len := uint(0)
 	payload_ptr := C.vjsx_js_write_bytecode(ctx.ref, &payload_len, compiled.ref, int(options.strip_source), int(options.strip_debug))
 	if isnil(payload_ptr) {
 		return ctx.execution_error()
@@ -228,7 +228,7 @@ pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModu
 	}
 	mut payload := []u8{len: int(payload_len)}
 	unsafe {
-		vmemcpy(payload.data, payload_ptr, payload_len)
+		vmemcpy(payload.data, payload_ptr, payload.len)
 	}
 	return wrap_bytecode_artifact(payload, options)
 }
@@ -258,7 +258,7 @@ pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
 	}
 	mut compiled_ref := ctx.js_undefined().ref
 	payload_ptr := &artifact.payload[0]
-	C.vjsx_js_read_bytecode_out(ctx.ref, payload_ptr, usize(artifact.payload.len), &compiled_ref)
+	C.vjsx_js_read_bytecode_out(ctx.ref, payload_ptr, uint(artifact.payload.len), &compiled_ref)
 	compiled := ctx.c_val(compiled_ref)
 	if compiled.is_exception() {
 		return ctx.execution_error()

@@ -4,9 +4,9 @@ import os
 
 #include "vjsx_curl_process.h"
 
-fn C.vjsx_curl_process_start(&char, &&char, &char, &int) int
+fn C.vjsx_curl_process_start(&char, &&char, &char, &i32) int
 
-fn C.vjsx_curl_process_wait(int, &int) int
+fn C.vjsx_curl_process_wait(int, &i32) int
 
 fn run_npm_curl(path string, args []string, diagnostics_path string) ! {
 	mut argv := []&char{cap: args.len + 2}
@@ -15,11 +15,11 @@ fn run_npm_curl(path string, args []string, diagnostics_path string) ! {
 		argv << &char(arg.str)
 	}
 	argv << &char(unsafe { nil })
-	mut pid := 0
+	mut pid := i32(0)
 	if C.vjsx_curl_process_start(&char(path.str), argv.data, &char(diagnostics_path.str), &pid) != 0 {
 		return error('could not start curl')
 	}
-	mut exit_code := -1
+	mut exit_code := i32(-1)
 	if C.vjsx_curl_process_wait(pid, &exit_code) != 0 {
 		return error('could not wait for curl')
 	}

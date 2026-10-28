@@ -37,7 +37,7 @@ fn C.JS_JSONStringify(&C.JSContext, JSValueConst, JSValueConst, JSValueConst) C.
 
 fn C.JS_ToBool(&C.JSContext, JSValueConst) bool
 
-fn C.JS_ToInt32(&C.JSContext, &int, JSValueConst)
+fn C.JS_ToInt32(&C.JSContext, &i32, JSValueConst)
 
 fn C.JS_ToInt64(&C.JSContext, &i64, JSValueConst)
 
@@ -61,7 +61,7 @@ fn C.JS_Call(&C.JSContext, JSValueConst, JSValueConst, int, &JSValueConst) C.JSV
 
 fn C.JS_DupValue(&C.JSContext, JSValueConst) C.JSValue
 
-fn C.JS_GetArrayBuffer(&C.JSContext, &usize, JSValueConst) byteptr
+fn C.JS_GetArrayBuffer(&C.JSContext, &uint, JSValueConst) byteptr
 
 fn C.JS_DeleteProperty(&C.JSContext, JSValueConst, C.JSAtom, int) int
 
@@ -96,7 +96,7 @@ pub fn (v Value) to_string() string {
 // Convert Value to `V` []u8
 pub fn (v Value) to_bytes() []u8 {
 	len := v.byte_len()
-	size := usize(len)
+	size := uint(len)
 	data := C.JS_GetArrayBuffer(v.ctx.ref, &size, v.ref)
 	mut bytes := []u8{cap: len}
 	for i in 0 .. len {
@@ -172,9 +172,9 @@ pub fn (v Value) to_bool() bool {
 
 // Convert Value to `V` int
 pub fn (v Value) to_int() int {
-	mut val := 0
+	mut val := i32(0)
 	C.JS_ToInt32(v.ctx.ref, &val, v.ref)
-	return val
+	return int(val)
 }
 
 // Convert Value to `V` i64

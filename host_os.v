@@ -169,11 +169,11 @@ pub fn (ctx &Context) install_os_module() {
 		return node_os_cpus_value(ctx)
 	})
 	totalmem_fn := ctx.js_function(fn [ctx] (args []Value) Value {
-		total := runtime.total_memory() or { usize(0) }
+		total := runtime.total_memory() or { uint(0) }
 		return ctx.js_float(f64(total))
 	})
 	freemem_fn := ctx.js_function(fn [ctx] (args []Value) Value {
-		free_mem := runtime.free_memory() or { usize(0) }
+		free_mem := runtime.free_memory() or { uint(0) }
 		return ctx.js_float(f64(free_mem))
 	})
 	loadavg_fn := ctx.js_function(fn [ctx] (args []Value) Value {

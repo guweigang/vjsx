@@ -4,13 +4,13 @@ module vjsx
 
 #include "vjsx_curl_process.h"
 
-fn C.vjsx_curl_process_start(&char, &&char, &char, &int) int
+fn C.vjsx_curl_process_start(&char, &&char, &char, &i32) int
 
-fn C.vjsx_curl_process_poll(int, &int) int
+fn C.vjsx_curl_process_poll(int, &i32) int
 
 fn C.vjsx_curl_process_signal(int, int) int
 
-fn C.vjsx_curl_process_wait(int, &int) int
+fn C.vjsx_curl_process_wait(int, &i32) int
 
 struct CurlProcess {
 mut:
@@ -26,7 +26,7 @@ fn start_curl_process(path string, args []string, output_path string) !CurlProce
 		argv << &char(arg.str)
 	}
 	argv << &char(unsafe { nil })
-	mut pid := 0
+	mut pid := i32(0)
 	if C.vjsx_curl_process_start(&char(path.str), argv.data, &char(output_path.str), &pid) != 0 {
 		return error('failed to start curl')
 	}
@@ -39,7 +39,7 @@ fn (mut process CurlProcess) poll() !bool {
 	if process.done {
 		return true
 	}
-	mut exit_code := -1
+	mut exit_code := i32(-1)
 	status := C.vjsx_curl_process_poll(process.pid, &exit_code)
 	if status < 0 {
 		return error('failed to poll curl process')
@@ -63,7 +63,7 @@ fn (mut process CurlProcess) reap() {
 	if process.done || process.pid <= 0 {
 		return
 	}
-	mut exit_code := -1
+	mut exit_code := i32(-1)
 	if C.vjsx_curl_process_wait(process.pid, &exit_code) == 0 {
 		process.exit_code = exit_code
 		process.done = true
