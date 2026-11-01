@@ -278,7 +278,10 @@ pub fn build_runtime_module_entry(ctx &vjsx.Context, script_path string, as_modu
 	return mirrored_runtime_path(root, script_path)
 }
 
-fn build_runtime_module_entry_with_mirror_base(ctx &vjsx.Context, script_path string, as_module bool, temp_root string, mirror_base string) !string {
+// Hosts with long source paths can keep emitted modules relative to a module
+// root instead of repeating the absolute source path under the build directory.
+// temp_root must be a disposable output directory owned by the caller.
+pub fn build_runtime_module_entry_with_mirror_base(ctx &vjsx.Context, script_path string, as_module bool, temp_root string, mirror_base string) !string {
 	config_json := load_typescript_config(ctx, script_path) or { '' }
 	if !as_module {
 		if vjsx.is_javascript_file(script_path) && (is_commonjs_module(ctx, script_path) or {
