@@ -11,9 +11,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup V
-        uses: vlang/setup-v@v1.7
-        with:
-          version-file: .v-version
+        uses: ./.github/actions/setup-v
 
       - name: Gen Docs
         run: v doc -f html -m -readme .

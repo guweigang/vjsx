@@ -29,9 +29,7 @@ jobs:
           arch: amd64
 
       - name: Setup V
-        uses: vlang/setup-v@v1.7
-        with:
-          version-file: .v-version
+        uses: ./.github/actions/setup-v
 
       - name: Cache Windows vcpkg packages
         if: matrix.os == 'windows-latest'

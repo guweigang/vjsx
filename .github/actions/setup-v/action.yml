@@ -1,0 +1,88 @@
+name: Setup pinned V
+description: Build the pinned V compiler with its matching pinned vc bootstrap
+
+runs:
+  using: composite
+  steps:
+    - name: Build pinned V on Unix
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        v_root="$RUNNER_TEMP/vjsx-v"
+        v_ref="$(tr -d '[:space:]' < "$GITHUB_WORKSPACE/.v-version")"
+        vc_ref="$(tr -d '[:space:]' < "$GITHUB_WORKSPACE/.vc-version")"
+        tcc_key="${RUNNER_OS}-${RUNNER_ARCH}"
+        tcc_ref="$(sed -n "s/^${tcc_key}=//p" "$GITHUB_WORKSPACE/.tcc-versions")"
+        if [ -z "$tcc_ref" ]; then
+          echo "unsupported V bootstrap platform: $tcc_key" >&2
+          exit 1
+        fi
+
+        git init -q "$v_root"
+        git -C "$v_root" remote add origin https://github.com/vlang/v.git
+        git -C "$v_root" fetch --depth 1 origin "$v_ref"
+        git -C "$v_root" checkout -q --detach FETCH_HEAD
+
+        git init -q "$v_root/vc"
+        git -C "$v_root/vc" remote add origin https://github.com/vlang/vc.git
+        git -C "$v_root/vc" fetch --depth 1 origin "$vc_ref"
+        git -C "$v_root/vc" checkout -q --detach FETCH_HEAD
+
+        git init -q "$v_root/thirdparty/tcc"
+        git -C "$v_root/thirdparty/tcc" remote add origin https://github.com/vlang/tccbin.git
+        git -C "$v_root/thirdparty/tcc" fetch --depth 1 origin "$tcc_ref"
+        git -C "$v_root/thirdparty/tcc" checkout -q --detach FETCH_HEAD
+
+        make -C "$v_root" -f Makefile v
+        echo "$v_root" >> "$GITHUB_PATH"
+        "$v_root/v" version
+
+    - name: Build pinned V on Windows
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $ErrorActionPreference = "Stop"
+        $vRoot = Join-Path $env:RUNNER_TEMP "vjsx-v"
+        $vRef = (Get-Content -Raw (Join-Path $env:GITHUB_WORKSPACE ".v-version")).Trim()
+        $vcRef = (Get-Content -Raw (Join-Path $env:GITHUB_WORKSPACE ".vc-version")).Trim()
+        $tccKey = "$env:RUNNER_OS-$env:RUNNER_ARCH"
+        $tccLine = Get-Content (Join-Path $env:GITHUB_WORKSPACE ".tcc-versions") |
+          Where-Object { $_.StartsWith("$tccKey=") } |
+          Select-Object -First 1
+        if ($null -eq $tccLine) { throw "unsupported V bootstrap platform: $tccKey" }
+        $tccRef = $tccLine.Substring($tccKey.Length + 1).Trim()
+
+        git init -q $vRoot
+        git -C $vRoot remote add origin https://github.com/vlang/v.git
+        git -C $vRoot fetch --depth 1 origin $vRef
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        git -C $vRoot checkout -q --detach FETCH_HEAD
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $vcRoot = Join-Path $vRoot "vc"
+        git init -q $vcRoot
+        git -C $vcRoot remote add origin https://github.com/vlang/vc.git
+        git -C $vcRoot fetch --depth 1 origin $vcRef
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        git -C $vcRoot checkout -q --detach FETCH_HEAD
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $tccRoot = Join-Path $vRoot "thirdparty\tcc"
+        git init -q $tccRoot
+        git -C $tccRoot remote add origin https://github.com/vlang/tccbin.git
+        git -C $tccRoot fetch --depth 1 origin $tccRef
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        git -C $tccRoot checkout -q --detach FETCH_HEAD
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        Push-Location $vRoot
+        try {
+          & .\makev.bat -msvc --local
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        } finally {
+          Pop-Location
+        }
+        Add-Content -Path $env:GITHUB_PATH -Value $vRoot
+        & (Join-Path $vRoot "v.exe") version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
