@@ -312,6 +312,8 @@ Hosts should:
 - call runtime pump APIs only from the owning lane/thread
 - use wakeup `generation` to ignore stale scheduled wakeups
 - pass worker code only async completion ports/cancel tokens, never Context or Value
+- install a dynamic import loader only when runtime source loading is intended,
+  and pass workers only `DynamicImportCompletionPort`
 - honor `async_ready_fn` by enqueueing `deliver_wakeup(0)` on the owning lane
 - treat a false stream `try_push()` as backpressure and pause/retry production
 - log or emit `RuntimeSessionDiagnostic` through `set_diagnostic_handler`
@@ -326,6 +328,7 @@ Hosts should not:
 - maintain a second JS Promise job queue
 - treat compatibility-mode timer wakeup hints as the source of timer truth
 - call Promise resolve/reject or any QuickJS API from a background thread
+- perform `JS_LoadModule` or settle dynamic-import tokens from a background thread
 - call lane-owned sessions from arbitrary caller threads
 - use or close the old `RuntimeSession` copy after transferring it to a
   `runtimejs.SessionLane`

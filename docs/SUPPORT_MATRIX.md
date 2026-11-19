@@ -16,7 +16,9 @@ TypeScript compatibility.
 | Other OS/architectures | none | none | source-build only, unsupported |
 
 The CI toolchain is pinned by `.v-version`; quickjs-ng is pinned by the immutable
-commit in `.quickjs-version`. Release smoke checks verify the CLI,
+commit in `.quickjs-version`, currently quickjs-ng 0.18.0. Overrides through
+`QUICKJS_REF` or `VJS_QUICKJS_PATH` are experimental source builds rather than
+part of the supported release ABI. Release smoke checks verify the CLI,
 reported version, runtime profile, script execution, bundle/app packaging and
 the packaged executable. Release builds select V's OpenSSL crypto backend;
 OpenSSL is therefore a source-build dependency for the advertised WebCrypto

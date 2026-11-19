@@ -22,10 +22,25 @@ a runtime concern and are not bundled.
 | `.json` | filesystem or package target | generated ESM default export | supported |
 | package `exports` | package helper selects root/subpath target | target kind determines transform | supported for exported targets |
 | static-string `import()` | included in graph | specifier rewritten | supported |
-| computed `import()` / `require()` | not statically resolvable | unchanged/unsupported by CJS wrapper | not bundled |
+| computed `import()` / `require()` | not statically resolvable | unchanged/unsupported by CJS wrapper | not bundled; `import()` may use an opt-in host source loader at runtime |
 | Node builtin | classified as a builtin edge | specifier preserved | availability depends on runtime profile |
 
 No new Node builtin surface is introduced by the graph resolver.
+
+## Asynchronous dynamic imports
+
+On quickjs-ng 0.18+, an embedder may install
+`Context.install_dynamic_import_loader(...)`. The callback receives a
+`DynamicImportRequest` and a thread-safe `DynamicImportCompletionPort`; it may
+resolve JavaScript source or reject the request from a worker. vjsx queues the
+completion and performs `JS_LoadModule` / `JS_FinishDynamicImport` only when
+the owning lane drains dynamic-import events.
+
+The loader is deliberately opt-in and source-only. It does not grant implicit
+filesystem, package, or network access, and it does not change the static graph
+or bundle format. Relative imports in returned source continue through the
+normal module loader and therefore need sources available through the host's
+chosen loading policy.
 
 ## Cache contract
 

@@ -309,6 +309,25 @@ Only statically reachable dependencies are included; dynamic dependency names
 that cannot be determined during the build are not supported by this first
 bundle format. As with `.qbc`, load only trusted artifacts.
 
+QuickJS 0.18+ embedders can opt into asynchronous runtime `import()` loading
+without giving worker threads access to QuickJS values:
+
+```v
+fn load_dynamic(request vjsx.DynamicImportRequest, port vjsx.DynamicImportCompletionPort) {
+	// The host chooses how and where source is loaded. No filesystem or network
+	// access is enabled by vjsx itself.
+	port.resolve_source('export const answer = 42')
+}
+
+ctx.install_dynamic_import_loader(load_dynamic)!
+```
+
+The completion port is thread-safe. Completed imports must be settled on the
+session-owning lane through `drain_dynamic_import_events()` or
+`deliver_wakeup()`. Configured `async_ready_fn` callbacks are notified when a
+completion becomes ready. This runtime facility does not make computed imports
+statically bundleable.
+
 To package that bundle as a native single-file application:
 
 ```bash
