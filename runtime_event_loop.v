@@ -99,6 +99,7 @@ pub:
 	timer_wakeup_hint_count          int
 	runtime_owned_timer_count        int
 	pending_host_async_count         int
+	pending_dynamic_import_count     int
 	next_timer_wakeup_at_ms          i64 = -1
 	async_error_count                int
 	last_error_message               string
@@ -186,7 +187,9 @@ pub fn (session RuntimeSession) needs_wakeup() bool {
 		return false
 	}
 	return session.has_ready_task() || session.has_pending_wakeup()
-		|| (session.pending_host_async_event_count() > 0 || session.pending_websocket_event_count() > 0)
+		|| (session.pending_host_async_event_count() > 0
+			|| session.pending_dynamic_import_event_count() > 0
+			|| session.pending_websocket_event_count() > 0)
 }
 
 // Report the next wakeup time requested by the session.
@@ -466,6 +469,7 @@ pub fn (mut session RuntimeSession) deliver_wakeup(generation u64) !int {
 	state.next_wakeup_at_ms = -1
 	mut delivered := session.fire_due_runtime_timers()!
 	delivered += session.drain_host_async_events()!
+	delivered += session.drain_dynamic_import_events()!
 	delivered += session.drain_websocket_events()!
 	session.drain_ready_tasks()!
 	session.reschedule_timer_wakeup('event-loop')
@@ -518,7 +522,10 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 		runtime_owned_timers:             state.config.runtime_owned_timers
 		has_ready_task:                   has_ready
 		has_pending_wakeup:               has_pending
-		needs_wakeup:                     has_ready || has_pending || (session.pending_host_async_event_count() > 0 || session.pending_websocket_event_count() > 0)
+		needs_wakeup:                     has_ready || has_pending
+			|| (session.pending_host_async_event_count() > 0
+				|| session.pending_dynamic_import_event_count() > 0
+				|| session.pending_websocket_event_count() > 0)
 		next_wakeup_at_ms:                next_wakeup_at_ms
 		wakeup_generation:                if has_pending { state.wakeup_generation } else { u64(0) }
 		timer_wakeup_hint_count:          if session.closed || state.closed {
@@ -535,6 +542,11 @@ pub fn (session RuntimeSession) debug_snapshot() RuntimeSessionDebugSnapshot {
 			0
 		} else {
 			session.pending_host_async_operation_count()
+		}
+		pending_dynamic_import_count:     if session.closed || state.closed {
+			0
+		} else {
+			session.pending_dynamic_import_count()
 		}
 		next_timer_wakeup_at_ms:          if session.closed || state.closed || !has_next_timer {
 			i64(-1)

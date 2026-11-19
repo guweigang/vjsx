@@ -219,17 +219,22 @@ pub fn (operation RuntimeHostAsyncOperation) bind_abort_signal(signal Value) ! {
 		};
 		if (signal.aborted) {
 			cancel();
-			return;
+			return null;
 		}
 		signal.addEventListener("abort", cancel, { once: true });
-		const cleanup = () => signal.removeEventListener("abort", cancel);
-		promise.then(cleanup, cleanup);
+		return () => signal.removeEventListener("abort", cancel);
 	}')!
 	defer {
 		helper.free()
 	}
-	result := ctx.call(helper, signal, operation.promise)!
-	result.free()
+	cleanup := ctx.call(helper, signal, operation.promise)!
+	defer {
+		cleanup.free()
+	}
+	if cleanup.is_function() {
+		settled := ctx.js_promise_then(operation.promise, cleanup, cleanup)!
+		settled.free()
+	}
 }
 
 // Start a host operation on the session-owning lane. The returned Promise is
@@ -461,6 +466,7 @@ fn (mut session RuntimeSession) configure_host_async_ready(session_id string, re
 	stream_ready.session_id = session_id
 	stream_ready.ready_fn = ready_fn
 	stream_ready.guard.unlock()
+	session.context.configure_dynamic_import_ready(session_id, ready_fn)
 }
 
 fn (session RuntimeSession) next_host_async_deadline() ?i64 {

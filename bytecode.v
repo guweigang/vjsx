@@ -207,7 +207,7 @@ pub fn compile_module(source string, options CompileModuleOptions) ![]u8 {
 // Compile a self-contained UMD/CommonJS source string using an existing
 // context. This is the lower-level counterpart of compile_module().
 pub fn (ctx &Context) compile_module_bytecode(source string, options CompileModuleOptions) ![]u8 {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	factory_source := commonjs_factory_source(source)
 	mut compiled_ref := ctx.js_undefined().ref
 	C.vjsx_js_eval_out(ctx.ref, factory_source.str, uint(factory_source.len), options.filename.str, type_global | type_compile_only, &compiled_ref)
@@ -250,7 +250,7 @@ fn (ctx &Context) validate_bytecode_artifact(artifact BytecodeArtifact) ! {
 // The returned handle owns module.exports and can be retained for repeated
 // calls without reloading or reinitializing the bytecode.
 pub fn (ctx &Context) load_bytecode(bytecode []u8) !ScriptModule {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	artifact := parse_bytecode_artifact(bytecode)!
 	ctx.validate_bytecode_artifact(artifact)!
 	if artifact.payload.len == 0 {

@@ -1,6 +1,7 @@
 import os
-import vjsx
 import runtimejs
+import time
+import vjsx
 
 const runtime_session_test_wake_log_env = 'VJSX_RUNTIME_SESSION_TEST_WAKE_LOG'
 const runtime_session_test_now_env = 'VJSX_RUNTIME_SESSION_TEST_NOW'
@@ -15,6 +16,23 @@ fn runtime_session_test_now_from_env() i64 {
 
 fn runtime_session_test_complete_async(port vjsx.RuntimeHostAsyncCompletionPort, done chan bool) {
 	done <- port.resolve_text('worker-result')
+}
+
+fn runtime_session_test_complete_dynamic_import(port vjsx.DynamicImportCompletionPort) {
+	assert port.resolve_source('export const answer = 42')
+	assert !port.resolve_source('export const answer = -1')
+}
+
+fn runtime_session_test_resolve_dynamic_import(request vjsx.DynamicImportRequest, port vjsx.DynamicImportCompletionPort) {
+	if request.specifier == 'virtual:answer' {
+		spawn runtime_session_test_complete_dynamic_import(port)
+		return
+	}
+	port.reject('unexpected module: ${request.specifier}')
+}
+
+fn runtime_session_test_reject_dynamic_import(_request vjsx.DynamicImportRequest, port vjsx.DynamicImportCompletionPort) {
+	port.reject('module unavailable')
 }
 
 fn runtime_session_test_reset_wakeup_hooks(path string) {
@@ -107,6 +125,60 @@ fn test_runtime_host_async_completion_is_settled_only_when_owner_drains() {
 	assert session.pending_host_async_operation_count() == 0
 }
 
+fn test_dynamic_import_source_is_settled_only_when_owner_drains() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	ctx.install_dynamic_import_loader(runtime_session_test_resolve_dynamic_import) or {
+		panic(err)
+	}
+	setup := ctx.eval("import('virtual:answer').then(mod => globalThis.__dynamic_answer = mod.answer)") or {
+		panic(err)
+	}
+	setup.free()
+	session.drain_ready_tasks() or { panic(err) }
+	for _ in 0 .. 1000 {
+		if session.pending_dynamic_import_event_count() > 0 {
+			break
+		}
+		time.sleep(time.millisecond)
+	}
+	assert session.pending_dynamic_import_count() == 1
+	assert session.pending_dynamic_import_event_count() == 1
+	before := ctx.js_global('__dynamic_answer')
+	assert before.is_undefined()
+	before.free()
+	assert session.drain_dynamic_import_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	result := ctx.js_global('__dynamic_answer')
+	assert result.to_int() == 42
+	result.free()
+	assert session.pending_dynamic_import_count() == 0
+}
+
+fn test_dynamic_import_loader_rejection_reaches_javascript() {
+	mut session := vjsx.new_runtime_session()
+	defer {
+		session.close()
+	}
+	ctx := session.context()
+	ctx.install_dynamic_import_loader(runtime_session_test_reject_dynamic_import) or {
+		panic(err)
+	}
+	setup := ctx.eval("import('virtual:missing').catch(error => globalThis.__dynamic_error = error.message)") or {
+		panic(err)
+	}
+	setup.free()
+	session.drain_ready_tasks() or { panic(err) }
+	assert session.drain_dynamic_import_events() or { panic(err) } == 1
+	session.drain_ready_tasks() or { panic(err) }
+	message := ctx.js_global('__dynamic_error')
+	assert message.to_string().contains('module unavailable')
+	message.free()
+}
+
 fn test_runtime_host_async_cancel_wins_completion_race() {
 	mut session := vjsx.new_runtime_session()
 	defer {
@@ -145,9 +217,15 @@ fn test_runtime_host_async_abort_signal_propagates_cancellation() {
 	}
 	controller_setup.free()
 	operation := session.start_host_async_operation(kind: 'abort-signal') or { panic(err) }
+	poisoned_then := ctx.eval('() => { throw new Error("poisoned promise.then"); }') or {
+		panic(err)
+	}
+	operation.promise.set('then', poisoned_then)
+	poisoned_then.free()
 	abort_signal := ctx.eval('__async_abort.signal') or { panic(err) }
 	operation.bind_abort_signal(abort_signal) or { panic(err) }
 	abort_signal.free()
+	assert operation.promise.delete('then')
 	global := ctx.js_global()
 	global.set('__abort_promise', operation.promise)
 	global.free()

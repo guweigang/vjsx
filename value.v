@@ -2,9 +2,10 @@ module vjsx
 
 @[typedef]
 union C.JSValueUnion {
-	int32   int
-	float64 f64
-	ptr     voidptr
+	uint64        u64
+	float64       f64
+	ptr           voidptr
+	short_big_int i32
 }
 
 @[typedef]

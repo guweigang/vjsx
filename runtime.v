@@ -69,13 +69,13 @@ fn C.vjsx_interrupt_state_new(&C.JSRuntime) &C.VJSXInterruptState
 
 fn C.vjsx_interrupt_state_free(&C.JSRuntime, &C.VJSXInterruptState)
 
-fn C.vjsx_interrupt_set_deadline_after_ms(&C.VJSXInterruptState, u64)
+fn C.vjsx_interrupt_set_deadline_after_ms(&C.VJSXInterruptState, &C.JSContext, u64)
 
-fn C.vjsx_interrupt_clear_deadline(&C.VJSXInterruptState)
+fn C.vjsx_interrupt_clear_deadline(&C.VJSXInterruptState, &C.JSContext)
 
-fn C.vjsx_interrupt_cancel(&C.VJSXInterruptState)
+fn C.vjsx_interrupt_cancel(&C.VJSXInterruptState, &C.JSContext)
 
-fn C.vjsx_interrupt_reason(&C.VJSXInterruptState) int
+fn C.vjsx_interrupt_reason(&C.VJSXInterruptState, &C.JSContext) int
 
 // Create new Runtime.
 // This is the low-level manual ownership path. Prefer
@@ -111,7 +111,6 @@ pub fn (rt Runtime) is_job_pending() bool {
 // Execute a single pending QuickJS job if one is ready.
 // Returns `true` when a job ran, `false` when the queue was empty.
 pub fn (rt Runtime) execute_pending_job() !bool {
-	rt.ensure_executable()!
 	mut job_ctx := &C.JSContext(unsafe { nil })
 	status := C.JS_ExecutePendingJob(rt.ref, &job_ctx)
 	if status < 0 {

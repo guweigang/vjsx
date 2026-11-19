@@ -1,5 +1,9 @@
 module vjsx
 
+fn test_quickjs_abi_uses_pinned_engine_version() {
+	assert quickjs_abi_fingerprint().starts_with('quickjs-ng/0.18.0/')
+}
+
 fn test_artifact_abi_is_independent_from_product_patch_version() {
 	assert artifact_runtime_abi_compatible(artifact_abi)
 	assert artifact_runtime_abi_compatible('0.0.1')

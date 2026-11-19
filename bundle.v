@@ -188,7 +188,7 @@ fn (ctx &Context) compile_bundle_loader_module(c_ctx &C.JSContext, name string, 
 
 // Compile a complete emitted ES module graph into a `.vjsx` bundle.
 pub fn (ctx &Context) compile_bundle(modules []BundleSourceModule, options CompileBundleOptions) ![]u8 {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	bytecode_profile_id(options.runtime_profile)!
 	if modules.len == 0 {
 		return error('vjsx bundle requires at least one module')
@@ -382,7 +382,7 @@ fn (ctx &Context) validate_bundle_manifest(manifest BundleManifest) ! {
 // Register, link and evaluate a trusted `.vjsx` bundle entirely from memory.
 // The returned ScriptModule retains the entry module namespace for reuse.
 pub fn (ctx &Context) load_bundle(data []u8) !ScriptModule {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	parsed := parse_bundle(data)!
 	ctx.validate_bundle_manifest(parsed.manifest)!
 	ctx.register_bundle_modules(parsed.modules)

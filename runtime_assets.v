@@ -338,6 +338,16 @@ fn vjsx_runtime_module_loader(ctx &C.JSContext, module_name &char, opaque voidpt
 			C.vjsx_js_throw_bundle_module_not_found(ctx, module_name)
 			return unsafe { nil }
 		}
+		if source := owner_ctx.take_dynamic_import_source(name) {
+			mut ref := C.JSValue{}
+			C.vjsx_js_eval_out(ctx, source.str, uint(source.len), name.str,
+				type_module | type_compile_only, &ref)
+			if C.JS_IsException(ref) == 1 {
+				return unsafe { nil }
+			}
+			C.js_module_set_import_meta(ctx, ref, true, true)
+			return C.vjsx_js_value_to_module_def(ref)
+		}
 	}
 	rel_path := runtime_asset_module_name_to_rel_path(name)
 	if rel_path == '' {

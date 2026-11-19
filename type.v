@@ -68,7 +68,7 @@ pub fn (ctx &Context) js_exception() &JSError {
 // specific session interruption reason when an interrupt handler stopped JS.
 fn (ctx &Context) execution_error() IError {
 	err := ctx.js_exception()
-	reason := ctx.rt.interrupt_reason()
+	reason := ctx.rt.interrupt_reason(ctx.ref)
 	if reason != .none {
 		return &RuntimeInterruptedError{
 			reason: reason
@@ -244,7 +244,7 @@ pub fn (ctx &Context) js_global(keys ...string) Value {
 
 // JS call await.
 pub fn (ctx &Context) js_await(val Value) !Value {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	dup := val.dup_value()
 	mut ref := ctx.js_undefined().ref
 	C.vjsx_js_std_await_out(ctx.ref, dup.ref, &ref)
@@ -257,7 +257,7 @@ pub fn (ctx &Context) js_await(val Value) !Value {
 
 // JS call new class.
 pub fn (ctx &Context) js_new_class(val Value, args ...AnyValue) !Value {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	arg_values := args.map(ctx.owned_any_to_val(it))
 	defer {
 		for arg in arg_values {

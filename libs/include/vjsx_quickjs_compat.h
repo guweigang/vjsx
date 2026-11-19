@@ -18,9 +18,11 @@ typedef struct VJSXInterruptState {
 #if defined(_WIN32)
     volatile LONG64 deadline_ms;
     volatile LONG reason;
+    void *volatile target_ctx;
 #else
     atomic_uint_fast64_t deadline_ms;
     atomic_int reason;
+    atomic_uintptr_t target_ctx;
 #endif
 } VJSXInterruptState;
 
@@ -55,6 +57,26 @@ static inline void vjsx_atomic_store_deadline(VJSXInterruptState *state,
 #endif
 }
 
+static inline JSContext *vjsx_atomic_load_target_ctx(VJSXInterruptState *state) {
+#if defined(_WIN32)
+    return (JSContext *)InterlockedCompareExchangePointer(
+        (PVOID volatile *)&state->target_ctx, NULL, NULL);
+#else
+    return (JSContext *)atomic_load_explicit(&state->target_ctx,
+                                             memory_order_acquire);
+#endif
+}
+
+static inline void vjsx_atomic_store_target_ctx(VJSXInterruptState *state,
+                                                 JSContext *ctx) {
+#if defined(_WIN32)
+    InterlockedExchangePointer((PVOID volatile *)&state->target_ctx, ctx);
+#else
+    atomic_store_explicit(&state->target_ctx, (uintptr_t)ctx,
+                          memory_order_release);
+#endif
+}
+
 static inline void vjsx_atomic_try_set_reason(VJSXInterruptState *state, int reason) {
 #if defined(_WIN32)
     InterlockedCompareExchange(&state->reason, (LONG)reason, VJSX_INTERRUPT_NONE);
@@ -70,9 +92,11 @@ static inline void vjsx_atomic_init(VJSXInterruptState *state) {
 #if defined(_WIN32)
     InterlockedExchange64(&state->deadline_ms, 0);
     InterlockedExchange(&state->reason, VJSX_INTERRUPT_NONE);
+    InterlockedExchangePointer((PVOID volatile *)&state->target_ctx, NULL);
 #else
     atomic_init(&state->deadline_ms, 0);
     atomic_init(&state->reason, VJSX_INTERRUPT_NONE);
+    atomic_init(&state->target_ctx, (uintptr_t)NULL);
 #endif
 }
 
@@ -90,11 +114,15 @@ static inline uint64_t vjsx_monotonic_time_ms(void) {
 #endif
 }
 
-static inline int vjsx_interrupt_handler(JSRuntime *rt, void *opaque) {
+static inline int vjsx_interrupt_handler_impl(JSContext *ctx, void *opaque) {
     VJSXInterruptState *state = (VJSXInterruptState *)opaque;
+    JSContext *target_ctx;
     uint64_t deadline_ms;
-    (void)rt;
     if (state == NULL) {
+        return 0;
+    }
+    target_ctx = vjsx_atomic_load_target_ctx(state);
+    if (ctx != NULL && target_ctx != NULL && ctx != target_ctx) {
         return 0;
     }
     if (vjsx_atomic_load_reason(state) != VJSX_INTERRUPT_NONE) {
@@ -107,6 +135,18 @@ static inline int vjsx_interrupt_handler(JSRuntime *rt, void *opaque) {
     vjsx_atomic_try_set_reason(state, VJSX_INTERRUPT_DEADLINE);
     return 1;
 }
+
+#if defined(VJSX_QUICKJS_NG) && \
+    (QJS_VERSION_MAJOR > 0 || QJS_VERSION_MINOR >= 18)
+static inline int vjsx_interrupt_handler(JSContext *ctx, void *opaque) {
+    return vjsx_interrupt_handler_impl(ctx, opaque);
+}
+#else
+static inline int vjsx_interrupt_handler(JSRuntime *rt, void *opaque) {
+    (void)rt;
+    return vjsx_interrupt_handler_impl(NULL, opaque);
+}
+#endif
 
 static inline VJSXInterruptState *vjsx_interrupt_state_new(JSRuntime *rt) {
     VJSXInterruptState *state = (VJSXInterruptState *)malloc(sizeof(*state));
@@ -124,6 +164,7 @@ static inline void vjsx_interrupt_state_free(JSRuntime *rt, VJSXInterruptState *
 }
 
 static inline void vjsx_interrupt_set_deadline_after_ms(VJSXInterruptState *state,
+                                                         JSContext *ctx,
                                                          uint64_t delay_ms) {
     uint64_t now_ms;
     if (state == NULL ||
@@ -131,26 +172,38 @@ static inline void vjsx_interrupt_set_deadline_after_ms(VJSXInterruptState *stat
         return;
     }
     now_ms = vjsx_monotonic_time_ms();
+    vjsx_atomic_store_target_ctx(state, ctx);
     vjsx_atomic_store_deadline(state, now_ms + delay_ms);
 }
 
-static inline void vjsx_interrupt_clear_deadline(VJSXInterruptState *state) {
+static inline void vjsx_interrupt_clear_deadline(VJSXInterruptState *state,
+                                                  JSContext *ctx) {
     if (state == NULL ||
         vjsx_atomic_load_reason(state) != VJSX_INTERRUPT_NONE) {
         return;
     }
+    if (vjsx_atomic_load_target_ctx(state) != ctx) {
+        return;
+    }
     vjsx_atomic_store_deadline(state, 0);
+    vjsx_atomic_store_target_ctx(state, NULL);
 }
 
-static inline void vjsx_interrupt_cancel(VJSXInterruptState *state) {
+static inline void vjsx_interrupt_cancel(VJSXInterruptState *state,
+                                          JSContext *ctx) {
     if (state == NULL) {
         return;
     }
+    vjsx_atomic_store_target_ctx(state, ctx);
     vjsx_atomic_try_set_reason(state, VJSX_INTERRUPT_CANCELLED);
 }
 
-static inline int vjsx_interrupt_reason(VJSXInterruptState *state) {
+static inline int vjsx_interrupt_reason(VJSXInterruptState *state,
+                                         JSContext *ctx) {
     if (state == NULL) {
+        return VJSX_INTERRUPT_NONE;
+    }
+    if (ctx != NULL && vjsx_atomic_load_target_ctx(state) != ctx) {
         return VJSX_INTERRUPT_NONE;
     }
     return vjsx_atomic_load_reason(state);
@@ -220,6 +273,96 @@ static inline void vjsx_js_eval_out(JSContext *ctx, const char *input, size_t in
 
 static inline void vjsx_js_eval_function_out(JSContext *ctx, JSValue func_obj, JSValue *out) {
 	*out = JS_EvalFunction(ctx, func_obj);
+}
+
+static inline JSValue vjsx_js_promise_then(JSContext *ctx, JSValueConst promise,
+                                           JSValueConst on_fulfilled,
+                                           JSValueConst on_rejected) {
+#if defined(VJSX_QUICKJS_NG)
+    return JS_PromiseThen(ctx, promise, on_fulfilled, on_rejected);
+#else
+    JSValue then = JS_GetPropertyStr(ctx, promise, "then");
+    JSValue args[2] = { JS_DupValue(ctx, on_fulfilled),
+                        JS_DupValue(ctx, on_rejected) };
+    JSValue result;
+    if (JS_IsException(then)) {
+        JS_FreeValue(ctx, args[0]);
+        JS_FreeValue(ctx, args[1]);
+        return then;
+    }
+    result = JS_Call(ctx, then, promise, 2, args);
+    JS_FreeValue(ctx, args[0]);
+    JS_FreeValue(ctx, args[1]);
+    JS_FreeValue(ctx, then);
+    return result;
+#endif
+}
+
+typedef void VJSXDynamicImportFunc(JSContext *ctx, const char *basename,
+                                   const char *filename, JSValue token,
+                                   JSValueConst attributes, void *opaque);
+
+static inline int vjsx_set_dynamic_import_func(JSRuntime *rt,
+                                                VJSXDynamicImportFunc *func,
+                                                void *opaque) {
+#if defined(VJSX_QUICKJS_NG) && \
+    (QJS_VERSION_MAJOR > 0 || QJS_VERSION_MINOR >= 18)
+    JS_SetDynamicImportFunc(rt, (JSDynamicImportFunc *)func, opaque);
+    return 1;
+#else
+    (void)rt;
+    (void)func;
+    (void)opaque;
+    return 0;
+#endif
+}
+
+static inline void vjsx_js_load_module_out(JSContext *ctx,
+                                            const char *basename,
+                                            const char *filename,
+                                            JSValueConst attributes,
+                                            JSValue *out) {
+#if defined(VJSX_QUICKJS_NG) && \
+    (QJS_VERSION_MAJOR > 0 || QJS_VERSION_MINOR >= 18)
+    *out = JS_LoadModule(ctx, basename, filename, attributes);
+#else
+    (void)basename;
+    (void)filename;
+    (void)attributes;
+    *out = JS_ThrowReferenceError(ctx,
+        "asynchronous dynamic import is not supported by this QuickJS build");
+#endif
+}
+
+static inline int vjsx_js_finish_dynamic_import(JSContext *ctx, JSValue token,
+                                                 JSValue promise) {
+#if defined(VJSX_QUICKJS_NG) && \
+    (QJS_VERSION_MAJOR > 0 || QJS_VERSION_MINOR >= 18)
+    JSValue exception = JS_UNDEFINED;
+    if (JS_IsException(promise)) {
+        exception = JS_GetException(ctx);
+    }
+    return JS_FinishDynamicImport(ctx, token, promise, exception);
+#else
+    JS_FreeValue(ctx, token);
+    JS_FreeValue(ctx, promise);
+    return -1;
+#endif
+}
+
+static inline int vjsx_js_reject_dynamic_import(JSContext *ctx, JSValue token,
+                                                 const char *message) {
+#if defined(VJSX_QUICKJS_NG) && \
+    (QJS_VERSION_MAJOR > 0 || QJS_VERSION_MINOR >= 18)
+    JSValue exception;
+    JS_ThrowReferenceError(ctx, "%s", message);
+    exception = JS_GetException(ctx);
+    return JS_FinishDynamicImport(ctx, token, JS_EXCEPTION, exception);
+#else
+    (void)message;
+    JS_FreeValue(ctx, token);
+    return -1;
+#endif
 }
 
 static inline uint8_t *vjsx_js_write_bytecode(JSContext *ctx, size_t *out_len,

@@ -175,11 +175,11 @@ pub fn (session RuntimeSession) run_turn(options RuntimeSessionTurnOptions, acti
 		session.engine_limits().default_turn_timeout_ms
 	}
 	if timeout_ms > 0 {
-		session.runtime.set_deadline_after_ms(timeout_ms)
+		session.runtime.set_deadline_after_ms(session.context.ref, timeout_ms)
 	}
 	result := action(session.context) or {
 		if timeout_ms > 0 && !session.is_interrupted() {
-			session.runtime.clear_deadline()
+			session.runtime.clear_deadline(session.context.ref)
 		}
 		duration_ms := time.ticks() - started_tick
 		memory_after := session.memory_usage()
@@ -199,7 +199,7 @@ pub fn (session RuntimeSession) run_turn(options RuntimeSessionTurnOptions, acti
 		return err
 	}
 	if timeout_ms > 0 {
-		session.runtime.clear_deadline()
+		session.runtime.clear_deadline(session.context.ref)
 	}
 	duration_ms := time.ticks() - started_tick
 	memory_after := session.memory_usage()

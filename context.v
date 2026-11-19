@@ -11,7 +11,8 @@ struct C.JSModuleDef {}
 // Context structure based on `JSContext` in qjs
 // and implemented into `ref`.
 struct HostCleanupState {
-	host_async &RuntimeHostAsyncState = new_runtime_host_async_state()
+	host_async     &RuntimeHostAsyncState = new_runtime_host_async_state()
+	dynamic_import &DynamicImportState    = new_dynamic_import_state()
 mut:
 	fs_stat_factory   ?Value
 	cleanups          []HostCleanup
@@ -229,7 +230,7 @@ fn (ctx &Context) run_host_cleanups() {
 
 // Core evaluate JS
 pub fn (ctx &Context) js_eval_core(op EvalCoreConfig) !Value {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
 	input := op.input
 	len := op.len
@@ -306,7 +307,7 @@ pub fn (ctx &Context) eval_module(input string, fname string) !Value {
 
 // Compile and resolve an ES module graph without evaluating module bodies.
 pub fn (ctx &Context) compile_module(input string, fname string) ! {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	mut ref := ctx.js_undefined().ref
 	C.vjsx_js_eval_out(ctx.ref, input.str, uint(input.len), fname.str, type_module | type_compile_only, &ref)
 	value := ctx.c_val(ref)
@@ -393,7 +394,7 @@ pub fn (ctx &Context) eval_function(val Value) Value {
 
 // Callback this from Context
 pub fn (ctx &Context) call_this(this Value, val Value, args ...AnyValue) !Value {
-	ctx.rt.ensure_executable()!
+	ctx.ensure_executable()!
 	arg_values := args.map(ctx.owned_any_to_val(it))
 	defer {
 		for arg in arg_values {
@@ -483,6 +484,7 @@ pub fn (ctx &Context) runtime() Runtime {
 // Only use this when you are managing ownership manually. When using
 // `RuntimeSession`, call `session.close()` instead.
 pub fn (ctx &Context) free() {
+	ctx.close_dynamic_imports()
 	ctx.close_context_host_async_operations()
 	ctx.run_host_cleanups()
 	C.js_std_free_handlers(ctx.rt.ref)

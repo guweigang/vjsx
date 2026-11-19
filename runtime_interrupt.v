@@ -26,16 +26,16 @@ pub fn (err &RuntimeInterruptedError) msg() string {
 	}
 }
 
-fn (rt Runtime) interrupt_reason() RuntimeInterruptReason {
-	return match C.vjsx_interrupt_reason(rt.interrupt_state) {
+fn (rt Runtime) interrupt_reason(ctx &C.JSContext) RuntimeInterruptReason {
+	return match C.vjsx_interrupt_reason(rt.interrupt_state, ctx) {
 		1 { .cancelled }
 		2 { .deadline }
 		else { .none }
 	}
 }
 
-fn (rt Runtime) ensure_executable() ! {
-	reason := rt.interrupt_reason()
+fn (ctx &Context) ensure_executable() ! {
+	reason := ctx.rt.interrupt_reason(ctx.ref)
 	if reason != .none {
 		return &RuntimeInterruptedError{
 			reason: reason
@@ -43,16 +43,16 @@ fn (rt Runtime) ensure_executable() ! {
 	}
 }
 
-fn (rt Runtime) set_deadline_after_ms(delay_ms u64) {
-	C.vjsx_interrupt_set_deadline_after_ms(rt.interrupt_state, delay_ms)
+fn (rt Runtime) set_deadline_after_ms(ctx &C.JSContext, delay_ms u64) {
+	C.vjsx_interrupt_set_deadline_after_ms(rt.interrupt_state, ctx, delay_ms)
 }
 
-fn (rt Runtime) clear_deadline() {
-	C.vjsx_interrupt_clear_deadline(rt.interrupt_state)
+fn (rt Runtime) clear_deadline(ctx &C.JSContext) {
+	C.vjsx_interrupt_clear_deadline(rt.interrupt_state, ctx)
 }
 
-fn (rt Runtime) cancel() {
-	C.vjsx_interrupt_cancel(rt.interrupt_state)
+fn (rt Runtime) cancel(ctx &C.JSContext) {
+	C.vjsx_interrupt_cancel(rt.interrupt_state, ctx)
 }
 
 // Set an absolute execution deadline. The wall-clock delta is converted here;
@@ -64,7 +64,7 @@ pub fn (session RuntimeSession) set_deadline(deadline time.Time) {
 	now_ms := time.now().unix_milli()
 	deadline_ms := deadline.unix_milli()
 	delay_ms := if deadline_ms > now_ms { u64(deadline_ms - now_ms) } else { u64(0) }
-	session.runtime.set_deadline_after_ms(delay_ms)
+	session.runtime.set_deadline_after_ms(session.context.ref, delay_ms)
 }
 
 // Clear a pending deadline. Once interrupted, a session stays poisoned and
@@ -73,7 +73,7 @@ pub fn (session RuntimeSession) clear_deadline() {
 	if session.closed {
 		return
 	}
-	session.runtime.clear_deadline()
+	session.runtime.clear_deadline(session.context.ref)
 }
 
 // Request cancellation. This only performs an atomic store and is safe to call
@@ -82,7 +82,7 @@ pub fn (session RuntimeSession) cancel() {
 	if session.closed {
 		return
 	}
-	session.runtime.cancel()
+	session.runtime.cancel(session.context.ref)
 }
 
 // Return the interruption reason, or `none` while the session is usable.
@@ -90,7 +90,7 @@ pub fn (session RuntimeSession) interrupt_reason() RuntimeInterruptReason {
 	if session.closed {
 		return .none
 	}
-	return session.runtime.interrupt_reason()
+	return session.runtime.interrupt_reason(session.context.ref)
 }
 
 // Report whether execution was interrupted and the session must be closed.

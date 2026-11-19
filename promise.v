@@ -14,6 +14,8 @@ pub enum JSPromiseStateEnum {
 
 fn C.JS_NewPromiseCapability(&C.JSContext, &C.JSValue) C.JSValue
 
+fn C.vjsx_js_promise_then(&C.JSContext, JSValueConst, JSValueConst, JSValueConst) C.JSValue
+
 fn C.JS_SetHostPromiseRejectionTracker(&C.JSRuntime, &JSHostPromiseRejectionTracker, voidptr)
 
 fn C.js_std_promise_rejection_tracker(&C.JSContext, JSValueConst, JSValueConst, bool, voidptr)
@@ -49,6 +51,17 @@ pub fn (ctx &Context) js_promise_capability() PromiseCapability {
 		resolve: ctx.c_val(resolving_funcs[0])
 		reject:  ctx.c_val(resolving_funcs[1])
 	}
+}
+
+// Attach intrinsic Promise reactions without consulting a user-overridden
+// `then` property or `Symbol.species`.
+fn (ctx &Context) js_promise_then(promise Value, on_fulfilled Value, on_rejected Value) !Value {
+	result := ctx.c_val(C.vjsx_js_promise_then(ctx.ref, promise.ref, on_fulfilled.ref,
+		on_rejected.ref))
+	if result.is_exception() {
+		return ctx.execution_error()
+	}
+	return result
 }
 
 @[manualfree]
