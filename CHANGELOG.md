@@ -4,7 +4,7 @@ All notable user-visible changes are recorded here.
 
 ## Unreleased
 
-## 0.1.0 - 2026-11-20
+## 1.0.0-rc.3 - 2026-11-20
 
 ### Added
 
