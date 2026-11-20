@@ -165,7 +165,11 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev
+          packages=(libssl-dev zlib1g-dev libzstd-dev)
+          if apt-cache show libjitterentropy3-dev >/dev/null 2>&1; then
+            packages+=(libjitterentropy3-dev)
+          fi
+          sudo apt-get install -y "${packages[@]}"
 
       - name: Build Unix binary
         if: matrix.shell == 'bash'

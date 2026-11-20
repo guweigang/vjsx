@@ -90,6 +90,34 @@ find_libssl_a() {
   return 1
 }
 
+find_static_library() {
+  local name=$1
+  local preferred_dir=$2
+  local multiarch=''
+  local candidate
+  if command -v cc >/dev/null 2>&1; then
+    multiarch=$(cc -print-multiarch 2>/dev/null || true)
+  fi
+  for candidate in \
+    "$preferred_dir/lib${name}.a" \
+    ${multiarch:+"/usr/lib/$multiarch/lib${name}.a"} \
+    "/usr/local/lib/lib${name}.a" \
+    "/usr/lib64/lib${name}.a" \
+    "/usr/lib/lib${name}.a"; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+archive_references_any() {
+  local archive=$1
+  local pattern=$2
+  command -v nm >/dev/null 2>&1 && nm -u "$archive" 2>/dev/null | grep -Eq "$pattern"
+}
+
 v_args=()
 if [ -n "${VJS_V_FLAGS:-}" ]; then
   # Split user-provided flags by whitespace into array
@@ -142,6 +170,32 @@ if [ -n "$crypto_static_a" ] && [ -n "$ssl_static_a" ]; then
   # resolve to the archives on Unix toolchains.
   export CFLAGS="-L$static_dir${CFLAGS:+ $CFLAGS}"
   export LIBRARY_PATH="$static_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
+
+  if [ "$(uname -s)" = "Linux" ]; then
+    crypto_dir=$(dirname "$crypto_static_a")
+    static_crypto_dependencies=()
+    while IFS='|' read -r name pattern; do
+      if ! archive_references_any "$crypto_static_a" "$pattern"; then
+        continue
+      fi
+      dependency=$(find_static_library "$name" "$crypto_dir" || true)
+      if [ -z "$dependency" ]; then
+        echo "Static OpenSSL requires lib${name}.a, but it was not found" >&2
+        exit 1
+      fi
+      static_crypto_dependencies+=("$dependency")
+    done <<'EOF'
+z|[[:space:]](inflate|deflate|compress|uncompress|zError)(_|$)
+zstd|[[:space:]]ZSTD_
+jitterentropy|[[:space:]]jent_
+EOF
+    if [ "${#static_crypto_dependencies[@]}" -gt 0 ]; then
+      # Static archive dependencies must follow libcrypto on the final link line.
+      printf -v crypto_dependency_flags ' %q' "${static_crypto_dependencies[@]}"
+      export LDFLAGS="${LDFLAGS:+$LDFLAGS }${crypto_dependency_flags# }"
+      echo "Using static OpenSSL dependencies: ${static_crypto_dependencies[*]}" >&2
+    fi
+  fi
   echo "Using static OpenSSL: $ssl_static_a $crypto_static_a" >&2
 elif [ "$require_static_crypto" = "1" ]; then
   echo "Static OpenSSL is required but libssl.a or libcrypto.a was not found" >&2
@@ -164,7 +218,7 @@ check_dynamic_openssl() {
       ;;
     Linux)
       if command -v ldd >/dev/null 2>&1; then
-        dependency=$(ldd "$binary" 2>/dev/null | grep -E 'lib(ssl|crypto)\.so' || true)
+        dependency=$(ldd "$binary" 2>/dev/null | grep -E 'lib(ssl|crypto|zstd|jitterentropy)\.so|libz\.so' || true)
       fi
       ;;
   esac
