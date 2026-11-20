@@ -4,6 +4,19 @@ All notable user-visible changes are recorded here.
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-20
+
+### Added
+
+- QuickJS-ng 0.18 runtime integration, including asynchronous module loading
+  and context interruption support.
+- Reproducible release builds pinned to the repository's V toolchain revision.
+
+### Fixed
+
+- Linux release builds link the static OpenSSL archive's zlib, zstd and jitter
+  entropy dependencies statically when required by the host distribution.
+
 ### Documentation
 
 - Defined the managed runtime guarantees and required host conditions for 1.x.
