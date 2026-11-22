@@ -90,3 +90,13 @@ vjsx check --json --module src/main.mts
 
 Inspection performs resolution only. It reports a deterministic graph and the
 cache key that run/check/bundle use for the same inputs.
+
+## Embedding with a relative module mirror
+
+Hosts may call `runtimejs.build_runtime_module_entry_with_mirror_base(ctx, entry,
+true, output_root, project_root)` to mirror project files relative to
+`project_root`. This avoids duplicating long absolute Windows paths beneath the
+output directory. Import rewrites and generated runtime support files use the
+same mirror layout. Sources outside `project_root` retain the normal absolute
+path mirror. The caller owns the output directory and must keep it available
+for deferred imports until execution finishes.

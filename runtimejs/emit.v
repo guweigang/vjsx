@@ -278,7 +278,10 @@ pub fn build_runtime_module_entry(ctx &vjsx.Context, script_path string, as_modu
 	return mirrored_runtime_path(root, script_path)
 }
 
-fn build_runtime_module_entry_with_mirror_base(ctx &vjsx.Context, script_path string, as_module bool, temp_root string, mirror_base string) !string {
+// build_runtime_module_entry_with_mirror_base keeps modules inside mirror_base
+// relative to the output root. Embedding hosts can avoid repeating long Windows
+// project paths while retaining rewritten imports and runtime support files.
+pub fn build_runtime_module_entry_with_mirror_base(ctx &vjsx.Context, script_path string, as_module bool, temp_root string, mirror_base string) !string {
 	config_json := load_typescript_config(ctx, script_path) or { '' }
 	if !as_module {
 		if vjsx.is_javascript_file(script_path) && (is_commonjs_module(ctx, script_path) or {
