@@ -217,6 +217,7 @@ jobs:
             "tests\runtime_assets_test.v",
             "tests\runtime_policy_test.v",
             "tests\runtime_session_test.v",
+            "tests\module_mirror\public_api_test.v",
             "tests\type_test.v",
             "tests\value_test.v"
           )
