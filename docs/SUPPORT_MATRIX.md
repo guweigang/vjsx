@@ -35,7 +35,8 @@ ECDSA subset. Release smoke tests exercise ECDSA sign/verify on every artifact.
 | timers | supported subset | absent by default | supported subset |
 | `fetch` | supported subset when policy allows | supported subset when policy allows | supported subset |
 | `fs`, HTTP(S), child process | supported subset when policy allows | absent by default | rejected/absent |
-| Node crypto/zlib | supported subset | absent | browser WebCrypto subset instead |
+| Web Crypto (`crypto.subtle`) | supported subset | absent | supported subset |
+| Node crypto/zlib modules | supported subset | absent | absent |
 | sqlite/mysql compatibility modules | conditional, trusted policy only | opt-in legacy subset | absent |
 | DOM rendering/layout/storage/workers | absent | absent | absent |
 

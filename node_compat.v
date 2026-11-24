@@ -75,6 +75,7 @@ pub fn (ctx &Context) try_install_node_compat(config NodeCompatConfig) ! {
 		ctx.try_install_node_timers_promises_module()!
 	}
 	if config.crypto {
+		ctx.try_install_web_crypto_globals()!
 		ctx.try_install_node_crypto_module()!
 	}
 	if config.zlib {

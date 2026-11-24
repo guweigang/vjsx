@@ -7,8 +7,11 @@ import crypto, {
   createPublicKey,
   generateKeyPair,
   generateKeyPairSync,
+  getRandomValues,
   sign,
+  subtle,
   verify,
+  webcrypto,
 } from "node:crypto";
 import * as bareCrypto from "crypto";
 
@@ -41,6 +44,12 @@ console.log(!verify(null, new TextEncoder().encode("wrong"), publicKey, signatur
 console.log(createPrivateKey(privateKey).equals(privateKey));
 console.log(crypto.sign === sign);
 console.log(bareCrypto.verify === verify);
+console.log(globalThis.crypto === webcrypto && crypto.webcrypto === webcrypto);
+console.log(subtle === webcrypto.subtle && crypto.subtle === subtle);
+const digest = await subtle.digest("SHA-256", new TextEncoder().encode("abc"));
+console.log(Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("") === "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+const randomTarget = new Uint8Array(16);
+console.log(getRandomValues(randomTarget) === randomTarget && randomTarget.length === 16);
 
 const generated = generateKeyPairSync("ed25519");
 const generatedSignature = sign(null, message, generated.privateKey);

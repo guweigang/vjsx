@@ -15,12 +15,17 @@ The following filesystem specifiers resolve to the same host implementation:
 | `fs/promises` | Asynchronous helpers only |
 | `node:fs/promises` | Alias of `fs/promises` |
 
-The following crypto specifiers resolve to the same Ed25519 implementation:
+The following crypto specifiers resolve to the same compatibility module:
 
 | Specifier | Scope |
 | --- | --- |
-| `crypto` | Ed25519 operations, SHA-256/MD5 hashing, and UUID generation |
+| `crypto` | Ed25519 operations, SHA-256/MD5 hashing, UUID generation, and Web Crypto accessors |
 | `node:crypto` | Alias of `crypto` |
+
+The full `node` profile also installs the Web Crypto globals `crypto`,
+`crypto.subtle`, `CryptoKey`, and `SubtleCrypto`. The module exports
+`webcrypto`, `subtle`, and `getRandomValues` as references to that same global
+implementation.
 
 `path`/`node:path`, `os`/`node:os`, and `zlib`/`node:zlib` are paired aliases.
 The zlib subset currently exports `deflateRawSync()`.
@@ -110,12 +115,43 @@ The crypto module exports:
 - `createPublicKey()`
 - `generateKeyPair()`
 - `generateKeyPairSync()`
+- `getRandomValues()`
 - `randomUUID()`
 - `sign()`
+- `subtle`
 - `verify()`
+- `webcrypto`
 
 `randomUUID()` obtains its 128 random bits from V's `crypto.rand` operating
 system entropy source before applying the RFC 9562 version and variant bits.
+
+### Web Crypto API
+
+The full `node` profile exposes the same Web Crypto subset as the browser
+profile. These identities hold:
+
+```js
+import { getRandomValues, subtle, webcrypto } from "node:crypto";
+
+console.log(webcrypto === globalThis.crypto); // true
+console.log(subtle === globalThis.crypto.subtle); // true
+getRandomValues(new Uint8Array(16));
+```
+
+Current `SubtleCrypto` support includes:
+
+| Area | Current support |
+| --- | --- |
+| `digest` | `SHA-1`, `SHA-256`, `SHA-384`, `SHA-512` |
+| `HMAC` | `generateKey`, raw import/export, `sign`, `verify` |
+| `AES-CBC` | `generateKey`, raw import/export, `encrypt`, `decrypt` |
+| `AES-CTR` | `generateKey`, raw import/export, `encrypt`, `decrypt`; counter `length = 128` only |
+| `PBKDF2` | raw base-key import, `deriveBits`, `deriveKey`; `SHA-256/384/512` |
+| `Ed25519` | `generateKey`, `sign`, `verify`, raw public-key import/export |
+| `ECDSA` | generated key pairs, `sign`, `verify`, raw public-key export |
+
+`AES-GCM` is not implemented. ECDSA structured key import/export is not
+implemented, and Ed25519/ECDSA raw export is limited to public keys.
 
 ### Import, sign, and verify
 
@@ -200,15 +236,18 @@ and trailing data.
 The following are intentionally unsupported and rejected:
 
 - encrypted PKCS8 and passphrases
-- RSA, DSA, ECDSA, X25519, and other algorithms through `node:crypto`
+- RSA, DSA, ECDSA, X25519, and other algorithms through the Node-style
+  `sign()`/`verify()` and `KeyObject` APIs (ECDSA is available only through
+  `crypto.subtle` as documented above)
 - PKCS1, SEC1, private JWK, certificates, and OpenSSH key containers
 - streaming `Sign`/`Verify` objects
 - hashes other than SHA-256 and MD5, HMAC, ciphers, KDFs, and the rest of the
-  full Node crypto surface
+  Node-style crypto surface (some equivalents are available through
+  `crypto.subtle` as documented above)
 
-Browser-profile applications should continue using `crypto.subtle`; the
-`node:crypto` module is installed only by the full Node-style compatibility
-profile. `node_compat_minimal()` and the `script` profile do not install it.
+The `node:crypto` module and global Web Crypto API are installed only by the
+full Node-style compatibility profile. `node_compat_minimal()` and the `script`
+profile do not install them.
 
 ## Native Fetch Transport
 

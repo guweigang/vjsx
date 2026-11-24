@@ -59,7 +59,7 @@ fn test_cli_node_fs_promises_and_ed25519_crypto_modules() {
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/host_node_compat_modules_runtime.mjs')
 	assert output.exit_code == 0
-	assert output.output.trim_space() == 'promise fs\nfunction:function:function\ntrue\nprivate:public:ed25519\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue'
+	assert output.output.trim_space() == 'promise fs\nfunction:function:function\ntrue\nprivate:public:ed25519\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue'
 }
 
 fn test_cli_script_runtime_skips_fs_module() {

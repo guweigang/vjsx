@@ -572,15 +572,22 @@ The promise filesystem modules expose the existing asynchronous `readFile`,
 `readJson`, and `writeJson` helpers. They are a practical subset rather than a
 complete implementation of Node's `FileHandle` API.
 
-`crypto` and `node:crypto` provide an Ed25519-focused compatibility subset:
+The full Node profile installs global Web Crypto (`crypto`, `crypto.subtle`,
+`CryptoKey`, and `SubtleCrypto`). `crypto` and `node:crypto` also provide an
+Ed25519-focused Node compatibility subset:
 
 - `createPrivateKey()` with unencrypted PKCS8 PEM/DER keys
 - `createPublicKey()` with SPKI PEM/DER keys or an Ed25519 private `KeyObject`
 - `sign(null, data, privateKey)` and `verify(null, data, publicKey, signature)`
 - `generateKeyPairSync("ed25519")` and callback-based `generateKeyPair()`
 - `KeyObject.export()` to PKCS8/SPKI PEM or DER
+- `webcrypto`, `subtle`, and `getRandomValues` backed by the global Web Crypto
+  implementation
 
-Encrypted private keys and non-Ed25519 algorithms are intentionally rejected.
+The Web Crypto subset supports SHA digests, HMAC, AES-CBC, AES-CTR, PBKDF2,
+Ed25519, and generated-key ECDSA flows. AES-GCM and structured ECDSA key import
+are not implemented. Encrypted private keys and non-Ed25519 algorithms in the
+Node-style `KeyObject`/`sign()` APIs are intentionally rejected.
 See [`docs/NODE_COMPATIBILITY.md`](docs/NODE_COMPATIBILITY.md) for the complete
 specifier matrix, examples, compatibility differences, key formats, and
 security boundaries.
@@ -990,8 +997,8 @@ Notes:
 
 Minimal examples:
 
-These snippets assume you are running with the browser-style host profile, so
-`crypto.subtle` and `TextEncoder` are already available.
+These snippets assume you are running with the `browser` or full `node` host
+profile, where `crypto.subtle` and `TextEncoder` are available.
 
 Runnable copies of these snippets live under `examples/webcrypto/` and can be run
 with:

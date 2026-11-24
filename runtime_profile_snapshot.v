@@ -19,6 +19,7 @@ pub:
 	has_clear_timeout        bool
 	has_fetch                bool
 	has_process              bool
+	has_crypto_subtle        bool
 	has_node_timers_promises bool
 	has_node_crypto_module   bool
 	has_node_zlib_module     bool
@@ -73,6 +74,7 @@ fn (kind RuntimeProfileKind) required_capabilities() []string {
 				'process',
 				'setTimeout',
 				'clearTimeout',
+				'crypto.subtle',
 				'node:timers/promises',
 				'node:crypto',
 				'node:zlib',
@@ -101,6 +103,7 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'clearTimeout' { snapshot.has_clear_timeout }
 		'fetch' { snapshot.has_fetch }
 		'process' { snapshot.has_process }
+		'crypto.subtle' { snapshot.has_crypto_subtle }
 		'node:timers/promises' { snapshot.has_node_timers_promises }
 		'node:crypto' { snapshot.has_node_crypto_module }
 		'node:zlib' { snapshot.has_node_zlib_module }
@@ -169,6 +172,8 @@ pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 		has_clear_timeout:        runtime_profile_has_global(ctx, 'typeof clearTimeout === "function"')
 		has_fetch:                runtime_profile_has_global(ctx, 'typeof fetch === "function"')
 		has_process:              runtime_profile_has_global(ctx, 'typeof process === "object"')
+		has_crypto_subtle:        runtime_profile_has_global(ctx,
+			'typeof crypto === "object" && typeof crypto.subtle === "object"')
 		has_node_timers_promises: ctx.has_runtime_module('node:timers/promises')
 		has_node_crypto_module:   ctx.has_runtime_module('node:crypto')
 		has_node_zlib_module:     ctx.has_runtime_module('node:zlib')

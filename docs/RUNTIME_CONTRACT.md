@@ -161,8 +161,11 @@ owner lane and reschedules the earliest remaining deadline.
 
 The full `node` profile installs the filesystem aliases `fs`, `node:fs`,
 `fs/promises`, and `node:fs/promises`, plus the Ed25519-focused `crypto` and
-`node:crypto` modules. The `script` and `node_compat_minimal()` profiles do not
-install the filesystem or crypto modules.
+`node:crypto` modules. It also installs global Web Crypto (`crypto`,
+`crypto.subtle`, `CryptoKey`, and `SubtleCrypto`); the crypto modules expose
+that same object through `webcrypto`, `subtle`, and `getRandomValues`. The
+`script` and `node_compat_minimal()` profiles do not install the filesystem or
+crypto capabilities.
 
 These modules are compatibility subsets. Their supported exports, behavioral
 differences from Node.js, key formats, and security boundaries are documented
