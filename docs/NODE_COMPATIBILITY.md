@@ -148,10 +148,24 @@ Current `SubtleCrypto` support includes:
 | `AES-CTR` | `generateKey`, raw import/export, `encrypt`, `decrypt`; counter `length = 128` only |
 | `PBKDF2` | raw base-key import, `deriveBits`, `deriveKey`; `SHA-256/384/512` |
 | `Ed25519` | `generateKey`, `sign`, `verify`, raw public-key import/export |
-| `ECDSA` | generated key pairs, `sign`, `verify`, raw public-key export |
+| `ECDSA` | generated key pairs, `sign`, `verify`, raw public-key export; signatures use DER encoding |
 
 `AES-GCM` is not implemented. ECDSA structured key import/export is not
 implemented, and Ed25519/ECDSA raw export is limited to public keys.
+
+ECDSA signatures currently use ASN.1 DER encoding. This differs from Web
+Crypto's fixed-width IEEE P1363 representation and from the JOSE representation
+used by ACME. For ES256 JWS, callers must decode DER and emit the 64-byte
+`r || s` value before base64url encoding it. A probe that performed this
+conversion verified successfully, but vjsx does not currently perform the
+conversion itself.
+
+P-256 private-key persistence is not supported. Importing or exporting a
+private key through `pkcs8`, `jwk`, or `raw` does not currently succeed. There
+is therefore no supported way to serialize a generated P-256 `CryptoKey` and
+restore it through the same Web Crypto API after a process restart. In
+particular, an ACME client running in vhttpd cannot yet restore its account key
+after restart and must not treat generated P-256 keys as durable.
 
 ### Import, sign, and verify
 

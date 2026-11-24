@@ -986,12 +986,17 @@ Current `SubtleCrypto` scope:
 | `AES-CTR` | `generateKey`, `importKey('raw')`, `exportKey('raw')`, `encrypt`, `decrypt` with `length = 128` only |
 | `PBKDF2` | `importKey('raw')`, `deriveBits`, `deriveKey` with `SHA-256`, `SHA-384`, `SHA-512` |
 | `Ed25519` | `generateKey`, `sign`, `verify`, `importKey('raw')` for public keys, `exportKey('raw')` for generated public keys |
-| `ECDSA` | `generateKey`, `sign`, `verify`, `exportKey('raw')` for generated public keys |
+| `ECDSA` | `generateKey`, `sign`, `verify`, `exportKey('raw')` for generated public keys; DER signatures |
 
 Notes:
 
 - `AES-GCM` is not implemented yet.
 - `ECDSA` currently supports generated key pairs only; full `importKey()`/structured export formats are not implemented yet.
+- ECDSA signatures are ASN.1 DER encoded. ES256 JWS/ACME callers must convert
+  them to the 64-byte `r || s` JOSE representation.
+- P-256 private keys cannot currently be imported or exported as `pkcs8`,
+  `jwk`, or `raw`. They therefore cannot be persisted and restored through
+  Web Crypto across a vhttpd restart, including for ACME account keys.
 - `Ed25519` and `ECDSA` support in `exportKey('raw')` is intentionally limited to public keys.
 - `PBKDF2` is a base-key flow only; use `importKey('raw', ...)` before `deriveBits()` or `deriveKey()`.
 

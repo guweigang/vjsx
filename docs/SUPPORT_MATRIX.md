@@ -23,6 +23,9 @@ reported version, runtime profile, script execution, bundle/app packaging and
 the packaged executable. Release builds select V's OpenSSL crypto backend;
 OpenSSL is therefore a source-build dependency for the advertised WebCrypto
 ECDSA subset. Release smoke tests exercise ECDSA sign/verify on every artifact.
+ECDSA signatures currently use ASN.1 DER rather than Web Crypto/JOSE fixed-width
+`r || s` encoding, and P-256 private keys cannot be persisted through
+`pkcs8`, `jwk`, or `raw` import/export.
 
 ## Runtime profiles
 
