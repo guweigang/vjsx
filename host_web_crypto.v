@@ -250,23 +250,18 @@ pub fn (ctx &Context) install_web_crypto_boot(boot Value) {
 		privatekey.free()
 		return ctx.js_array_buffer(signature)
 	}))
-	obj.set('ecdsa_verify_with_private', ctx.js_function(fn [ctx] (args []Value) Value {
+	obj.set('ecdsa_verify', ctx.js_function(fn [ctx] (args []Value) Value {
 		nid := web_crypto_ecdsa_nid_from_curve_name(args[3].to_string()) or {
 			return ctx.js_bool(false)
 		}
 		opt := web_crypto_ecdsa_signer_opts_from_hash_name(args[4].to_string()) or {
 			return ctx.js_bool(false)
 		}
-		privatekey := ecdsa.new_key_from_seed(args[0].to_bytes(), nid: nid) or {
-			return ctx.js_bool(false)
-		}
-		publickey := privatekey.public_key() or {
-			privatekey.free()
+		publickey := ecdsa.PublicKey.from_uncompressed_bytes(args[0].to_bytes(), nid: nid) or {
 			return ctx.js_bool(false)
 		}
 		valid := publickey.verify(args[1].to_bytes(), args[2].to_bytes(), opt) or { false }
 		publickey.free()
-		privatekey.free()
 		return ctx.js_bool(valid)
 	}))
 	boot.set('crypto', obj)

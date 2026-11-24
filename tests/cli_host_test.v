@@ -62,6 +62,31 @@ fn test_cli_node_fs_promises_and_ed25519_crypto_modules() {
 	assert output.output.trim_space() == 'promise fs\nfunction:function:function\ntrue\nprivate:public:ed25519\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue'
 }
 
+fn test_cli_node_webcrypto_ecdsa_key_survives_process_restart() {
+	root := os.join_path(os.temp_dir(), 'vjsx_webcrypto_restart_${os.getpid()}')
+	os.rmdir_all(root) or {}
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	private_path := os.join_path(root, 'account.pk8')
+	public_path := os.join_path(root, 'account.spki')
+	private_jwk_path := os.join_path(root, 'account.private.jwk')
+	public_jwk_path := os.join_path(root, 'account.public.jwk')
+	exported :=
+		os.execute('${cli_test_support.command(false)} --module ./tests/webcrypto_ecdsa_export_runtime.mjs ${private_path} ${public_path} ${private_jwk_path} ${public_jwk_path}')
+	assert exported.exit_code == 0
+	assert exported.output.trim_space() == 'true:true:string:false'
+	assert os.is_file(private_path)
+	assert os.is_file(public_path)
+	assert os.is_file(private_jwk_path)
+	assert os.is_file(public_jwk_path)
+	restored :=
+		os.execute('${cli_test_support.command(false)} --module ./tests/webcrypto_ecdsa_import_runtime.mjs ${private_path} ${public_path} ${private_jwk_path} ${public_jwk_path}')
+	assert restored.exit_code == 0
+	assert restored.output.trim_space() == '64:true:64:true'
+}
+
 fn test_cli_script_runtime_skips_fs_module() {
 	output :=
 		os.execute('${cli_test_support.command(false)} --runtime script --module ./tests/host_runtime.mjs')

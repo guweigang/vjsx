@@ -585,9 +585,10 @@ Ed25519-focused Node compatibility subset:
   implementation
 
 The Web Crypto subset supports SHA digests, HMAC, AES-CBC, AES-CTR, PBKDF2,
-Ed25519, and generated-key ECDSA flows. AES-GCM and structured ECDSA key import
-are not implemented. Encrypted private keys and non-Ed25519 algorithms in the
-Node-style `KeyObject`/`sign()` APIs are intentionally rejected.
+Ed25519, and ECDSA with Node-compatible P1363 signatures and raw/SPKI/PKCS8/JWK
+key formats. AES-GCM is not implemented. Encrypted private keys and non-Ed25519
+algorithms in the Node-style `KeyObject`/`sign()` APIs are intentionally
+rejected.
 See [`docs/NODE_COMPATIBILITY.md`](docs/NODE_COMPATIBILITY.md) for the complete
 specifier matrix, examples, compatibility differences, key formats, and
 security boundaries.
@@ -969,6 +970,8 @@ fn main() {
   - [x] `generateKey()` for `HMAC`, `Ed25519`, `ECDSA`, `AES-CBC`, and `AES-CTR`
   - [x] `importKey('raw')` for `HMAC`, `PBKDF2`, `AES-CBC`, `AES-CTR`, and `Ed25519` public keys
   - [x] `exportKey('raw')` for extractable `HMAC`/`AES` keys, and generated `Ed25519`/`ECDSA` public keys
+  - [x] ECDSA `raw`/`spki` public-key and `pkcs8` private-key import/export
+  - [x] ECDSA `jwk` public/private-key import/export
   - [x] `deriveBits()` for `PBKDF2` (`SHA-256/384/512`)
   - [x] `deriveKey()` for `PBKDF2` -> `HMAC`/`AES-CBC`/`AES-CTR`
   - [x] encrypt (`AES-CBC`, `AES-CTR` with `length = 128`)
@@ -986,16 +989,14 @@ Current `SubtleCrypto` scope:
 | `AES-CTR` | `generateKey`, `importKey('raw')`, `exportKey('raw')`, `encrypt`, `decrypt` with `length = 128` only |
 | `PBKDF2` | `importKey('raw')`, `deriveBits`, `deriveKey` with `SHA-256`, `SHA-384`, `SHA-512` |
 | `Ed25519` | `generateKey`, `sign`, `verify`, `importKey('raw')` for public keys, `exportKey('raw')` for generated public keys |
-| `ECDSA` | `generateKey`, `sign`, `verify`, `exportKey('raw')` for generated public keys; DER signatures |
+| `ECDSA` | `generateKey`, `sign`, `verify`; P1363 signatures; raw/SPKI/PKCS8/JWK import/export |
 
 Notes:
 
 - `AES-GCM` is not implemented yet.
-- `ECDSA` currently supports generated key pairs only; full `importKey()`/structured export formats are not implemented yet.
-- ECDSA signatures are ASN.1 DER encoded. ES256 JWS/ACME callers must convert
-  them to the 64-byte `r || s` JOSE representation.
-- P-256 private keys cannot currently be imported or exported as `pkcs8`,
-  `jwk`, or `raw`. They therefore cannot be persisted and restored through
+- ECDSA signatures use the fixed-width IEEE P1363 `r || s` representation used
+  by Node Web Crypto and JOSE. ES256 signatures are 64 bytes.
+- ECDSA private keys can be persisted as `pkcs8` or `jwk` and restored through
   Web Crypto across a vhttpd restart, including for ACME account keys.
 - `Ed25519` and `ECDSA` support in `exportKey('raw')` is intentionally limited to public keys.
 - `PBKDF2` is a base-key flow only; use `importKey('raw', ...)` before `deriveBits()` or `deriveKey()`.

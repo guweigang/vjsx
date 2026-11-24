@@ -148,24 +148,21 @@ Current `SubtleCrypto` support includes:
 | `AES-CTR` | `generateKey`, raw import/export, `encrypt`, `decrypt`; counter `length = 128` only |
 | `PBKDF2` | raw base-key import, `deriveBits`, `deriveKey`; `SHA-256/384/512` |
 | `Ed25519` | `generateKey`, `sign`, `verify`, raw public-key import/export |
-| `ECDSA` | generated key pairs, `sign`, `verify`, raw public-key export; signatures use DER encoding |
+| `ECDSA` | P-256/P-384/P-521 key generation, `sign`, `verify`, and raw/SPKI/PKCS8/JWK import/export |
 
-`AES-GCM` is not implemented. ECDSA structured key import/export is not
-implemented, and Ed25519/ECDSA raw export is limited to public keys.
+`AES-GCM` is not implemented. Ed25519 and ECDSA raw export is limited to public
+keys; ECDSA private keys use `pkcs8` or `jwk`.
 
-ECDSA signatures currently use ASN.1 DER encoding. This differs from Web
-Crypto's fixed-width IEEE P1363 representation and from the JOSE representation
-used by ACME. For ES256 JWS, callers must decode DER and emit the 64-byte
-`r || s` value before base64url encoding it. A probe that performed this
-conversion verified successfully, but vjsx does not currently perform the
-conversion itself.
+ECDSA signatures use Web Crypto's fixed-width IEEE P1363 `r || s`
+representation. P-256/ES256 signatures are therefore 64 bytes and can be
+base64url encoded directly for JOSE and ACME.
 
-P-256 private-key persistence is not supported. Importing or exporting a
-private key through `pkcs8`, `jwk`, or `raw` does not currently succeed. There
-is therefore no supported way to serialize a generated P-256 `CryptoKey` and
-restore it through the same Web Crypto API after a process restart. In
-particular, an ACME client running in vhttpd cannot yet restore its account key
-after restart and must not treat generated P-256 keys as durable.
+ECDSA private keys are exportable and importable as PKCS8 or JWK when the
+`CryptoKey` is extractable. Public keys support raw SEC1 points, SPKI, and JWK.
+The executable compatibility test persists P-256 PKCS8/SPKI and JWK keys,
+starts a new vjsx process, restores them, and completes 64-byte ES256
+sign/verify round trips. These are the supported paths for durable vhttpd ACME
+account keys.
 
 ### Import, sign, and verify
 
