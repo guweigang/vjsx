@@ -55,7 +55,7 @@ not silently install or emulate them.
 | `.ts` / `.mts` | supported subset | transpilation only; no type checking |
 | `.cjs` / detected CommonJS | partial | statically discoverable `require()` and named-export interop |
 | JSON modules | supported | generated default export |
-| package `exports` root/subpath | supported subset | resolvable string targets used by the runtime graph |
+| package `exports` root/subpath | supported subset | exact and single-wildcard subpaths with string targets, including the existing conditional target selection |
 | package `imports`, conditional matrices, loaders | partial or rejected | not Node-complete |
 | computed `require()` / computed `import()` in bundles | rejected/not bundled | cannot be statically resolved |
 | native addons (`.node`, `binding.gyp`) | rejected when reachable | no N-API/addon ABI |

@@ -3,6 +3,12 @@
   "type": "module",
   "exports": {
     ".": "./index.mjs",
-    "./feature": "./feature.mjs"
+    "./feature": "./feature.mjs",
+    "./nested/*": "./*.mjs",
+    "./nested/deep/*.js": {
+      "types": "./*.d.ts",
+      "import": "./*.mjs"
+    },
+    "./nested/deep/root.js": "./index.mjs"
   }
 }
