@@ -256,6 +256,9 @@ fn test_cli_capabilities_command() {
 	assert output.output.contains('yes crypto.subtle')
 	assert output.output.contains('yes node:zlib')
 	assert output.output.contains('yes node:fs/promises')
+	assert output.output.contains('yes node:child_process')
+	assert output.output.contains('yes timers/promises')
+	assert output.output.contains('yes node:timers/promises')
 	assert output.output.contains('yes path')
 }
 

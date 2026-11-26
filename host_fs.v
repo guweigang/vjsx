@@ -237,8 +237,12 @@ fn stat_object(ctx &Context, st os.Stat, path string) Value {
 		return ctx.js_throw(ctx.js_error(message: err.msg()))
 	}
 	obj.set('path', path)
-	obj.set('size', int(st.size))
+	obj.set('size', f64(st.size))
+	obj.set('mode', st.mode)
+	obj.set('ino', f64(st.inode))
+	obj.set('dev', f64(st.dev))
 	obj.set('mtime', st.mtime)
+	obj.set('mtimeMs', f64(st.mtime) * 1000)
 	obj.set('ctime', st.ctime)
 	obj.set('atime', st.atime)
 	return obj
@@ -263,14 +267,20 @@ fn fs_bytes_value(ctx &Context, bytes []u8) Value {
 }
 
 fn fs_write_bytes(path string, bytes []u8, mode int, exclusive bool) ! {
+	fs_write_bytes_mode(path, bytes, mode, exclusive, false)!
+}
+
+fn fs_write_bytes_mode(path string, bytes []u8, mode int, exclusive bool, append bool) ! {
 	fd := $if windows {
-		mut flags := C._O_WRONLY | C._O_CREAT | C._O_TRUNC | C._O_BINARY
+		mut flags := C._O_WRONLY | C._O_CREAT | C._O_BINARY
+		flags |= if append { C._O_APPEND } else { C._O_TRUNC }
 		if exclusive {
 			flags |= C._O_EXCL
 		}
 		C._wopen(path.to_wide(), flags, mode)
 	} $else {
-		mut flags := C.O_WRONLY | C.O_CREAT | C.O_TRUNC
+		mut flags := C.O_WRONLY | C.O_CREAT
+		flags |= if append { C.O_APPEND } else { C.O_TRUNC }
 		if exclusive {
 			flags |= C.O_EXCL
 		}
@@ -484,7 +494,11 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 				return promise.resolve(fs_bytes_value(ctx, bytes))
 			}
 		}
-		read_err = ctx.js_error(message: 'file not found: ${path}', name: 'Error')
+		read_err = if candidates.len > 0 {
+			fs_error(ctx, 'file not found: ${path}', 'ENOENT')
+		} else {
+			fs_error(ctx, 'filesystem read path is not allowed: ${path}', 'EACCES')
+		}
 		reject:
 		return promise.reject(read_err)
 	})
@@ -609,18 +623,21 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		candidates := readable_candidate_paths(path, roots, ctx.capability_policy())
 		for candidate in candidates {
 			if os.exists(candidate) && os.is_dir(candidate) {
-				entries := os.ls(candidate) or {
+				with_types := if args.len > 1 {
+					bool_option(args[1], 'withFileTypes', false) or {
+						return promise.reject(fs_error(ctx, err.msg(), 'ERR_INVALID_ARG_TYPE'))
+					}
+				} else {
+					false
+				}
+				entries := fs_dir_entries(ctx, candidate, with_types) or {
 					readdir_err = ctx.js_error(message: err.msg())
 					unsafe {
 						goto reject
 					}
-					[]string{}
+					ctx.js_undefined()
 				}
-				arr := ctx.js_array()
-				for i, entry in entries {
-					arr.set(i, entry)
-				}
-				return promise.resolve(arr)
+				return promise.resolve(entries)
 			}
 		}
 		readdir_err = ctx.js_error(message: 'directory not found: ${path}', name: 'Error')
@@ -637,7 +654,18 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 			}
 		}
 		path := args[0].str()
-		recursive := if args.len > 1 { args[1].to_bool() } else { false }
+		recursive := if args.len > 1 && args[1].is_bool() {
+			args[1].to_bool()
+		} else if args.len > 1 {
+			bool_option(args[1], 'recursive', false) or { return promise.reject(fs_error(ctx, err.msg(), 'ERR_INVALID_ARG_TYPE')) }
+		} else {
+			false
+		}
+		force := if args.len > 1 {
+			bool_option(args[1], 'force', false) or { return promise.reject(fs_error(ctx, err.msg(), 'ERR_INVALID_ARG_TYPE')) }
+		} else {
+			false
+		}
 		target := writable_target_path(path, roots, ctx.capability_policy()) or {
 			rm_err = ctx.js_error(message: err.msg())
 			unsafe {
@@ -654,6 +682,9 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 			}
 		} else {
 			os.rm(target) or {
+				if force && !os.exists(target) {
+					return promise.resolve(ctx.js_undefined())
+				}
 				rm_err = ctx.js_error(message: err.msg())
 				unsafe {
 					goto reject
@@ -686,7 +717,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 				return promise.resolve(stat_object(ctx, st, candidate))
 			}
 		}
-		stat_err = ctx.js_error(message: 'path not found: ${path}', name: 'Error')
+		stat_err = fs_error(ctx, 'path not found: ${path}', 'ENOENT')
 		reject:
 		return promise.reject(stat_err)
 	})
@@ -695,11 +726,17 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		if args.len == 0 {
 			return promise.reject(ctx.js_error(message: 'path is required', name: 'TypeError'))
 		}
-		for candidate in readable_candidate_paths(args[0].str(), roots, ctx.capability_policy()) {
+		path := args[0].str()
+		candidates := readable_candidate_paths(path, roots, ctx.capability_policy())
+		for candidate in candidates {
 			st := os.lstat(candidate) or { continue }
 			return promise.resolve(stat_object(ctx, st, candidate))
 		}
-		return promise.reject(ctx.js_error(message: 'path not found: ${args[0].str()}'))
+		return promise.reject(if candidates.len == 0 {
+			fs_error(ctx, 'filesystem read path is not allowed: ${path}', 'EACCES')
+		} else {
+			fs_error(ctx, 'path not found: ${path}', 'ENOENT')
+		})
 	})
 	chmod_fn := ctx.js_function(fn [ctx, roots] (args []Value) Value {
 		promise := ctx.js_promise()
@@ -1073,10 +1110,15 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	fs.export('copyFileSync', copy_file_sync)
 	fs.export('chmodSync', chmod_sync)
 	fs.export('createWriteStream', create_write_stream)
+	watch_fn := ctx.fs_watch_export(roots) or { panic(err) }
+	fs.export('watch', watch_fn)
 	fs.export('rename', rename_fn)
 	fs.export('readJson', read_json_fn)
 	fs.export('writeJson', write_json_fn)
 	default_obj := ctx.js_object()
+	constants := fs_constants(ctx)
+	fs.export('constants', constants)
+	default_obj.set('constants', constants)
 	default_obj.set('readFile', read_file)
 	default_obj.set('writeFile', write_file)
 	default_obj.set('exists', exists_fn)
@@ -1098,6 +1140,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	default_obj.set('copyFileSync', copy_file_sync)
 	default_obj.set('chmodSync', chmod_sync)
 	default_obj.set('createWriteStream', create_write_stream)
+	default_obj.set('watch', watch_fn)
 	default_obj.set('rename', rename_fn)
 	default_obj.set('readJson', read_json_fn)
 	default_obj.set('writeJson', write_json_fn)
@@ -1115,20 +1158,37 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
 		'chmod', 'copyFile', 'readFileSync', 'writeFileSync', 'existsSync', 'mkdirSync', 'mkdtempSync',
 		'readdirSync', 'rmSync', 'statSync', 'copyFileSync', 'chmodSync', 'createWriteStream',
-		'rename', 'readJson', 'writeJson', 'openSync', 'writeSync', 'fsyncSync', 'closeSync',
-		'renameSync'] {
+		'watch', 'rename', 'readJson', 'writeJson', 'openSync', 'writeSync', 'fsyncSync', 'closeSync',
+		'constants', 'renameSync'] {
 		node_fs.export(name, fs.get(name))
 	}
 	node_fs.export_default(default_obj)
 	node_fs.create()
 
 	mut promises_obj := ctx.js_object()
+	extras := ctx.fs_promise_extra_exports(roots) or { panic(err) }
+	extra_names := ['access', 'appendFile', 'mkdtemp', 'open', 'opendir', 'realpath']
+	for name in extra_names {
+		extra := extras.get(name)
+		promises_obj.set(name, extra)
+		extra.free()
+	}
+	promises_obj.set('constants', constants)
+	statfs_fn := ctx.fs_statfs_export(roots)
+	promises_obj.set('statfs', statfs_fn)
 	for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
 		'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
 		promises_obj.set(name, fs.get(name))
 	}
 	for module_name in ['fs/promises', 'node:fs/promises'] {
 		mut promises_mod := ctx.js_module(module_name)
+		for name in extra_names {
+			extra := extras.get(name)
+			promises_mod.export(name, extra)
+			extra.free()
+		}
+		promises_mod.export('constants', constants)
+		promises_mod.export('statfs', statfs_fn)
 		for name in ['readFile', 'writeFile', 'exists', 'mkdir', 'readdir', 'rm', 'stat', 'lstat',
 			'chmod', 'copyFile', 'rename', 'readJson', 'writeJson'] {
 			promises_mod.export(name, fs.get(name))
@@ -1136,6 +1196,9 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 		promises_mod.export_default(promises_obj)
 		promises_mod.create()
 	}
+	statfs_fn.free()
+	extras.free()
+	constants.free()
 	promises_obj.free()
 	default_obj.free()
 	read_file.free()
@@ -1159,6 +1222,7 @@ pub fn (ctx &Context) install_fs_module_policy(roots []string, policy HostPolicy
 	copy_file_sync.free()
 	chmod_sync.free()
 	create_write_stream.free()
+	watch_fn.free()
 	rename_fn.free()
 	read_json_fn.free()
 	write_json_fn.free()

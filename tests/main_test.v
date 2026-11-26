@@ -95,7 +95,7 @@ fn test_node_policy_can_disable_shell_execution() {
 		}
 	})
 	ctx.eval('
-		import { execSync } from "child_process";
+		import { execSync } from "node:child_process";
 		try {
 			execSync("printf should-not-run");
 			globalThis.__shellPolicy = "ran";

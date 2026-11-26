@@ -10,10 +10,14 @@ The following filesystem specifiers resolve to the same host implementation:
 
 | Specifier | Exports |
 | --- | --- |
-| `fs` | Asynchronous helpers, synchronous helpers, and the default export |
+| `fs` | Asynchronous helpers, synchronous helpers, `watch()`, and the default export |
 | `node:fs` | Alias of `fs` |
 | `fs/promises` | Asynchronous helpers only |
 | `node:fs/promises` | Alias of `fs/promises` |
+
+The filesystem modules share `constants` for access checks and supported
+open flags. `os.constants.signals` exposes common host signal numbers.
+`path.win32` provides `join()` and `normalize()` on every platform.
 
 The following crypto specifiers resolve to the same compatibility module:
 
@@ -30,6 +34,10 @@ implementation.
 `path`/`node:path`, `os`/`node:os`, and `zlib`/`node:zlib` are paired aliases.
 The zlib subset currently exports `deflateRawSync()`.
 
+`child_process` and `node:child_process` share the same exports and are
+available when the policy allows subprocesses. `timers/promises` and
+`node:timers/promises` expose the same promise-based `setTimeout()`.
+
 These specifiers are also recognized as builtins by the TypeScript/runtime
 module graph emitter, so they are not incorrectly resolved from
 `node_modules` while bundling.
@@ -39,16 +47,23 @@ module graph emitter, so they are not incorrectly resolved from
 The promise modules export:
 
 - `readFile`
+- `access`
 - `writeFile`
+- `appendFile`
 - `exists`
 - `mkdir`
+- `mkdtemp`
 - `readdir`
+- `opendir`
+- `open`
 - `rm`
 - `stat`
 - `lstat`
+- `statfs`
 - `chmod`
 - `copyFile`
 - `rename`
+- `realpath`
 - `readJson`
 - `writeJson`
 
@@ -73,14 +88,17 @@ The current behavior intentionally follows the existing vjsx filesystem host:
   Exclusive variants use atomic creation and never degrade to truncating
   writes. Other flags are rejected.
 - `mkdir()` creates missing parent directories.
-- `rm(path, recursive)` accepts a boolean recursive flag rather than Node's
-  complete options object.
-- Operations execute through V's filesystem functions and return an already
-  settled or rejected JavaScript `Promise`; they are not backed by Node's
-  libuv worker pool.
-- `FileHandle`, `open()`, streams in the promise module, `AbortSignal`, most
-  flags/encodings, and the complete Node error-code surface are not yet
-  implemented.
+- `rm()` accepts `{ recursive, force }` and the legacy boolean recursive flag.
+- Operations run synchronously in the host and return an already settled
+  JavaScript `Promise`.
+- `statfs(path)` accepts string paths and returns filesystem metadata as
+  Numbers. Set `{ bigint: true }` to receive exact BigInts. Windows reports
+  zero for filesystem type and inode counts.
+- `open()` supports `r`, `r+`, `w`, `wx`, and `a`. On Unix, numeric
+  read-only flags can include `O_NONBLOCK` and `O_NOFOLLOW`. A file handle
+  supports `read()`, `stat()`, `sync()`, `truncate()`, and `close()`.
+- `readdir(path, { withFileTypes: true })` and `opendir()` expose directory
+  entry names and type checks. An open directory reads from a snapshot.
 
 Filesystem resolution remains governed by `NodeCompatConfig.fs_roots`. Relative
 writes use the first configured root; relative reads try the provided path and
@@ -96,6 +114,37 @@ The direct `sqlite` compatibility module is omitted when bounded filesystem
 roots are active because the driver does not enforce per-operation policy. The
 same rule applies to `mysql` when a network hostname allowlist is active; use a
 host-owned database API for bounded database access.
+
+## Filesystem watching
+
+`fs.watch(path, options?, listener?)` and `node:fs` watch string paths for
+files or directories within the current filesystem read policy. The watcher
+supports `recursive`, `persistent`, UTF-8 or buffer filenames, `AbortSignal`,
+and the usual `on`, `once`, `off`, `close`, `ref`, and `unref` methods.
+
+Watchers poll filesystem metadata every 100 ms and emit `change` or `rename`
+for differences between snapshots. Multiple changes within one interval may
+be coalesced or missed. Recursive scans do not traverse directory symlinks.
+On the CLI, unreferenced watchers do not keep an idle process alive. An explicit
+await can still receive their events. Managed hosts that own their timers
+schedule watcher polls through their runtime scheduler.
+
+## Node SQLite subset
+
+With `-d vjsx_sqlite`, the trusted `node` profile also exposes
+`node:sqlite`. It supports `new DatabaseSync(path, { readOnly, timeout })`,
+`exec(sql)`, `prepare(sql)`, and `close()`. A statement supports
+`run(...params)`, `get(...params)`, `all(...params)`, and
+`setReadBigInts(enabled)`. `exec` accepts SQL scripts, including transaction
+statements. `prepare` accepts a single statement and validates it before
+returning a handle. The handle prepares the SQL again on each execution.
+
+Positional bindings accept `null`, numbers, signed 64-bit bigints, strings, and
+`Uint8Array` values. Reads preserve SQL `NULL`, integer, real, text, and blob
+values. Integers outside JavaScript's safe range require
+`setReadBigInts(true)`. `get` returns `undefined` if no row matches.
+The existing `sqlite` module retains its string-oriented API. Both SQLite
+modules require unrestricted filesystem read and write in the host policy.
 
 ## Raw DEFLATE API
 

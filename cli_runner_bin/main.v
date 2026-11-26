@@ -672,6 +672,7 @@ fn runtime_capabilities(runtime_profile string) !string {
 	append_capability(mut lines, 'Intl', runtime_profile_has_expr(ctx, 'typeof Intl === "object"'))
 	append_capability(mut lines, 'crypto.subtle', runtime_profile_has_expr(ctx, 'typeof crypto === "object" && typeof crypto.subtle === "object"'))
 	lines << 'modules:'
+	append_capability(mut lines, 'timers/promises', snapshot.has_node_timers_promises)
 	append_capability(mut lines, 'node:timers/promises', snapshot.has_node_timers_promises)
 	append_capability(mut lines, 'node:crypto', snapshot.has_node_crypto_module)
 	append_capability(mut lines, 'node:zlib', snapshot.has_node_zlib_module)
@@ -683,7 +684,9 @@ fn runtime_capabilities(runtime_profile string) !string {
 	append_capability(mut lines, 'https', snapshot.has_https_module)
 	append_capability(mut lines, 'os', snapshot.has_os_module)
 	append_capability(mut lines, 'child_process', snapshot.has_child_process_module)
+	append_capability(mut lines, 'node:child_process', snapshot.has_child_process_module)
 	append_capability(mut lines, 'sqlite', snapshot.has_sqlite_module)
+	append_capability(mut lines, 'node:sqlite', snapshot.has_node_sqlite_module)
 	append_capability(mut lines, 'mysql', snapshot.has_mysql_module)
 	return lines.join('\n') + '\n'
 }

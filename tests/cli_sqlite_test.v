@@ -51,6 +51,12 @@ fn test_cli_host_sqlite_close_lifecycle() {
 	assert !os.exists(db_path)
 }
 
+fn test_cli_node_sqlite_preserves_values_and_transactions() {
+	output := os.execute('${cli_test_support.command(true)} --module ./tests/host_node_sqlite_runtime.mjs')
+	assert output.exit_code == 0, output.output
+	assert output.output.trim_space() == 'node:sqlite ok'
+}
+
 fn test_cli_host_mysql_module_available() {
 	output :=
 		os.execute('${cli_test_support.command(false)} --module ./tests/host_mysql_module_runtime.mjs')

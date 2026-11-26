@@ -3,6 +3,8 @@ module vjsx
 import os
 import runtime
 
+#include <signal.h>
+
 fn node_os_platform() string {
 	return match os.user_os() {
 		'macos' { 'darwin' }
@@ -128,6 +130,21 @@ fn node_os_user_info_value(ctx &Context) Value {
 
 // Install a Node-like `os` host module with common platform helpers.
 pub fn (ctx &Context) install_os_module() {
+	constants := ctx.js_object()
+	signals := ctx.js_object()
+	signals.set('SIGINT', int(C.SIGINT))
+	signals.set('SIGTERM', int(C.SIGTERM))
+	signals.set('SIGABRT', int(C.SIGABRT))
+	signals.set('SIGKILL', 9)
+	$if !windows {
+		signals.set('SIGHUP', int(C.SIGHUP))
+		signals.set('SIGPIPE', int(C.SIGPIPE))
+		signals.set('SIGQUIT', int(C.SIGQUIT))
+		signals.set('SIGUSR1', int(C.SIGUSR1))
+		signals.set('SIGUSR2', int(C.SIGUSR2))
+	}
+	constants.set('signals', signals)
+	signals.free()
 	eol := ctx.js_string('\n')
 	dev_null := ctx.js_string(os.path_devnull)
 	arch_fn := ctx.js_function(fn [ctx] (args []Value) Value {
@@ -183,6 +200,7 @@ pub fn (ctx &Context) install_os_module() {
 		return node_os_user_info_value(ctx)
 	})
 	default_obj := ctx.js_object()
+	default_obj.set('constants', constants)
 	default_obj.set('EOL', eol)
 	default_obj.set('devNull', dev_null)
 	default_obj.set('arch', arch_fn)
@@ -203,6 +221,7 @@ pub fn (ctx &Context) install_os_module() {
 	default_obj.set('userInfo', user_info_fn)
 	for module_name in ['os', 'node:os'] {
 		mut os_mod := ctx.js_module(module_name)
+		os_mod.export('constants', constants)
 		os_mod.export('EOL', eol)
 		os_mod.export('devNull', dev_null)
 		os_mod.export('arch', arch_fn)
@@ -225,6 +244,7 @@ pub fn (ctx &Context) install_os_module() {
 		os_mod.create()
 	}
 	default_obj.free()
+	constants.free()
 	eol.free()
 	dev_null.free()
 	arch_fn.free()

@@ -29,14 +29,28 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 	defer { session.close() }
 	ctx := session.context()
 	assert !ctx.has_runtime_module('sqlite')
+	assert !ctx.has_runtime_module('node:sqlite')
 	value := ctx.eval('
 		import fs from "fs";
+		import { appendFile, open, statfs } from "node:fs/promises";
 		fs.writeFileSync("inside.txt", "ok");
 		let outsideRead = "allowed";
 		let outsideWrite = "allowed";
+		let outsideWatch = "allowed";
+		let outsideStatfs = "allowed";
+		let outsideOpen = "allowed";
+		let outsideAppend = "allowed";
 		try { fs.readFileSync(${outside_js}); } catch (err) { outsideRead = String(err.message); }
 		try { fs.writeFileSync(${outside_js}, "bad"); } catch (err) { outsideWrite = String(err.message); }
-		globalThis.__policyResult = [fs.readFileSync("inside.txt", "utf8"), outsideRead, outsideWrite].join("|");
+		try { fs.watch(${outside_js}); } catch (err) { outsideWatch = err.code; }
+		try { await statfs(${outside_js}); } catch (err) { outsideStatfs = err.code; }
+		try { await open(${outside_js}, "r+"); } catch (err) { outsideOpen = err.code; }
+		try { await appendFile(${outside_js}, "bad"); } catch (err) { outsideAppend = err.code; }
+		const inside = await statfs("inside.txt");
+		globalThis.__policyResult = [
+			fs.readFileSync("inside.txt", "utf8"), outsideRead, outsideWrite, outsideWatch,
+			outsideStatfs, inside.bsize > 0, outsideOpen, outsideAppend,
+		].join("|");
 	', vjsx.type_module) or { panic(err) }
 	value.free()
 	ctx.end()
@@ -46,6 +60,11 @@ fn test_bounded_filesystem_policy_allows_inside_and_rejects_outside() {
 	assert parts[0] == 'ok'
 	assert parts[1].contains('not found') || parts[1].contains('disabled')
 	assert parts[2].contains('not allowed')
+	assert parts[3] == 'EACCES'
+	assert parts[4] == 'EACCES'
+	assert parts[5] == 'true'
+	assert parts[6] == 'EACCES'
+	assert parts[7] == 'EACCES'
 	assert os.read_file(outside) or { '' } == 'secret'
 }
 
@@ -87,6 +106,8 @@ fn test_network_host_allowlist_and_safe_module_denial() {
 	assert !ctx.has_runtime_module('http')
 	assert !ctx.has_runtime_module('https')
 	assert !ctx.has_runtime_module('child_process')
+	assert !ctx.has_runtime_module('node:child_process')
 	assert !ctx.has_runtime_module('sqlite')
+	assert !ctx.has_runtime_module('node:sqlite')
 	assert !ctx.has_runtime_module('mysql')
 }

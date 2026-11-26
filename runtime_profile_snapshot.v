@@ -32,6 +32,7 @@ pub:
 	has_os_module            bool
 	has_child_process_module bool
 	has_sqlite_module        bool
+	has_node_sqlite_module   bool
 	has_mysql_module         bool
 }
 
@@ -104,7 +105,7 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'fetch' { snapshot.has_fetch }
 		'process' { snapshot.has_process }
 		'crypto.subtle' { snapshot.has_crypto_subtle }
-		'node:timers/promises' { snapshot.has_node_timers_promises }
+		'timers/promises', 'node:timers/promises' { snapshot.has_node_timers_promises }
 		'node:crypto' { snapshot.has_node_crypto_module }
 		'node:zlib' { snapshot.has_node_zlib_module }
 		'node:fs' { snapshot.has_node_fs_module }
@@ -114,8 +115,9 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'http', 'node:http' { snapshot.has_http_module }
 		'https', 'node:https' { snapshot.has_https_module }
 		'os' { snapshot.has_os_module }
-		'child_process' { snapshot.has_child_process_module }
+		'child_process', 'node:child_process' { snapshot.has_child_process_module }
 		'sqlite' { snapshot.has_sqlite_module }
+		'node:sqlite' { snapshot.has_node_sqlite_module }
 		'mysql' { snapshot.has_mysql_module }
 		else { false }
 	}
@@ -186,6 +188,7 @@ pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 		has_os_module:            ctx.has_runtime_module('os')
 		has_child_process_module: ctx.has_runtime_module('child_process')
 		has_sqlite_module:        ctx.has_runtime_module('sqlite')
+		has_node_sqlite_module:   ctx.has_runtime_module('node:sqlite')
 		has_mysql_module:         ctx.has_runtime_module('mysql')
 	}
 }

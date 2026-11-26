@@ -223,3 +223,24 @@ fn test_cli_host_rename_warn_runtime_features() {
 	assert !os.exists(source_path)
 	assert !os.exists(target_path)
 }
+
+fn test_cli_fs_watch_callbacks_and_unref() {
+	output := os.execute('${cli_test_support.command(false)} --module ./tests/host_fs_watch_runtime.mjs')
+	assert output.exit_code == 0, output.output
+	assert output.output.trim_space() == 'watch callbacks ok'
+	idle := os.execute('${cli_test_support.command(false)} --module ./tests/host_fs_watch_runtime.mjs --idle')
+	assert idle.exit_code == 0, idle.output
+	assert idle.output.trim_space() == 'unreferenced watcher'
+}
+
+fn test_cli_fs_statfs_promise_aliases() {
+	output := os.execute('${cli_test_support.command(false)} --module ./tests/host_fs_statfs_runtime.mjs')
+	assert output.exit_code == 0, output.output
+	assert output.output.trim_space() == 'statfs ok'
+}
+
+fn test_cli_fs_promise_handles() {
+	output := os.execute('${cli_test_support.command(false)} --module ./tests/host_fs_handles_runtime.mjs')
+	assert output.exit_code == 0, output.output
+	assert output.output.trim_space() == 'filesystem handles ok'
+}
