@@ -19,11 +19,15 @@ const runtime_asset_fetch_headers_js = $embed_file('web/js/fetch/headers.js')
 const runtime_asset_fetch_request_js = $embed_file('web/js/fetch/request.js')
 const runtime_asset_fetch_response_js = $embed_file('web/js/fetch/response.js')
 const runtime_asset_form_data_js = $embed_file('web/js/form_data.js')
+const runtime_asset_fs_file_handle_js = $embed_file('web/js/fs_file_handle.js')
+const runtime_asset_fs_watch_js = $embed_file('web/js/fs_watch.js')
 const runtime_asset_inject_js = $embed_file('web/js/inject.js')
 const runtime_asset_intl_js = $embed_file('web/js/intl.js')
 const runtime_asset_navigator_js = $embed_file('web/js/navigator.js')
 const runtime_asset_node_timers_promises_js = $embed_file('web/js/node_timers_promises.js')
 const runtime_asset_node_crypto_js = $embed_file('web/js/node_crypto.js')
+const runtime_asset_node_sqlite_js = $embed_file('web/js/node_sqlite.js')
+const runtime_asset_path_win32_js = $embed_file('web/js/path_win32.js')
 const runtime_asset_perf_js = $embed_file('web/js/perf.js')
 const runtime_asset_polyfill_stream_js = $embed_file('web/js/polyfill/stream.js')
 const runtime_asset_polyfill_url_pattern_js = $embed_file('web/js/polyfill/url_pattern.js')
@@ -193,11 +197,15 @@ fn runtime_embedded_asset_source(rel_path string) !string {
 		'web/js/fetch/request.js' { runtime_asset_fetch_request_js.to_string() }
 		'web/js/fetch/response.js' { runtime_asset_fetch_response_js.to_string() }
 		'web/js/form_data.js' { runtime_asset_form_data_js.to_string() }
+		'web/js/fs_file_handle.js' { runtime_asset_fs_file_handle_js.to_string() }
+		'web/js/fs_watch.js' { runtime_asset_fs_watch_js.to_string() }
 		'web/js/inject.js' { runtime_asset_inject_js.to_string() }
 		'web/js/intl.js' { runtime_asset_intl_js.to_string() }
 		'web/js/navigator.js' { runtime_asset_navigator_js.to_string() }
 		'web/js/node_timers_promises.js' { runtime_asset_node_timers_promises_js.to_string() }
 		'web/js/node_crypto.js' { runtime_asset_node_crypto_js.to_string() }
+		'web/js/node_sqlite.js' { runtime_asset_node_sqlite_js.to_string() }
+		'web/js/path_win32.js' { runtime_asset_path_win32_js.to_string() }
 		'web/js/perf.js' { runtime_asset_perf_js.to_string() }
 		'web/js/polyfill/stream.js' { runtime_asset_polyfill_stream_js.to_string() }
 		'web/js/polyfill/url_pattern.js' { runtime_asset_polyfill_url_pattern_js.to_string() }
@@ -428,11 +436,15 @@ pub fn embedded_runtime_asset_paths() []string {
 		'web/js/fetch/request.js',
 		'web/js/fetch/response.js',
 		'web/js/form_data.js',
+		'web/js/fs_file_handle.js',
+		'web/js/fs_watch.js',
 		'web/js/inject.js',
 		'web/js/intl.js',
 		'web/js/navigator.js',
 		'web/js/node_crypto.js',
+		'web/js/node_sqlite.js',
 		'web/js/node_timers_promises.js',
+		'web/js/path_win32.js',
 		'web/js/perf.js',
 		'web/js/polyfill/stream.js',
 		'web/js/polyfill/url_pattern.js',
