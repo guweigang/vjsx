@@ -1,0 +1,11 @@
+{
+  "name": "vjsx-pi-durable-conformance",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/chord": "1.6.1",
+    "@earendil-works/pi-ai": "1.6.1",
+    "@earendil-works/pi-durable": "1.6.1",
+    "@earendil-works/pi-schema": "1.6.1"
+  }
+}
