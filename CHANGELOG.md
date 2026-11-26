@@ -2,8 +2,12 @@
 
 All notable user-visible changes are recorded here.
 
-## Unreleased
+## 1.0.0 - 2026-11-26
 
+- Expose Web Crypto in the Node profile and align ECDSA key import, export,
+  signing and verification with Node.
+- Support unreferenced QuickJS timers so idle filesystem watchers and Node
+  timers do not keep the process running.
 - Resolve single-wildcard subpaths in npm package exports.
 - Support both spellings of `child_process` and `timers/promises` in Node module
   loading and project bundles.
@@ -14,6 +18,9 @@ All notable user-visible changes are recorded here.
   partial-line recovery in package conformance.
 - Add a typed `node:sqlite` subset to SQLite-enabled builds. Exercise Pi
   Durable checkpoint recovery after process termination in package conformance.
+- Expose a relative module mirror API for embedding hosts on Windows.
+- Add a Pi Durable example with configurable DeepSeek API access and a
+  persisted tool call.
 
 ## 1.0.0-rc.3 - 2026-11-20
 
