@@ -210,7 +210,7 @@ jobs:
           ./dist/${{ matrix.binary }} check-runtime --runtime node
           test "$(./dist/${{ matrix.binary }} --version)" = "vjsx ${{ needs.metadata.outputs.version }}"
           ./dist/${{ matrix.binary }} ./tests/test.js
-          ./dist/${{ matrix.binary }} --runtime browser --module ./examples/webcrypto/signatures.mjs | grep -Eq '^ECDSA:(70|71|72):true$'
+          ./dist/${{ matrix.binary }} --runtime browser --module ./examples/webcrypto/signatures.mjs | grep -Fx 'ECDSA:64:true'
           ./dist/${{ matrix.binary }} build ./tests/test.js -o ./dist/vjsx-smoke-app
           ./dist/vjsx-smoke-app
 
@@ -224,7 +224,7 @@ jobs:
           .\dist\${{ matrix.binary }} .\tests\test.js
           $signatureOutput = .\dist\${{ matrix.binary }} --runtime browser --module .\examples\webcrypto\signatures.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (($signatureOutput | Select-Object -Last 1) -notmatch '^ECDSA:(70|71|72):true$') { throw "WebCrypto ECDSA smoke failed: $signatureOutput" }
+          if (($signatureOutput | Select-Object -Last 1) -cne 'ECDSA:64:true') { throw "WebCrypto ECDSA smoke failed: $signatureOutput" }
           .\dist\${{ matrix.binary }} build .\tests\test.js -o .\dist\vjsx-smoke-app.exe
           .\dist\vjsx-smoke-app.exe
 
