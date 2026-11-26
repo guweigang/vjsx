@@ -46,6 +46,31 @@ globalThis.__vjs_apply_browser_map = function(pkg, entry) {
 	return entry;
 };
 
+function vjs_valid_export_path(path) {
+	return !/[\\%]/.test(path) && path.split("/").every(
+		(part) => part && part !== "." && part !== ".." && part.toLowerCase() !== "node_modules"
+	);
+}
+
+function vjs_pick_package_pattern(exports, key) {
+	let best;
+	for (const pattern of Object.keys(exports)) {
+		const star = pattern.indexOf("*");
+		if (!pattern.startsWith("./") || star < 0 || star !== pattern.lastIndexOf("*")) continue;
+		const prefix = pattern.slice(0, star);
+		const suffix = pattern.slice(star + 1);
+		if (!key.startsWith(prefix) || !key.endsWith(suffix) || key.length <= prefix.length + suffix.length) continue;
+		if (!best || star > best.star || (star === best.star && pattern.length > best.pattern.length)) {
+			best = { pattern, star, match: key.slice(star, key.length - suffix.length) };
+		}
+	}
+	if (!best || !vjs_valid_export_path(best.match)) return "";
+	const target = globalThis.__vjs_pick_package_target(exports[best.pattern]);
+	if (!target.startsWith("./")) return "";
+	const entry = target.replaceAll("*", () => best.match);
+	return vjs_valid_export_path(entry.slice(2)) ? entry : "";
+}
+
 globalThis.__vjs_package_entry = function(packageText, subpath) {
 	if (!packageText) {
 		return "";
@@ -60,9 +85,10 @@ globalThis.__vjs_package_entry = function(packageText, subpath) {
 				const direct = globalThis.__vjs_pick_package_target(pkg.exports);
 				if (direct) entry = direct;
 			}
-			if (!entry && key in pkg.exports) {
-				const mapped = globalThis.__vjs_pick_package_target(pkg.exports[key]);
-				if (mapped) entry = mapped;
+			if (!entry && Object.hasOwn(pkg.exports, key)) {
+				entry = globalThis.__vjs_pick_package_target(pkg.exports[key]);
+			} else if (!entry && subpath) {
+				entry = vjs_pick_package_pattern(pkg.exports, key);
 			}
 		}
 	}

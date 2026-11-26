@@ -1322,7 +1322,6 @@ pub fn (ctx &Context) install_child_process_module(roots []string) {
 pub fn (ctx &Context) install_child_process_module_config(config ChildProcessModuleConfig) {
 	roots := config.roots
 	allow_shell := config.allow_shell
-	mut child_process_mod := ctx.js_module('child_process')
 	exec_file_sync := ctx.js_function(fn [ctx, roots, allow_shell] (args []Value) Value {
 		if args.len == 0 {
 			return ctx.js_throw(ctx.js_error(message: 'file is required', name: 'TypeError'))
@@ -1515,13 +1514,6 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 			child
 		}
 	})
-	child_process_mod.export('execFile', exec_file)
-	child_process_mod.export('exec', exec_fn)
-	child_process_mod.export('spawn', spawn_fn)
-	child_process_mod.export('fork', fork_fn)
-	child_process_mod.export('execFileSync', exec_file_sync)
-	child_process_mod.export('execSync', exec_sync)
-	child_process_mod.export('spawnSync', spawn_sync)
 	default_obj := ctx.js_object()
 	default_obj.set('execFile', exec_file)
 	default_obj.set('exec', exec_fn)
@@ -1530,8 +1522,18 @@ pub fn (ctx &Context) install_child_process_module_config(config ChildProcessMod
 	default_obj.set('execFileSync', exec_file_sync)
 	default_obj.set('execSync', exec_sync)
 	default_obj.set('spawnSync', spawn_sync)
-	child_process_mod.export_default(default_obj)
-	child_process_mod.create()
+	for module_name in ['child_process', 'node:child_process'] {
+		mut child_process_mod := ctx.js_module(module_name)
+		child_process_mod.export('execFile', exec_file)
+		child_process_mod.export('exec', exec_fn)
+		child_process_mod.export('spawn', spawn_fn)
+		child_process_mod.export('fork', fork_fn)
+		child_process_mod.export('execFileSync', exec_file_sync)
+		child_process_mod.export('execSync', exec_sync)
+		child_process_mod.export('spawnSync', spawn_sync)
+		child_process_mod.export_default(default_obj)
+		child_process_mod.create()
+	}
 	default_obj.free()
 	exec_file.free()
 	exec_fn.free()

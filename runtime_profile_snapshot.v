@@ -19,6 +19,7 @@ pub:
 	has_clear_timeout        bool
 	has_fetch                bool
 	has_process              bool
+	has_crypto_subtle        bool
 	has_node_timers_promises bool
 	has_node_crypto_module   bool
 	has_node_zlib_module     bool
@@ -31,6 +32,7 @@ pub:
 	has_os_module            bool
 	has_child_process_module bool
 	has_sqlite_module        bool
+	has_node_sqlite_module   bool
 	has_mysql_module         bool
 }
 
@@ -73,6 +75,7 @@ fn (kind RuntimeProfileKind) required_capabilities() []string {
 				'process',
 				'setTimeout',
 				'clearTimeout',
+				'crypto.subtle',
 				'node:timers/promises',
 				'node:crypto',
 				'node:zlib',
@@ -101,7 +104,8 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'clearTimeout' { snapshot.has_clear_timeout }
 		'fetch' { snapshot.has_fetch }
 		'process' { snapshot.has_process }
-		'node:timers/promises' { snapshot.has_node_timers_promises }
+		'crypto.subtle' { snapshot.has_crypto_subtle }
+		'timers/promises', 'node:timers/promises' { snapshot.has_node_timers_promises }
 		'node:crypto' { snapshot.has_node_crypto_module }
 		'node:zlib' { snapshot.has_node_zlib_module }
 		'node:fs' { snapshot.has_node_fs_module }
@@ -111,8 +115,9 @@ pub fn (snapshot RuntimeProfileSnapshot) has_capability(name string) bool {
 		'http', 'node:http' { snapshot.has_http_module }
 		'https', 'node:https' { snapshot.has_https_module }
 		'os' { snapshot.has_os_module }
-		'child_process' { snapshot.has_child_process_module }
+		'child_process', 'node:child_process' { snapshot.has_child_process_module }
 		'sqlite' { snapshot.has_sqlite_module }
+		'node:sqlite' { snapshot.has_node_sqlite_module }
 		'mysql' { snapshot.has_mysql_module }
 		else { false }
 	}
@@ -169,6 +174,8 @@ pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 		has_clear_timeout:        runtime_profile_has_global(ctx, 'typeof clearTimeout === "function"')
 		has_fetch:                runtime_profile_has_global(ctx, 'typeof fetch === "function"')
 		has_process:              runtime_profile_has_global(ctx, 'typeof process === "object"')
+		has_crypto_subtle:        runtime_profile_has_global(ctx,
+			'typeof crypto === "object" && typeof crypto.subtle === "object"')
 		has_node_timers_promises: ctx.has_runtime_module('node:timers/promises')
 		has_node_crypto_module:   ctx.has_runtime_module('node:crypto')
 		has_node_zlib_module:     ctx.has_runtime_module('node:zlib')
@@ -181,6 +188,7 @@ pub fn runtime_profile_snapshot(ctx &Context) RuntimeProfileSnapshot {
 		has_os_module:            ctx.has_runtime_module('os')
 		has_child_process_module: ctx.has_runtime_module('child_process')
 		has_sqlite_module:        ctx.has_runtime_module('sqlite')
+		has_node_sqlite_module:   ctx.has_runtime_module('node:sqlite')
 		has_mysql_module:         ctx.has_runtime_module('mysql')
 	}
 }

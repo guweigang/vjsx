@@ -10,20 +10,33 @@ The following filesystem specifiers resolve to the same host implementation:
 
 | Specifier | Exports |
 | --- | --- |
-| `fs` | Asynchronous helpers, synchronous helpers, and the default export |
+| `fs` | Asynchronous helpers, synchronous helpers, `watch()`, and the default export |
 | `node:fs` | Alias of `fs` |
 | `fs/promises` | Asynchronous helpers only |
 | `node:fs/promises` | Alias of `fs/promises` |
 
-The following crypto specifiers resolve to the same Ed25519 implementation:
+The filesystem modules share `constants` for access checks and supported
+open flags. `os.constants.signals` exposes common host signal numbers.
+`path.win32` provides `join()` and `normalize()` on every platform.
+
+The following crypto specifiers resolve to the same compatibility module:
 
 | Specifier | Scope |
 | --- | --- |
-| `crypto` | Ed25519 operations, SHA-256/MD5 hashing, and UUID generation |
+| `crypto` | Ed25519 operations, SHA-256/MD5 hashing, UUID generation, and Web Crypto accessors |
 | `node:crypto` | Alias of `crypto` |
+
+The full `node` profile also installs the Web Crypto globals `crypto`,
+`crypto.subtle`, `CryptoKey`, and `SubtleCrypto`. The module exports
+`webcrypto`, `subtle`, and `getRandomValues` as references to that same global
+implementation.
 
 `path`/`node:path`, `os`/`node:os`, and `zlib`/`node:zlib` are paired aliases.
 The zlib subset currently exports `deflateRawSync()`.
+
+`child_process` and `node:child_process` share the same exports and are
+available when the policy allows subprocesses. `timers/promises` and
+`node:timers/promises` expose the same promise-based `setTimeout()`.
 
 These specifiers are also recognized as builtins by the TypeScript/runtime
 module graph emitter, so they are not incorrectly resolved from
@@ -34,16 +47,23 @@ module graph emitter, so they are not incorrectly resolved from
 The promise modules export:
 
 - `readFile`
+- `access`
 - `writeFile`
+- `appendFile`
 - `exists`
 - `mkdir`
+- `mkdtemp`
 - `readdir`
+- `opendir`
+- `open`
 - `rm`
 - `stat`
 - `lstat`
+- `statfs`
 - `chmod`
 - `copyFile`
 - `rename`
+- `realpath`
 - `readJson`
 - `writeJson`
 
@@ -68,14 +88,17 @@ The current behavior intentionally follows the existing vjsx filesystem host:
   Exclusive variants use atomic creation and never degrade to truncating
   writes. Other flags are rejected.
 - `mkdir()` creates missing parent directories.
-- `rm(path, recursive)` accepts a boolean recursive flag rather than Node's
-  complete options object.
-- Operations execute through V's filesystem functions and return an already
-  settled or rejected JavaScript `Promise`; they are not backed by Node's
-  libuv worker pool.
-- `FileHandle`, `open()`, streams in the promise module, `AbortSignal`, most
-  flags/encodings, and the complete Node error-code surface are not yet
-  implemented.
+- `rm()` accepts `{ recursive, force }` and the legacy boolean recursive flag.
+- Operations run synchronously in the host and return an already settled
+  JavaScript `Promise`.
+- `statfs(path)` accepts string paths and returns filesystem metadata as
+  Numbers. Set `{ bigint: true }` to receive exact BigInts. Windows reports
+  zero for filesystem type and inode counts.
+- `open()` supports `r`, `r+`, `w`, `wx`, and `a`. On Unix, numeric
+  read-only flags can include `O_NONBLOCK` and `O_NOFOLLOW`. A file handle
+  supports `read()`, `stat()`, `sync()`, `truncate()`, and `close()`.
+- `readdir(path, { withFileTypes: true })` and `opendir()` expose directory
+  entry names and type checks. An open directory reads from a snapshot.
 
 Filesystem resolution remains governed by `NodeCompatConfig.fs_roots`. Relative
 writes use the first configured root; relative reads try the provided path and
@@ -91,6 +114,37 @@ The direct `sqlite` compatibility module is omitted when bounded filesystem
 roots are active because the driver does not enforce per-operation policy. The
 same rule applies to `mysql` when a network hostname allowlist is active; use a
 host-owned database API for bounded database access.
+
+## Filesystem watching
+
+`fs.watch(path, options?, listener?)` and `node:fs` watch string paths for
+files or directories within the current filesystem read policy. The watcher
+supports `recursive`, `persistent`, UTF-8 or buffer filenames, `AbortSignal`,
+and the usual `on`, `once`, `off`, `close`, `ref`, and `unref` methods.
+
+Watchers poll filesystem metadata every 100 ms and emit `change` or `rename`
+for differences between snapshots. Multiple changes within one interval may
+be coalesced or missed. Recursive scans do not traverse directory symlinks.
+On the CLI, unreferenced watchers do not keep an idle process alive. An explicit
+await can still receive their events. Managed hosts that own their timers
+schedule watcher polls through their runtime scheduler.
+
+## Node SQLite subset
+
+With `-d vjsx_sqlite`, the trusted `node` profile also exposes
+`node:sqlite`. It supports `new DatabaseSync(path, { readOnly, timeout })`,
+`exec(sql)`, `prepare(sql)`, and `close()`. A statement supports
+`run(...params)`, `get(...params)`, `all(...params)`, and
+`setReadBigInts(enabled)`. `exec` accepts SQL scripts, including transaction
+statements. `prepare` accepts a single statement and validates it before
+returning a handle. The handle prepares the SQL again on each execution.
+
+Positional bindings accept `null`, numbers, signed 64-bit bigints, strings, and
+`Uint8Array` values. Reads preserve SQL `NULL`, integer, real, text, and blob
+values. Integers outside JavaScript's safe range require
+`setReadBigInts(true)`. `get` returns `undefined` if no row matches.
+The existing `sqlite` module retains its string-oriented API. Both SQLite
+modules require unrestricted filesystem read and write in the host policy.
 
 ## Raw DEFLATE API
 
@@ -110,12 +164,54 @@ The crypto module exports:
 - `createPublicKey()`
 - `generateKeyPair()`
 - `generateKeyPairSync()`
+- `getRandomValues()`
 - `randomUUID()`
 - `sign()`
+- `subtle`
 - `verify()`
+- `webcrypto`
 
 `randomUUID()` obtains its 128 random bits from V's `crypto.rand` operating
 system entropy source before applying the RFC 9562 version and variant bits.
+
+### Web Crypto API
+
+The full `node` profile exposes the same Web Crypto subset as the browser
+profile. These identities hold:
+
+```js
+import { getRandomValues, subtle, webcrypto } from "node:crypto";
+
+console.log(webcrypto === globalThis.crypto); // true
+console.log(subtle === globalThis.crypto.subtle); // true
+getRandomValues(new Uint8Array(16));
+```
+
+Current `SubtleCrypto` support includes:
+
+| Area | Current support |
+| --- | --- |
+| `digest` | `SHA-1`, `SHA-256`, `SHA-384`, `SHA-512` |
+| `HMAC` | `generateKey`, raw import/export, `sign`, `verify` |
+| `AES-CBC` | `generateKey`, raw import/export, `encrypt`, `decrypt` |
+| `AES-CTR` | `generateKey`, raw import/export, `encrypt`, `decrypt`; counter `length = 128` only |
+| `PBKDF2` | raw base-key import, `deriveBits`, `deriveKey`; `SHA-256/384/512` |
+| `Ed25519` | `generateKey`, `sign`, `verify`, raw public-key import/export |
+| `ECDSA` | P-256/P-384/P-521 key generation, `sign`, `verify`, and raw/SPKI/PKCS8/JWK import/export |
+
+`AES-GCM` is not implemented. Ed25519 and ECDSA raw export is limited to public
+keys; ECDSA private keys use `pkcs8` or `jwk`.
+
+ECDSA signatures use Web Crypto's fixed-width IEEE P1363 `r || s`
+representation. P-256/ES256 signatures are therefore 64 bytes and can be
+base64url encoded directly for JOSE and ACME.
+
+ECDSA private keys are exportable and importable as PKCS8 or JWK when the
+`CryptoKey` is extractable. Public keys support raw SEC1 points, SPKI, and JWK.
+The executable compatibility test persists P-256 PKCS8/SPKI and JWK keys,
+starts a new vjsx process, restores them, and completes 64-byte ES256
+sign/verify round trips. These are the supported paths for durable vhttpd ACME
+account keys.
 
 ### Import, sign, and verify
 
@@ -200,15 +296,18 @@ and trailing data.
 The following are intentionally unsupported and rejected:
 
 - encrypted PKCS8 and passphrases
-- RSA, DSA, ECDSA, X25519, and other algorithms through `node:crypto`
+- RSA, DSA, ECDSA, X25519, and other algorithms through the Node-style
+  `sign()`/`verify()` and `KeyObject` APIs (ECDSA is available only through
+  `crypto.subtle` as documented above)
 - PKCS1, SEC1, private JWK, certificates, and OpenSSH key containers
 - streaming `Sign`/`Verify` objects
 - hashes other than SHA-256 and MD5, HMAC, ciphers, KDFs, and the rest of the
-  full Node crypto surface
+  Node-style crypto surface (some equivalents are available through
+  `crypto.subtle` as documented above)
 
-Browser-profile applications should continue using `crypto.subtle`; the
-`node:crypto` module is installed only by the full Node-style compatibility
-profile. `node_compat_minimal()` and the `script` profile do not install it.
+The `node:crypto` module and global Web Crypto API are installed only by the
+full Node-style compatibility profile. `node_compat_minimal()` and the `script`
+profile do not install them.
 
 ## Native Fetch Transport
 

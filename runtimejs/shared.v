@@ -29,7 +29,11 @@ const node_builtin_module_specifiers = [
 	'https',
 	'node:https',
 	'child_process',
+	'node:child_process',
+	'timers/promises',
+	'node:timers/promises',
 	'sqlite',
+	'node:sqlite',
 	'mysql',
 ]
 

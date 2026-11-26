@@ -16,8 +16,8 @@ they do not grant or enforce access.
 Use `host_policy_safe()` for extensions by default. It denies environment reads
 and writes, subprocess and shell execution, filesystem reads and writes,
 network access, `process.chdir`, and `process.exit`. The Node installer also
-omits `fs`, `http`, `https`, `fetch`, `child_process`, `sqlite`, and `mysql` when
-their underlying capability is denied.
+omits `fs`, `http`, `https`, `fetch`, `child_process`, `sqlite`, `node:sqlite`,
+and `mysql` when their underlying capability is denied.
 
 `host_policy_trusted()` is the explicit compatibility preset. It grants the
 historical full in-process host surface. `NodeRuntimeConfig{}`,
@@ -59,9 +59,9 @@ QuickJS ABI, and runtime-profile checks run before deserialization, but callers
 must still authenticate provenance and load only artifacts from trusted builds.
 
 The compatibility database drivers do not implement per-operation policy
-hooks. `sqlite` is therefore omitted when filesystem boundary roots are set,
-and `mysql` is omitted when a network hostname allowlist is set. Expose a
-narrow host-owned database API when bounded access is required. Granting
+hooks. Both `sqlite` and `node:sqlite` are omitted when filesystem boundary
+roots are set, and `mysql` is omitted when a network hostname allowlist is set.
+Expose a narrow host-owned database API when bounded access is required. Granting
 subprocess access can also bypass filesystem and network policy through the
 executed program, so treat it as a broader, independent capability.
 

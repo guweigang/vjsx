@@ -24,13 +24,12 @@ const {
   ecdsa_generate_key,
   ecdsa_public_from_private,
   ecdsa_sign,
-  ecdsa_verify_with_private,
+  ecdsa_verify,
 } = globalThis.__bootstrap.crypto;
 
 const { isArrayBuffer, isTypedArray } = globalThis.__bootstrap.util;
 
 const kKeyMaterial = Symbol("CryptoKeyMaterial");
-const keyHidden = new WeakMap();
 
 class DumpTypeError extends TypeError {
   constructor(name, input, pos = 0) {
@@ -383,6 +382,274 @@ function normalizeEcdsaUsages(keyUsages, type, pos = 0) {
   return Object.freeze(usages);
 }
 
+const idEcPublicKeyOid = Uint8Array.from([0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01]);
+const ecdsaCurveInfo = Object.freeze({
+  "P-256": Object.freeze({
+    size: 32,
+    oid: Uint8Array.from([0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07]),
+  }),
+  "P-384": Object.freeze({
+    size: 48,
+    oid: Uint8Array.from([0x2b, 0x81, 0x04, 0x00, 0x22]),
+  }),
+  "P-521": Object.freeze({
+    size: 66,
+    oid: Uint8Array.from([0x2b, 0x81, 0x04, 0x00, 0x23]),
+  }),
+});
+
+function concatByteArrays(...parts) {
+  const arrays = parts.map((part) => part instanceof Uint8Array ? part : new Uint8Array(part));
+  const output = new Uint8Array(arrays.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of arrays) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function equalByteArrays(left, right) {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
+}
+
+function derLength(length) {
+  if (length < 0x80) return Uint8Array.of(length);
+  const bytes = [];
+  for (let value = length; value > 0; value >>>= 8) bytes.unshift(value & 0xff);
+  return Uint8Array.from([0x80 | bytes.length, ...bytes]);
+}
+
+function derElement(tag, content) {
+  const bytes = content instanceof Uint8Array ? content : new Uint8Array(content);
+  return concatByteArrays(Uint8Array.of(tag), derLength(bytes.length), bytes);
+}
+
+function readDerElement(bytes, state, expectedTag) {
+  if (state.offset >= bytes.length || bytes[state.offset++] !== expectedTag) {
+    throw new TypeError(`invalid DER tag; expected 0x${expectedTag.toString(16)}`);
+  }
+  if (state.offset >= bytes.length) throw new TypeError("invalid DER length");
+  let length = bytes[state.offset++];
+  if ((length & 0x80) !== 0) {
+    const count = length & 0x7f;
+    if (count === 0 || count > 4 || state.offset + count > bytes.length) {
+      throw new TypeError("invalid DER length");
+    }
+    length = 0;
+    for (let i = 0; i < count; i += 1) length = (length * 256) + bytes[state.offset++];
+  }
+  const end = state.offset + length;
+  if (end > bytes.length) throw new TypeError("truncated DER value");
+  const value = bytes.subarray(state.offset, end);
+  state.offset = end;
+  return value;
+}
+
+function derInteger(unsignedBytes) {
+  let value = unsignedBytes instanceof Uint8Array ? unsignedBytes : new Uint8Array(unsignedBytes);
+  let offset = 0;
+  while (offset + 1 < value.length && value[offset] === 0) offset += 1;
+  value = value.subarray(offset);
+  if (value.length === 0) value = Uint8Array.of(0);
+  if ((value[0] & 0x80) !== 0) value = concatByteArrays(Uint8Array.of(0), value);
+  return derElement(0x02, value);
+}
+
+function fixedWidthDerInteger(value, size) {
+  if (value.length === 0 || (value[0] & 0x80) !== 0) throw new TypeError("invalid ECDSA DER integer");
+  let offset = 0;
+  while (offset + 1 < value.length && value[offset] === 0) offset += 1;
+  const stripped = value.subarray(offset);
+  if (stripped.length > size) throw new TypeError("ECDSA DER integer exceeds curve size");
+  const output = new Uint8Array(size);
+  output.set(stripped, size - stripped.length);
+  return output;
+}
+
+function derEcdsaToP1363(signature, namedCurve) {
+  const size = ecdsaCurveInfo[namedCurve].size;
+  const bytes = new Uint8Array(signature);
+  const outerState = { offset: 0 };
+  const sequence = readDerElement(bytes, outerState, 0x30);
+  if (outerState.offset !== bytes.length) throw new TypeError("trailing ECDSA DER data");
+  const state = { offset: 0 };
+  const r = fixedWidthDerInteger(readDerElement(sequence, state, 0x02), size);
+  const s = fixedWidthDerInteger(readDerElement(sequence, state, 0x02), size);
+  if (state.offset !== sequence.length) throw new TypeError("trailing ECDSA DER sequence data");
+  return concatByteArrays(r, s).buffer;
+}
+
+function p1363EcdsaToDer(signature, namedCurve) {
+  const size = ecdsaCurveInfo[namedCurve].size;
+  const bytes = new Uint8Array(signature);
+  if (bytes.length !== size * 2) {
+    throw new TypeError(`ECDSA signature must be ${size * 2} bytes for ${namedCurve}`);
+  }
+  return derElement(
+    0x30,
+    concatByteArrays(derInteger(bytes.subarray(0, size)), derInteger(bytes.subarray(size))),
+  ).buffer;
+}
+
+function curveFromOid(oid) {
+  for (const [name, info] of Object.entries(ecdsaCurveInfo)) {
+    if (equalByteArrays(oid, info.oid)) return name;
+  }
+  throw new TypeError("unsupported ECDSA curve OID");
+}
+
+function ecdsaAlgorithmIdentifier(namedCurve) {
+  return derElement(
+    0x30,
+    concatByteArrays(
+      derElement(0x06, idEcPublicKeyOid),
+      derElement(0x06, ecdsaCurveInfo[namedCurve].oid),
+    ),
+  );
+}
+
+function parseEcdsaAlgorithmIdentifier(value) {
+  const state = { offset: 0 };
+  const algorithmOid = readDerElement(value, state, 0x06);
+  if (!equalByteArrays(algorithmOid, idEcPublicKeyOid)) {
+    throw new TypeError("key algorithm is not id-ecPublicKey");
+  }
+  const curve = curveFromOid(readDerElement(value, state, 0x06));
+  if (state.offset !== value.length) throw new TypeError("trailing ECDSA algorithm data");
+  return curve;
+}
+
+function validateEcdsaPublicMaterial(material, namedCurve) {
+  const bytes = material instanceof Uint8Array ? material : new Uint8Array(material);
+  const expected = 1 + (2 * ecdsaCurveInfo[namedCurve].size);
+  if (bytes.length !== expected || bytes[0] !== 0x04) {
+    throw new TypeError(`invalid ${namedCurve} uncompressed public key`);
+  }
+  return bytes.slice().buffer;
+}
+
+function encodeEcdsaSpki(publicMaterial, namedCurve) {
+  return derElement(
+    0x30,
+    concatByteArrays(
+      ecdsaAlgorithmIdentifier(namedCurve),
+      derElement(0x03, concatByteArrays(Uint8Array.of(0), publicMaterial)),
+    ),
+  ).buffer;
+}
+
+function decodeEcdsaSpki(keyData, expectedCurve) {
+  const bytes = new Uint8Array(toExactArrayBuffer(keyData, 1));
+  const outerState = { offset: 0 };
+  const sequence = readDerElement(bytes, outerState, 0x30);
+  if (outerState.offset !== bytes.length) throw new TypeError("trailing SPKI data");
+  const state = { offset: 0 };
+  const curve = parseEcdsaAlgorithmIdentifier(readDerElement(sequence, state, 0x30));
+  if (curve !== expectedCurve) throw new TypeError(`ECDSA curve mismatch: expected ${expectedCurve} but got ${curve}`);
+  const bitString = readDerElement(sequence, state, 0x03);
+  if (state.offset !== sequence.length || bitString.length === 0 || bitString[0] !== 0) {
+    throw new TypeError("invalid ECDSA SPKI bit string");
+  }
+  return validateEcdsaPublicMaterial(bitString.subarray(1), curve);
+}
+
+function encodeEcdsaPkcs8(privateMaterial, publicMaterial, namedCurve) {
+  const ecPrivateKey = derElement(
+    0x30,
+    concatByteArrays(
+      derInteger(Uint8Array.of(1)),
+      derElement(0x04, privateMaterial),
+      derElement(0xa1, derElement(0x03, concatByteArrays(Uint8Array.of(0), publicMaterial))),
+    ),
+  );
+  return derElement(
+    0x30,
+    concatByteArrays(
+      derInteger(Uint8Array.of(0)),
+      ecdsaAlgorithmIdentifier(namedCurve),
+      derElement(0x04, ecPrivateKey),
+    ),
+  ).buffer;
+}
+
+function decodeEcdsaPkcs8(keyData, expectedCurve) {
+  const bytes = new Uint8Array(toExactArrayBuffer(keyData, 1));
+  const outerState = { offset: 0 };
+  const sequence = readDerElement(bytes, outerState, 0x30);
+  if (outerState.offset !== bytes.length) throw new TypeError("trailing PKCS8 data");
+  const state = { offset: 0 };
+  const version = readDerElement(sequence, state, 0x02);
+  if (version.length !== 1 || version[0] !== 0) throw new TypeError("unsupported PKCS8 version");
+  const curve = parseEcdsaAlgorithmIdentifier(readDerElement(sequence, state, 0x30));
+  if (curve !== expectedCurve) throw new TypeError(`ECDSA curve mismatch: expected ${expectedCurve} but got ${curve}`);
+  const wrapped = readDerElement(sequence, state, 0x04);
+  const wrappedState = { offset: 0 };
+  const ecPrivateKey = readDerElement(wrapped, wrappedState, 0x30);
+  if (wrappedState.offset !== wrapped.length) throw new TypeError("trailing ECPrivateKey data");
+  const privateState = { offset: 0 };
+  const privateVersion = readDerElement(ecPrivateKey, privateState, 0x02);
+  if (privateVersion.length !== 1 || privateVersion[0] !== 1) throw new TypeError("unsupported ECPrivateKey version");
+  const scalar = readDerElement(ecPrivateKey, privateState, 0x04);
+  const size = ecdsaCurveInfo[curve].size;
+  if (scalar.length === 0 || scalar.length > size) throw new TypeError(`invalid ${curve} private key size`);
+  const output = new Uint8Array(size);
+  output.set(scalar, size - scalar.length);
+  return output.buffer;
+}
+
+function base64UrlEncode(input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function base64UrlDecode(value) {
+  if (typeof value !== "string") throw new TypeError("invalid JWK base64url value");
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function ecdsaJwkPublicMaterial(jwk, namedCurve) {
+  if (jwk === null || typeof jwk !== "object" || jwk.kty !== "EC") {
+    throw new TypeError("ECDSA JWK must use kty EC");
+  }
+  if (jwk.crv !== namedCurve) throw new TypeError(`ECDSA curve mismatch: expected ${namedCurve} but got ${jwk.crv}`);
+  const size = ecdsaCurveInfo[namedCurve].size;
+  const x = base64UrlDecode(jwk.x);
+  const y = base64UrlDecode(jwk.y);
+  if (x.length !== size || y.length !== size) throw new TypeError(`invalid ${namedCurve} JWK coordinates`);
+  return concatByteArrays(Uint8Array.of(0x04), x, y).buffer;
+}
+
+function exportEcdsaJwk(cryptoKey) {
+  const namedCurve = cryptoKey.algorithm.namedCurve;
+  const size = ecdsaCurveInfo[namedCurve].size;
+  const privateMaterial = cryptoKey.type === "private" ? new Uint8Array(cryptoKey[kKeyMaterial]) : null;
+  const publicMaterial = new Uint8Array(
+    privateMaterial
+      ? ecdsa_public_from_private(privateMaterial.buffer, namedCurve)
+      : cryptoKey[kKeyMaterial],
+  );
+  validateEcdsaPublicMaterial(publicMaterial, namedCurve);
+  const jwk = {
+    key_ops: [...cryptoKey.usages],
+    ext: cryptoKey.extractable,
+    kty: "EC",
+    x: base64UrlEncode(publicMaterial.subarray(1, 1 + size)),
+    y: base64UrlEncode(publicMaterial.subarray(1 + size)),
+    crv: namedCurve,
+  };
+  if (privateMaterial) jwk.d = base64UrlEncode(privateMaterial);
+  return jwk;
+}
+
 function pkcs7Pad(buffer, blockSize) {
   const bytes = toByteArray(buffer);
   const padding = blockSize - (bytes.length % blockSize || blockSize) + (bytes.length % blockSize === 0 ? blockSize : 0);
@@ -681,6 +948,21 @@ class SubtleCrypto {
       if (!cryptoKey.extractable) {
         throw new TypeError("CryptoKey is not extractable");
       }
+      if (cryptoKey.algorithm?.name === "ECDSA") {
+        const namedCurve = cryptoKey.algorithm.namedCurve;
+        if (format === "jwk") return exportEcdsaJwk(cryptoKey);
+        if (format === "raw" && cryptoKey.type === "public") {
+          return cloneArrayBuffer(cryptoKey[kKeyMaterial]);
+        }
+        if (format === "spki" && cryptoKey.type === "public") {
+          return encodeEcdsaSpki(cryptoKey[kKeyMaterial], namedCurve);
+        }
+        if (format === "pkcs8" && cryptoKey.type === "private") {
+          const publicMaterial = ecdsa_public_from_private(cryptoKey[kKeyMaterial], namedCurve);
+          return encodeEcdsaPkcs8(cryptoKey[kKeyMaterial], publicMaterial, namedCurve);
+        }
+        throw new TypeError(`args[0] format ${format} is not valid for an ECDSA ${cryptoKey.type} key`);
+      }
       if (format !== "raw") {
         throw new TypeError(`args[0] expected raw but got ${format}`);
       }
@@ -688,9 +970,6 @@ class SubtleCrypto {
         return cloneArrayBuffer(cryptoKey[kKeyMaterial]);
       }
       if (cryptoKey.algorithm?.name === "AES-CBC" || cryptoKey.algorithm?.name === "AES-CTR") {
-        return cloneArrayBuffer(cryptoKey[kKeyMaterial]);
-      }
-      if (cryptoKey.algorithm?.name === "ECDSA" && cryptoKey.type === "public") {
         return cloneArrayBuffer(cryptoKey[kKeyMaterial]);
       }
       if (cryptoKey.algorithm?.name === "Ed25519" && cryptoKey.type === "public") {
@@ -773,9 +1052,6 @@ class SubtleCrypto {
           Object.freeze(wantsSign ? ["sign"] : []),
           privateMaterial,
         );
-        keyHidden.set(publicKey, {
-          ecdsaPrivateMaterial: privateMaterial,
-        });
         return { publicKey, privateKey };
       }
       if (algoName === "AES-CBC" || algoName === "AES-CTR") {
@@ -817,6 +1093,47 @@ class SubtleCrypto {
         typeof algorithm === "object" && algorithm !== null
           ? String(algorithm.name ?? "").toUpperCase()
           : String(algorithm ?? "").toUpperCase();
+      if (algoName === "ECDSA") {
+        const normalized = normalizeEcdsaKeyGenParams(algorithm, 2);
+        const namedCurve = normalized.namedCurve;
+        let type;
+        let material;
+        if (format === "raw") {
+          type = "public";
+          material = validateEcdsaPublicMaterial(toExactArrayBuffer(keyData, 1), namedCurve);
+        } else if (format === "spki") {
+          type = "public";
+          material = decodeEcdsaSpki(keyData, namedCurve);
+        } else if (format === "pkcs8") {
+          type = "private";
+          material = decodeEcdsaPkcs8(keyData, namedCurve);
+        } else if (format === "jwk") {
+          const publicMaterial = ecdsaJwkPublicMaterial(keyData, namedCurve);
+          if (typeof keyData.d === "string") {
+            type = "private";
+            const scalar = base64UrlDecode(keyData.d);
+            const size = ecdsaCurveInfo[namedCurve].size;
+            if (scalar.length !== size) throw new TypeError(`invalid ${namedCurve} JWK private key`);
+            material = scalar.buffer;
+            const derivedPublic = new Uint8Array(ecdsa_public_from_private(material, namedCurve));
+            if (!equalByteArrays(derivedPublic, new Uint8Array(publicMaterial))) {
+              throw new TypeError("ECDSA JWK public and private key material do not match");
+            }
+          } else {
+            type = "public";
+            material = publicMaterial;
+          }
+        } else {
+          throw new TypeError(`args[0] expected raw/spki/pkcs8/jwk but got ${format}`);
+        }
+        return new CryptoKey(
+          type,
+          normalizeExtractable(extractable),
+          Object.freeze({ name: "ECDSA", namedCurve }),
+          normalizeEcdsaUsages(keyUsages, type, 4),
+          material,
+        );
+      }
       if (algoName === "ED25519") {
         if (format !== "raw") {
           throw new TypeError(`args[0] expected raw but got ${format}`);
@@ -901,12 +1218,13 @@ class SubtleCrypto {
       if (algoName === "ECDSA") {
         const cryptoKey = assertEcdsaKey(key, "sign");
         const params = normalizeEcdsaParams(algorithm, 0);
-        return ecdsa_sign(
+        const derSignature = ecdsa_sign(
           cryptoKey[kKeyMaterial],
           toExactArrayBuffer(data, 2),
           cryptoKey.algorithm.namedCurve,
           params.hash.name,
         );
+        return derEcdsaToP1363(derSignature, cryptoKey.algorithm.namedCurve);
       }
       const cryptoKey = assertHmacKey(key, "sign");
       assertHmacAlgorithmMatchesKey(algorithm, cryptoKey.algorithm);
@@ -935,14 +1253,19 @@ class SubtleCrypto {
       if (algoName === "ECDSA") {
         const cryptoKey = assertEcdsaKey(key, "verify");
         const params = normalizeEcdsaParams(algorithm, 0);
-        const hidden = keyHidden.get(cryptoKey);
-        if (!hidden?.ecdsaPrivateMaterial) {
-          throw new TypeError("ECDSA verify currently supports generated public keys only");
+        let derSignature;
+        try {
+          derSignature = p1363EcdsaToDer(
+            toExactArrayBuffer(signature, 2),
+            cryptoKey.algorithm.namedCurve,
+          );
+        } catch {
+          return false;
         }
-        return ecdsa_verify_with_private(
-          hidden.ecdsaPrivateMaterial,
+        return ecdsa_verify(
+          cryptoKey[kKeyMaterial],
           toExactArrayBuffer(data, 3),
-          toExactArrayBuffer(signature, 2),
+          derSignature,
           cryptoKey.algorithm.namedCurve,
           params.hash.name,
         );

@@ -4,6 +4,17 @@ All notable user-visible changes are recorded here.
 
 ## Unreleased
 
+- Resolve single-wildcard subpaths in npm package exports.
+- Support both spellings of `child_process` and `timers/promises` in Node module
+  loading and project bundles.
+- Add polling-based `fs.watch()` with recursive watching and cancellation.
+- Add `statfs()` to the promise-based filesystem modules.
+- Add filesystem access constants, append operations, directory handles and
+  file handles used by Pi Durable's JSONL storage. Verify JSONL replay and
+  partial-line recovery in package conformance.
+- Add a typed `node:sqlite` subset to SQLite-enabled builds. Exercise Pi
+  Durable checkpoint recovery after process termination in package conformance.
+
 ## 1.0.0-rc.3 - 2026-11-20
 
 ### Added

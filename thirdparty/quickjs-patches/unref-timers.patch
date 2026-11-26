@@ -1,0 +1,105 @@
+--- a/quickjs-libc.c
++++ b/quickjs-libc.c
+@@ -138,6 +138,7 @@
+     struct list_head link;
+     int64_t timer_id;
+     uint8_t repeats:1;
++    uint8_t unref:1;
+     int64_t timeout;
+     int64_t delay;
+     JSValue func;
+@@ -2494,7 +2495,8 @@
+     th->timer_id = ts->next_timer_id++;
+     if (ts->next_timer_id > MAX_SAFE_INTEGER)
+         ts->next_timer_id = 1;
+-    th->repeats = (magic > 0);
++    th->repeats = (magic == 1);
++    th->unref = (magic == 2);
+     th->timeout = js__hrtime_ms() + delay;
+     th->delay = delay;
+     th->func = JS_DupValue(ctx, func);
+@@ -2580,7 +2582,7 @@
+     return r;
+ }
+
+-static int js_os_run_timers(JSRuntime *rt, JSContext *ctx, JSThreadState *ts, int *min_delay)
++static int js_os_run_timers(JSRuntime *rt, JSContext *ctx, JSThreadState *ts, int *min_delay, bool allow_unref)
+ {
+     JSValue func;
+     JSOSTimer *th;
+@@ -2591,6 +2593,22 @@
+     if (list_empty(&ts->os_timers)) {
+         *min_delay = -1;
+         return 0;
++    }
++
++    /* An unreferenced timer can run while other work keeps the loop alive. */
++    if (!allow_unref && list_empty(&ts->os_rw_handlers) && list_empty(&ts->port_list)) {
++        bool has_referenced_timer = false;
++        list_for_each(el, &ts->os_timers) {
++            th = list_entry(el, JSOSTimer, link);
++            if (!th->unref) {
++                has_referenced_timer = true;
++                break;
++            }
++        }
++        if (!has_referenced_timer) {
++            *min_delay = -1;
++            return 0;
++        }
+     }
+
+     cur_time = js__hrtime_ms();
+@@ -2759,6 +2777,7 @@
+ #define JS_OS_POLL_RUN_TIMERS  (1 << 0)
+ #define JS_OS_POLL_WORKERS     (1 << 1)
+ #define JS_OS_POLL_SIGNALS     (1 << 2)
++#define JS_OS_POLL_ALLOW_UNREF (1 << 3)
+
+ #if defined(_WIN32)
+ static int js_os_poll_internal(JSContext *ctx, int timeout_ms, int flags)
+@@ -2775,7 +2794,7 @@
+     min_delay = timeout_ms;
+
+     if (flags & JS_OS_POLL_RUN_TIMERS) {
+-        if (js_os_run_timers(rt, ctx, ts, &min_delay))
++        if (js_os_run_timers(rt, ctx, ts, &min_delay, flags & JS_OS_POLL_ALLOW_UNREF))
+             return -1;
+         if (min_delay == 0)
+             return 0; // expired timer
+@@ -2882,7 +2901,7 @@
+     }
+
+     if (flags & JS_OS_POLL_RUN_TIMERS) {
+-        if (js_os_run_timers(rt, ctx, ts, &min_delay))
++        if (js_os_run_timers(rt, ctx, ts, &min_delay, flags & JS_OS_POLL_ALLOW_UNREF))
+             return -1;
+         if (min_delay == 0)
+             return 0; // expired timer
+@@ -4468,6 +4487,7 @@
+     JS_CFUNC_DEF("now", 0, js_os_now ),
+     JS_CFUNC_MAGIC_DEF("setTimeout", 2, js_os_setTimeout, 0 ),
+     JS_CFUNC_MAGIC_DEF("setInterval", 2, js_os_setTimeout, 1 ),
++    JS_CFUNC_MAGIC_DEF("setTimeoutUnref", 2, js_os_setTimeout, 2 ),
+     // per spec: both functions can cancel timeouts and intervals
+     JS_CFUNC_DEF("clearTimeout", 1, js_os_clearTimeout ),
+     JS_CFUNC_DEF("clearInterval", 1, js_os_clearTimeout ),
+@@ -4919,7 +4939,7 @@
+     }
+
+     /* run at most one expired timer */
+-    if (js_os_run_timers(rt, ctx, ts, &min_delay) < 0)
++    if (js_os_run_timers(rt, ctx, ts, &min_delay, false) < 0)
+         return -2; /* error in timer callback */
+
+     /* check if more work is pending */
+@@ -4965,7 +4985,8 @@
+             if (err == 0)
+                 js_std_promise_rejection_check(ctx);
+             if (err == 0 && ts->can_js_os_poll)
+-                js_os_poll(ctx);
++                js_os_poll_internal(ctx, -1, JS_OS_POLL_RUN_TIMERS | JS_OS_POLL_WORKERS |
++                                   JS_OS_POLL_SIGNALS | JS_OS_POLL_ALLOW_UNREF);
+         } else {
+             /* not a promise */
+             ret = obj;

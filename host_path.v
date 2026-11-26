@@ -99,6 +99,8 @@ pub fn (ctx &Context) install_path_module() {
 		return ctx.js_bool(os.is_abs_path(args[0].str()))
 	})
 	default_obj := ctx.js_object()
+	win32 := ctx.eval($embed_file('web/js/path_win32.js').to_string()) or { panic(err) }
+	default_obj.set('win32', win32)
 	default_obj.set('sep', sep)
 	default_obj.set('join', join_fn)
 	default_obj.set('dirname', dirname_fn)
@@ -109,6 +111,7 @@ pub fn (ctx &Context) install_path_module() {
 	default_obj.set('isAbsolute', is_absolute_fn)
 	for module_name in ['path', 'node:path'] {
 		mut path_mod := ctx.js_module(module_name)
+		path_mod.export('win32', win32)
 		path_mod.export('sep', sep)
 		path_mod.export('join', join_fn)
 		path_mod.export('dirname', dirname_fn)
@@ -121,6 +124,7 @@ pub fn (ctx &Context) install_path_module() {
 		path_mod.create()
 	}
 	default_obj.free()
+	win32.free()
 	sep.free()
 	join_fn.free()
 	dirname_fn.free()

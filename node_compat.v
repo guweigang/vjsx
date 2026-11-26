@@ -75,6 +75,7 @@ pub fn (ctx &Context) try_install_node_compat(config NodeCompatConfig) ! {
 		ctx.try_install_node_timers_promises_module()!
 	}
 	if config.crypto {
+		ctx.try_install_web_crypto_globals()!
 		ctx.try_install_node_crypto_module()!
 	}
 	if config.zlib {
@@ -119,6 +120,9 @@ pub fn (ctx &Context) try_install_node_compat(config NodeCompatConfig) ! {
 	if config.sqlite && config.policy.allow_fs_read && config.policy.allow_fs_write
 		&& config.policy.fs_read_roots.len == 0 && config.policy.fs_write_roots.len == 0 {
 		ctx.install_sqlite_module(config.fs_roots)
+		$if vjsx_sqlite ? {
+			ctx.install_node_sqlite_module(config.fs_roots)!
+		}
 	}
 	if config.mysql && config.policy.allow_network && config.policy.network_hosts.len == 0 {
 		ctx.install_mysql_module()

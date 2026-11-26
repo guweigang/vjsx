@@ -2,6 +2,51 @@ import os
 import runtimejs
 import vjsx
 
+fn test_project_bundle_resolves_node_builtin_aliases() {
+	root := os.join_path(os.temp_dir(), 'vjsx_project_bundle_aliases_${os.getpid()}')
+	os.mkdir_all(root) or { panic(err) }
+	defer {
+		os.rmdir_all(root) or {}
+	}
+	entry := os.join_path(root, 'main.mjs')
+	os.write_file(entry, '
+		import child, { spawnSync } from "child_process";
+		import nodeChild, { spawnSync as nodeSpawnSync } from "node:child_process";
+		import timers, { setTimeout as delay } from "timers/promises";
+		import nodeTimers, { setTimeout as nodeDelay } from "node:timers/promises";
+		if (child !== nodeChild || spawnSync !== nodeSpawnSync || timers !== nodeTimers || delay !== nodeDelay) {
+			throw new Error("builtin alias uses different exports");
+		}
+		export const result = delay(0, 42);
+	') or { panic(err) }
+
+	mut compiler := vjsx.new_runtime_session()
+	defer {
+		compiler.close()
+	}
+	bundle := runtimejs.compile_project_bundle(compiler.context(), entry,
+		runtime_profile: 'node'
+	) or { panic(err) }
+
+	mut runtime := vjsx.new_node_runtime_session(vjsx.ContextConfig{}, vjsx.NodeRuntimeConfig{})
+	defer {
+		runtime.close()
+	}
+	mut app := runtime.context().load_bundle(bundle) or { panic(err) }
+	defer {
+		app.close()
+	}
+	promise := app.get('result') or { panic(err) }
+	defer {
+		promise.free()
+	}
+	result := runtime.resolve_value(promise) or { panic(err) }
+	defer {
+		result.free()
+	}
+	assert result.to_int() == 42
+}
+
 fn test_project_bundle_transpiles_typescript_and_json_without_runtime_sources() {
 	root := os.join_path(os.temp_dir(), 'vjsx_project_bundle_test_${os.getpid()}')
 	os.rmdir_all(root) or {}

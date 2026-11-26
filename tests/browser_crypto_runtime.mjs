@@ -151,7 +151,7 @@ const pbkdf2HmacVerified = await crypto.subtle.verify("HMAC", pbkdf2HmacKey, pbk
 const pbkdf2AesExported = await crypto.subtle.exportKey("raw", pbkdf2AesKey);
 const ecdsaPair = await crypto.subtle.generateKey(
   { name: "ECDSA", namedCurve: "P-256" },
-  false,
+  true,
   ["sign", "verify"],
 );
 const ecdsaSignature = await crypto.subtle.sign(
@@ -171,7 +171,119 @@ const ecdsaRejected = await crypto.subtle.verify(
   ecdsaSignature,
   Uint8Array.from([104, 101, 108, 112]),
 );
+const ecdsaMalformedRejected = await crypto.subtle.verify(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaPair.publicKey,
+  new Uint8Array(ecdsaSignature).subarray(1),
+  aesPlaintext,
+);
 const ecdsaExportedPublic = await crypto.subtle.exportKey("raw", ecdsaPair.publicKey);
+const ecdsaImportedRawPublic = await crypto.subtle.importKey(
+  "raw",
+  ecdsaExportedPublic,
+  { name: "ECDSA", namedCurve: "P-256" },
+  true,
+  ["verify"],
+);
+const ecdsaImportedRawVerified = await crypto.subtle.verify(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaImportedRawPublic,
+  ecdsaSignature,
+  aesPlaintext,
+);
+const ecdsaPkcs8 = await crypto.subtle.exportKey("pkcs8", ecdsaPair.privateKey);
+const ecdsaSpki = await crypto.subtle.exportKey("spki", ecdsaPair.publicKey);
+const ecdsaPrivateJwk = await crypto.subtle.exportKey("jwk", ecdsaPair.privateKey);
+const ecdsaPublicJwk = await crypto.subtle.exportKey("jwk", ecdsaPair.publicKey);
+const ecdsaImportedPkcs8 = await crypto.subtle.importKey(
+  "pkcs8",
+  ecdsaPkcs8,
+  { name: "ECDSA", namedCurve: "P-256" },
+  true,
+  ["sign"],
+);
+const ecdsaImportedSpki = await crypto.subtle.importKey(
+  "spki",
+  ecdsaSpki,
+  { name: "ECDSA", namedCurve: "P-256" },
+  true,
+  ["verify"],
+);
+const ecdsaRestoredSignature = await crypto.subtle.sign(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaImportedPkcs8,
+  aesPlaintext,
+);
+const ecdsaRestoredVerified = await crypto.subtle.verify(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaImportedSpki,
+  ecdsaRestoredSignature,
+  aesPlaintext,
+);
+const ecdsaImportedPrivateJwk = await crypto.subtle.importKey(
+  "jwk",
+  ecdsaPrivateJwk,
+  { name: "ECDSA", namedCurve: "P-256" },
+  true,
+  ["sign"],
+);
+const ecdsaImportedPublicJwk = await crypto.subtle.importKey(
+  "jwk",
+  ecdsaPublicJwk,
+  { name: "ECDSA", namedCurve: "P-256" },
+  true,
+  ["verify"],
+);
+const ecdsaJwkSignature = await crypto.subtle.sign(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaImportedPrivateJwk,
+  aesPlaintext,
+);
+const ecdsaJwkVerified = await crypto.subtle.verify(
+  { name: "ECDSA", hash: "SHA-256" },
+  ecdsaImportedPublicJwk,
+  ecdsaJwkSignature,
+  aesPlaintext,
+);
+const additionalEcdsaResults = [];
+for (const [namedCurve, hash, expectedSize] of [
+  ["P-384", "SHA-384", 96],
+  ["P-521", "SHA-512", 132],
+]) {
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve },
+    true,
+    ["sign", "verify"],
+  );
+  const pkcs8 = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
+  const spki = await crypto.subtle.exportKey("spki", pair.publicKey);
+  const privateKey = await crypto.subtle.importKey(
+    "pkcs8",
+    pkcs8,
+    { name: "ECDSA", namedCurve },
+    false,
+    ["sign"],
+  );
+  const publicKey = await crypto.subtle.importKey(
+    "spki",
+    spki,
+    { name: "ECDSA", namedCurve },
+    true,
+    ["verify"],
+  );
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash },
+    privateKey,
+    aesPlaintext,
+  );
+  const verified = await crypto.subtle.verify(
+    { name: "ECDSA", hash },
+    publicKey,
+    signature,
+    aesPlaintext,
+  );
+  additionalEcdsaResults.push(`${namedCurve}:${signature.byteLength}:${signature.byteLength === expectedSize && verified}`);
+}
 
 console.log(key.algorithm.name + ":" + key.algorithm.hash.name);
 console.log(key.type);
@@ -214,9 +326,20 @@ console.log(String(pbkdf2HmacSignature.byteLength));
 console.log(String(pbkdf2HmacVerified));
 console.log(ecdsaPair.publicKey.algorithm.name + ":" + ecdsaPair.publicKey.algorithm.namedCurve);
 console.log(ecdsaPair.publicKey.type + ":" + ecdsaPair.privateKey.type);
-console.log(String(ecdsaSignature.byteLength > 0));
+console.log(String(ecdsaSignature.byteLength));
 console.log(String(ecdsaVerified));
 console.log(String(ecdsaRejected));
+console.log(String(ecdsaMalformedRejected));
 console.log(String(ecdsaExportedPublic.byteLength));
+console.log(String(ecdsaImportedRawVerified));
+console.log(String(ecdsaPkcs8.byteLength > 0));
+console.log(String(ecdsaSpki.byteLength > 0));
+console.log(`${ecdsaPrivateJwk.kty}:${ecdsaPrivateJwk.crv}:${typeof ecdsaPrivateJwk.d}`);
+console.log(`${ecdsaPublicJwk.kty}:${ecdsaPublicJwk.crv}:${String("d" in ecdsaPublicJwk)}`);
+console.log(String(ecdsaRestoredSignature.byteLength));
+console.log(String(ecdsaRestoredVerified));
+console.log(String(ecdsaJwkSignature.byteLength));
+console.log(String(ecdsaJwkVerified));
+console.log(additionalEcdsaResults.join("\n"));
 console.log(Object.prototype.toString.call(key));
 console.log(Object.prototype.toString.call(crypto.subtle));

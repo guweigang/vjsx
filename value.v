@@ -31,6 +31,20 @@ pub type JSValueConst = C.JSValue
 fn C.JS_FreeValue(&C.JSContext, C.JSValue)
 
 fn C.JS_ToCString(&C.JSContext, JSValueConst) &char
+fn C.JS_ToCStringLen(&C.JSContext, &uint, JSValueConst) &char
+
+fn (value Value) utf8_string() !string {
+	mut length := uint(0)
+	data := C.JS_ToCStringLen(value.ctx.ref, &length, value.ref)
+	if data == unsafe { nil } {
+		value.ctx.js_exception_value().free()
+		return error('cannot encode string as UTF-8')
+	}
+	defer {
+		C.JS_FreeCString(value.ctx.ref, data)
+	}
+	return unsafe { tos(&u8(data), int(length)).clone() }
+}
 
 fn C.JS_FreeCString(&C.JSContext, &char)
 

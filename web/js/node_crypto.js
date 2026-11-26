@@ -417,6 +417,10 @@ function generateKeyPair(type, options, callback) {
   });
 }
 
+const webcrypto = globalThis.crypto;
+const subtle = webcrypto.subtle;
+const getRandomValues = webcrypto.getRandomValues;
+
 globalThis.__vjsxNodeCrypto = Object.freeze({
   KeyObject,
   createHash,
@@ -424,7 +428,10 @@ globalThis.__vjsxNodeCrypto = Object.freeze({
   createPublicKey,
   generateKeyPair,
   generateKeyPairSync,
+  getRandomValues,
   randomUUID,
   sign,
+  subtle,
   verify,
+  webcrypto,
 });

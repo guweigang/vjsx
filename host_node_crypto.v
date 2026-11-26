@@ -98,7 +98,7 @@ pub fn (ctx &Context) try_install_node_crypto_module() ! {
 
 	helpers := ctx.js_global('__vjsxNodeCrypto')
 	export_names := ['KeyObject', 'createHash', 'createPrivateKey', 'createPublicKey', 'generateKeyPair',
-		'generateKeyPairSync', 'randomUUID', 'sign', 'verify']
+		'generateKeyPairSync', 'getRandomValues', 'randomUUID', 'sign', 'subtle', 'verify', 'webcrypto']
 	for module_name in ['crypto', 'node:crypto'] {
 		mut crypto_mod := ctx.js_module(module_name)
 		default_obj := ctx.js_object()

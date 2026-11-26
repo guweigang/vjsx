@@ -8,12 +8,14 @@ pub fn (ctx &Context) try_install_node_timers_promises_module() ! {
 	value.free()
 	helpers := ctx.js_global('__vjsxNodeTimersPromises')
 	set_timeout_fn := helpers.get('setTimeout')
-	mut timers_mod := ctx.js_module('node:timers/promises')
-	timers_mod.export('setTimeout', set_timeout_fn)
 	default_obj := ctx.js_object()
 	default_obj.set('setTimeout', set_timeout_fn)
-	timers_mod.export_default(default_obj)
-	timers_mod.create()
+	for module_name in ['timers/promises', 'node:timers/promises'] {
+		mut timers_mod := ctx.js_module(module_name)
+		timers_mod.export('setTimeout', set_timeout_fn)
+		timers_mod.export_default(default_obj)
+		timers_mod.create()
+	}
 	default_obj.free()
 	set_timeout_fn.free()
 	helpers.free()

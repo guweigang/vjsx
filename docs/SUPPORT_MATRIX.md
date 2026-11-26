@@ -23,6 +23,9 @@ reported version, runtime profile, script execution, bundle/app packaging and
 the packaged executable. Release builds select V's OpenSSL crypto backend;
 OpenSSL is therefore a source-build dependency for the advertised WebCrypto
 ECDSA subset. Release smoke tests exercise ECDSA sign/verify on every artifact.
+ECDSA signatures use Web Crypto/JOSE fixed-width `r || s` encoding. ECDSA
+private keys support durable PKCS8/JWK import and export; raw key material is a
+public-key format.
 
 ## Runtime profiles
 
@@ -35,7 +38,8 @@ ECDSA subset. Release smoke tests exercise ECDSA sign/verify on every artifact.
 | timers | supported subset | absent by default | supported subset |
 | `fetch` | supported subset when policy allows | supported subset when policy allows | supported subset |
 | `fs`, HTTP(S), child process | supported subset when policy allows | absent by default | rejected/absent |
-| Node crypto/zlib | supported subset | absent | browser WebCrypto subset instead |
+| Web Crypto (`crypto.subtle`) | supported subset | absent | supported subset |
+| Node crypto/zlib modules | supported subset | absent | absent |
 | sqlite/mysql compatibility modules | conditional, trusted policy only | opt-in legacy subset | absent |
 | DOM rendering/layout/storage/workers | absent | absent | absent |
 
@@ -51,7 +55,7 @@ not silently install or emulate them.
 | `.ts` / `.mts` | supported subset | transpilation only; no type checking |
 | `.cjs` / detected CommonJS | partial | statically discoverable `require()` and named-export interop |
 | JSON modules | supported | generated default export |
-| package `exports` root/subpath | supported subset | resolvable string targets used by the runtime graph |
+| package `exports` root/subpath | supported subset | exact and single-wildcard subpaths with string targets, including the existing conditional target selection |
 | package `imports`, conditional matrices, loaders | partial or rejected | not Node-complete |
 | computed `require()` / computed `import()` in bundles | rejected/not bundled | cannot be statically resolved |
 | native addons (`.node`, `binding.gyp`) | rejected when reachable | no N-API/addon ABI |

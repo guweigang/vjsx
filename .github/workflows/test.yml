@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev
+          sudo apt-get install -y libssl-dev libsqlite3-dev
 
       - name: Prepare macOS SQLite
         if: startsWith(matrix.os, 'macos')
@@ -158,15 +158,25 @@ jobs:
         shell: bash
         run: v -d link_quickjs -d use_openssl -cg -cc clang test .
 
+      - name: Set up Node for package conformance
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Run pinned real-package conformance
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           mkdir -p dist
-          v -d link_quickjs -d use_openssl -cg -cc clang \
+          v -d link_quickjs -d use_openssl -d vjsx_sqlite -cg -cc clang \
             -o "$PWD/dist/vjsx-package-conformance" ./cli_runner_bin
           VJSX_BIN="$PWD/dist/vjsx-package-conformance" \
             ./tests/integration/openai_sdk/run.sh
+          export VJSX_BIN="$PWD/dist/vjsx-package-conformance"
+          cd tests/integration/pi_durable
+          npm ci --ignore-scripts --no-audit --no-fund
+          node verify.mjs
 
       - name: Run macOS package installer smoke
         if: matrix.os == 'macos-26'
