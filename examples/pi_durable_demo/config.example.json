@@ -1,0 +1,5 @@
+{
+  "baseUrl": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "sessionDir": ".pi-session"
+}
